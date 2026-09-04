@@ -70,13 +70,14 @@ export async function buscarDadosComissao(codigo: string): Promise<ComissaoData>
     body: { codigo },
   });
   if (error) {
-    const context = (error as { context?: Response }).context;
-    if (!context) {
-      // No HTTP response at all: the request never reached the function —
-      // wrong/missing VITE_SUPABASE_URL, no network, or CORS blocked it.
-      // This is NOT the same as a wrong access code, so don't say that.
+    const context = (error as { context?: unknown }).context;
+    // Only FunctionsHttpError carries a real Response in `context` — a
+    // FunctionsFetchError/FunctionsRelayError (network failure, CORS, wrong
+    // URL, function not deployed) carries something else (often an Error),
+    // which has no .clone()/.json(). Never assume it's a Response.
+    if (!(context instanceof Response)) {
       throw new Error(
-        'Não foi possível falar com o servidor. Confira se VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY estão configurados corretamente.',
+        'Não foi possível falar com o servidor. Confira se VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY estão certos e se a função "committee-data" foi publicada no Supabase.',
       );
     }
     if (context.status === 404) {
