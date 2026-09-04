@@ -1,0 +1,90 @@
+@import "./tokens.css";
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--ink-950);
+  color: var(--text-primary);
+  font-family: var(--font-core);
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--chalk-050);
+}
+
+button {
+  font: inherit;
+}
+
+@keyframes om-fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes om-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes om-glow {
+  0%, 100% { filter: drop-shadow(0 0 34px rgba(169, 211, 232, .14)); }
+  50% { filter: drop-shadow(0 0 56px rgba(169, 211, 232, .26)); }
+}
+
+@keyframes om-sheen {
+  0%, 100% { opacity: .35; }
+  50% { opacity: .6; }
+}
+
+@keyframes om-drift {
+  from { background-position: 0 0; }
+  to { background-position: 520px 0; }
+}
+
+@keyframes om-tick {
+  from { opacity: .55; }
+  to { opacity: 1; }
+}
+
+@keyframes om-rule {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+.reveal {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.reveal.is-in {
+  animation: om-fade-up 640ms var(--ease-out) both;
+}
+
+.reveal.no-motion {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .reveal {
+    opacity: 1;
+    transform: none;
+  }
+}
