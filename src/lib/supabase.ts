@@ -71,8 +71,22 @@ export async function buscarDadosComissao(codigo: string): Promise<ComissaoData>
   });
   if (error) {
     const context = (error as { context?: Response }).context;
-    const body = context ? await context.clone().json().catch(() => null) : null;
-    throw new Error(body?.error || 'Código incorreto.');
+    if (!context) {
+      // No HTTP response at all: the request never reached the function —
+      // wrong/missing VITE_SUPABASE_URL, no network, or CORS blocked it.
+      // This is NOT the same as a wrong access code, so don't say that.
+      throw new Error(
+        'Não foi possível falar com o servidor. Confira se VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY estão configurados corretamente.',
+      );
+    }
+    if (context.status === 404) {
+      throw new Error('A função "committee-data" não foi encontrada no Supabase. Confira se ela foi publicada com esse nome exato.');
+    }
+    const body = await context.clone().json().catch(() => null);
+    if (context.status === 401) {
+      throw new Error(body?.error || 'Código incorreto.');
+    }
+    throw new Error(body?.error || `Erro do servidor (HTTP ${context.status}).`);
   }
   if (!data) throw new Error('Sem resposta do servidor.');
   return data;

@@ -10,17 +10,17 @@ export function Comissao() {
   const mobile = useIsMobile();
   const [codigo, setCodigo] = useState('');
   const [carregando, setCarregando] = useState(false);
-  const [codigoErrado, setCodigoErrado] = useState(false);
+  const [erroAcesso, setErroAcesso] = useState<string | null>(null);
   const [dados, setDados] = useState<ComissaoData | null>(null);
 
   async function entrar() {
     setCarregando(true);
-    setCodigoErrado(false);
+    setErroAcesso(null);
     try {
       const resultado = await buscarDadosComissao(codigo.trim());
       setDados(resultado);
-    } catch {
-      setCodigoErrado(true);
+    } catch (e) {
+      setErroAcesso(e instanceof Error ? e.message : 'Não foi possível entrar agora.');
     } finally {
       setCarregando(false);
     }
@@ -76,13 +76,13 @@ export function Comissao() {
               value={codigo}
               onChange={(e) => {
                 setCodigo(e.target.value);
-                setCodigoErrado(false);
+                setErroAcesso(null);
               }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && codigo.trim() && !carregando) entrar();
               }}
             />
-            {codigoErrado ? <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--gild-400)' }}>Código incorreto.</span> : null}
+            {erroAcesso ? <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--gild-400)' }}>{erroAcesso}</span> : null}
             <div style={{ display: 'flex' }}>
               <Button size="lg" disabled={!codigo.trim() || carregando} onClick={entrar}>
                 {carregando ? 'ENTRANDO…' : 'ENTRAR'}
