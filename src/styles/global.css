@@ -8,6 +8,14 @@ html, body, #root {
   min-height: 100%;
 }
 
+html, body {
+  /* Safety net: a decorative absolutely-positioned glow/halo without its own
+     clipping container has caused horizontal overflow before (see the
+     "confirmar" section fix) — this stops that class of bug from ever
+     showing as a sideways-scrolling black gap again. */
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
   background: var(--ink-950);
@@ -68,7 +76,8 @@ button {
   transform: translateY(10px);
 }
 
-.print-watermark {
+.print-watermark,
+.print-footer-logo {
   display: none;
 }
 
@@ -125,12 +134,25 @@ button {
     position: fixed;
     top: 50%;
     left: 50%;
-    width: 340px;
+    width: 85vw;
+    max-width: 900px;
     height: auto;
     transform: translate(-50%, -50%);
     opacity: 0.06;
     filter: grayscale(1);
     z-index: -1;
+    pointer-events: none;
+  }
+
+  .print-footer-logo {
+    display: block !important;
+    position: fixed;
+    bottom: 0.3in;
+    left: 50%;
+    width: 56px;
+    height: auto;
+    transform: translateX(-50%);
+    z-index: 10;
     pointer-events: none;
   }
 

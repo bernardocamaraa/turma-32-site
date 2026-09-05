@@ -290,7 +290,7 @@ export function Home() {
       <Reveal
         id="confirmar"
         as="section"
-        style={{ maxWidth: 'var(--maxw-page)', margin: '0 auto', padding: 'var(--space-10) var(--gutter-page)', position: 'relative' }}
+        style={{ maxWidth: 'var(--maxw-page)', margin: '0 auto', padding: 'var(--space-10) var(--gutter-page)', position: 'relative', overflow: 'hidden' }}
       >
         <div
           style={{
