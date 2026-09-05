@@ -33,7 +33,8 @@ export function Baile() {
       setMensagem('');
       setEnviado(true);
     } catch (e) {
-      setErro('Não foi possível enviar agora. Tente de novo em instantes.');
+      const detalhe = e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : null;
+      setErro(detalhe ? `Não foi possível enviar agora: ${detalhe}` : 'Não foi possível enviar agora. Tente de novo em instantes.');
       console.error(e);
     } finally {
       setEnviando(false);

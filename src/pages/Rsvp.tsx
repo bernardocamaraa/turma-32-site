@@ -66,7 +66,8 @@ export function Rsvp() {
       setConfirmacao(registro);
       setDialogAberto(true);
     } catch (e) {
-      setErro('Não foi possível confirmar agora. Tente de novo em instantes.');
+      const detalhe = e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : null;
+      setErro(detalhe ? `Não foi possível confirmar agora: ${detalhe}` : 'Não foi possível confirmar agora. Tente de novo em instantes.');
       console.error(e);
     } finally {
       setEnviando(false);
