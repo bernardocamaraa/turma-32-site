@@ -128,6 +128,25 @@ export function Rsvp() {
           </p>
         </div>
 
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 'var(--space-3)',
+            padding: 'var(--space-5)',
+            border: '1px solid rgba(201,169,106,.4)',
+            borderRadius: 'var(--radius-sm)',
+            background: 'rgba(201,169,106,.08)',
+          }}
+        >
+          <div style={{ display: 'flex' }}>
+            <Badge tone="gild">TRAJE PASSEIO COMPLETO</Badge>
+          </div>
+          <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>
+            Recomendamos evitar a cor azul marinho.
+          </span>
+        </div>
+
         {confirmacao ? (
           <Card padding="var(--space-7)">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
