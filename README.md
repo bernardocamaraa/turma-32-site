@@ -18,8 +18,9 @@ npm run dev
 ## Configurando o Supabase
 
 1. Crie um projeto em [supabase.com](https://supabase.com).
-2. Em **SQL Editor**, rode `supabase/schema.sql` — cria as tabelas `rsvps` e
-   `mensagens` com RLS habilitado.
+2. Em **SQL Editor**, rode `supabase/schema.sql` — cria as tabelas `rsvps`,
+   `mensagens`, `configuracoes` e `fotos` (com RLS habilitado) e o bucket de
+   Storage `fotos-album` para o álbum.
 3. Em **Project Settings → API**, copie a `Project URL` e a `anon public key`
    para `.env.local` (`VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`).
 4. Publique a Edge Function que alimenta a área da comissão:
@@ -47,12 +48,21 @@ A leitura acontece só dentro da Edge Function `committee-data`
 guarda a *service role key* (nunca exposta ao navegador) e só devolve os
 dados depois de conferir o código digitado.
 
+## Álbum da festa
+
+O álbum liga em três peças do Supabase, todas em `schema.sql`:
+
+- Tabela `configuracoes` (`album_aberto`): a comissão liga/desliga o álbum
+  manualmente (botão "Liberar álbum" / "Fechar álbum") em vez do site tentar
+  adivinhar pela data — evita depender do relógio de quem visita ou de o
+  evento atrasar. Leitura pública, escrita só pela Edge Function.
+- Tabela `fotos` (caminho, legenda, criado_em) + bucket público
+  `fotos-album` no Storage: convidados enviam com legenda opcional
+  enquanto `album_aberto=true` (checado via RLS, não só na interface).
+  A comissão apaga qualquer foto pela Edge Function.
+
 ## O que fica de fora deste protótipo → produção
 
-- **Fotos do álbum**: a página do álbum mostra placeholders, como no
-  protótipo original. Enviar fotos de verdade precisa de um bucket no
-  Supabase Storage — não implementado aqui porque não fazia parte do que foi
-  pedido; o botão "enviar foto" hoje só mostra um aviso.
 - **Cota por formando**: todos os 32 formandos têm cota de 4 convidados
   (`src/lib/formandos.ts`) — ajuste ali se algum caso for diferente.
 - **Confirmação única por convidado**: como não há login, isso é garantido
