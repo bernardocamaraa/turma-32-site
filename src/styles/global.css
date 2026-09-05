@@ -161,4 +161,15 @@ button {
     transform: none !important;
     animation: none !important;
   }
+
+  /* The confirmations table scrolls sideways on narrow screens (mobile) —
+     on paper there's no dragging, so a visible scrollbar is just clutter.
+     Let it shrink to the page width instead. */
+  .table-scroll {
+    overflow: visible !important;
+  }
+
+  .table-scroll-inner {
+    min-width: 0 !important;
+  }
 }

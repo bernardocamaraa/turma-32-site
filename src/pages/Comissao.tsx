@@ -124,8 +124,8 @@ export function Comissao() {
                 </Button>
               </div>
             </div>
-            <div style={{ overflowX: 'auto' }}>
-              <div style={{ minWidth: 760 }}>
+            <div className="table-scroll" style={{ overflowX: 'auto' }}>
+              <div className="table-scroll-inner" style={{ minWidth: 760 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1.1fr .5fr 1.4fr 1fr', gap: 'var(--space-4)', padding: 'var(--space-4) var(--space-7)', borderBottom: '1px solid var(--stroke-hair)' }}>
                   {['Convidado', 'Formando', 'Pessoas', 'Acompanhantes', 'WhatsApp'].map((h) => (
                     <span key={h} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
