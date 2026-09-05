@@ -19,6 +19,7 @@ export function Rsvp() {
   const [nome, setNome] = useState('');
   const [whats, setWhats] = useState('');
   const [pessoas, setPessoas] = useState(1);
+  const [acompanhantes, setAcompanhantes] = useState<string[]>([]);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [dialogAberto, setDialogAberto] = useState(false);
@@ -26,14 +27,41 @@ export function Rsvp() {
 
   const cota = formando ? cotaDe(formando) : 0;
   const opcoesPessoas = useMemo(() => Array.from({ length: cota || 0 }, (_, i) => i + 1), [cota]);
-  const naoPodeEnviar = !nome.trim() || !whats.trim() || !formando || enviando;
+  const numAcompanhantes = pessoas - 1;
+  const acompanhantesPreenchidos = acompanhantes.slice(0, numAcompanhantes).every((a) => a.trim());
+  const naoPodeEnviar =
+    !nome.trim() || !whats.trim() || !formando || (numAcompanhantes > 0 && !acompanhantesPreenchidos) || enviando;
+
+  function escolherPessoas(n: number) {
+    setPessoas(n);
+    setAcompanhantes((atual) => {
+      const proximo = atual.slice(0, n - 1);
+      while (proximo.length < n - 1) proximo.push('');
+      return proximo;
+    });
+  }
+
+  function setNomeAcompanhante(i: number, valor: string) {
+    setAcompanhantes((atual) => {
+      const proximo = [...atual];
+      proximo[i] = valor;
+      return proximo;
+    });
+  }
 
   async function enviar() {
     setEnviando(true);
     setErro(null);
+    const nomesAcompanhantes = acompanhantes.slice(0, numAcompanhantes).map((a) => a.trim());
     try {
-      await enviarRsvp({ formando, nome: nome.trim(), whatsapp: whats.trim(), pessoas });
-      const registro = { formando, nome: nome.trim(), pessoas };
+      await enviarRsvp({
+        formando,
+        nome: nome.trim(),
+        whatsapp: whats.trim(),
+        pessoas,
+        acompanhantes: nomesAcompanhantes,
+      });
+      const registro = { formando, nome: nome.trim(), pessoas, acompanhantes: nomesAcompanhantes };
       setConfirmacaoLocal(registro);
       setConfirmacao(registro);
       setDialogAberto(true);
@@ -52,6 +80,7 @@ export function Rsvp() {
     setNome('');
     setWhats('');
     setPessoas(1);
+    setAcompanhantes([]);
   }
 
   return (
@@ -107,6 +136,11 @@ export function Rsvp() {
               <p style={{ margin: 0, fontSize: 'var(--fs-body-lg)', lineHeight: 'var(--lh-normal)', maxWidth: '44ch' }}>
                 {confirmacao.nome} · {confirmacao.pessoas} {confirmacao.pessoas === 1 ? 'lugar' : 'lugares'} no convite de {confirmacao.formando}.
               </p>
+              {confirmacao.acompanhantes.length > 0 ? (
+                <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>
+                  Acompanhantes: {confirmacao.acompanhantes.join(', ')}
+                </span>
+              ) : null}
               <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-faint)' }}>
                 Uma confirmação por convidado. Se algo estiver errado, refaça abaixo.
               </span>
@@ -147,7 +181,7 @@ export function Rsvp() {
                       key={n}
                       variant={pessoas === n ? 'primary' : 'ghost'}
                       style={{ width: 56, height: 44, padding: 0 }}
-                      onClick={() => setPessoas(n)}
+                      onClick={() => escolherPessoas(n)}
                     >
                       {n}
                     </Button>
@@ -159,6 +193,19 @@ export function Rsvp() {
                     : 'Escolha o formando para ver quantos convidados o convite permite.'}
                 </span>
               </div>
+              {numAcompanhantes > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+                  {Array.from({ length: numAcompanhantes }, (_, i) => (
+                    <Input
+                      key={i}
+                      label={`Nome do acompanhante ${i + 1}`}
+                      placeholder="Nome completo"
+                      value={acompanhantes[i] ?? ''}
+                      onChange={(e) => setNomeAcompanhante(i, e.target.value)}
+                    />
+                  ))}
+                </div>
+              ) : null}
               {erro ? <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--state-error)' }}>{erro}</span> : null}
               <Button fullWidth size="lg" disabled={naoPodeEnviar} onClick={enviar}>
                 {enviando ? 'ENVIANDO…' : 'CONFIRMAR PRESENÇA'}
@@ -206,6 +253,7 @@ export function Rsvp() {
         footer={<Button onClick={() => setDialogAberto(false)}>FECHAR</Button>}
       >
         {nome.trim() || 'Presença'}, anotamos {pessoas} {pessoas === 1 ? 'lugar' : 'lugares'} no convite de {formando}.
+        {numAcompanhantes > 0 ? ` Acompanhantes: ${acompanhantes.slice(0, numAcompanhantes).join(', ')}.` : ''}
       </Dialog>
     </main>
   );

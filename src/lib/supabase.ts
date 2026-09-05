@@ -20,6 +20,7 @@ export type RsvpRecord = {
   nome: string;
   whatsapp: string;
   pessoas: number;
+  acompanhantes: string[];
 };
 
 export type MensagemRecord = {
@@ -43,6 +44,7 @@ export type ComissaoRsvp = {
   nome: string;
   whatsapp: string;
   pessoas: number;
+  acompanhantes: string[] | null;
   criado_em: string;
 };
 

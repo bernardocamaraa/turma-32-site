@@ -9,8 +9,12 @@ create table if not exists public.rsvps (
   nome text not null,
   whatsapp text not null,
   pessoas integer not null check (pessoas > 0),
+  acompanhantes text[] not null default '{}',
   criado_em timestamptz not null default now()
 );
+
+-- Migration for a project created before "acompanhantes" existed:
+-- alter table public.rsvps add column if not exists acompanhantes text[] not null default '{}';
 
 create table if not exists public.mensagens (
   id uuid primary key default gen_random_uuid(),

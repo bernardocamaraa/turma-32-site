@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
     );
 
     const [rsvps, mensagens] = await Promise.all([
-      supabase.from('rsvps').select('id, formando, nome, whatsapp, pessoas, criado_em').order('criado_em', { ascending: false }),
+      supabase.from('rsvps').select('id, formando, nome, whatsapp, pessoas, acompanhantes, criado_em').order('criado_em', { ascending: false }),
       supabase.from('mensagens').select('id, nome, mensagem, criado_em').order('criado_em', { ascending: false }),
     ]);
 

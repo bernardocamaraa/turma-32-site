@@ -37,8 +37,8 @@ export function Comissao() {
 
   function baixarCsv() {
     if (!dados) return;
-    const linhas = [['convidado', 'formando', 'pessoas', 'whatsapp', 'quando']].concat(
-      dados.rsvps.map((r) => [r.nome, r.formando, String(r.pessoas), r.whatsapp, r.criado_em]),
+    const linhas = [['convidado', 'formando', 'pessoas', 'acompanhantes', 'whatsapp', 'quando']].concat(
+      dados.rsvps.map((r) => [r.nome, r.formando, String(r.pessoas), (r.acompanhantes ?? []).join('; '), r.whatsapp, r.criado_em]),
     );
     const csv = linhas.map((l) => l.map((c) => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -65,7 +65,12 @@ export function Comissao() {
         animation: 'om-fade-up 620ms var(--ease-out) both',
       }}
     >
-      {dados ? <img src="/assets/logo-32.png" alt="" aria-hidden className="print-watermark" /> : null}
+      {dados ? (
+        <>
+          <img src="/assets/logo-32.png" alt="" aria-hidden className="print-watermark" />
+          <img src="/assets/logo-32.png" alt="" aria-hidden className="print-footer-logo" />
+        </>
+      ) : null}
       <PageHeader eyebrow="Área da comissão" title="Confirmações e mensagens" />
 
       {!dados ? (
@@ -120,19 +125,22 @@ export function Comissao() {
               </div>
             </div>
             <div style={{ overflowX: 'auto' }}>
-              <div style={{ minWidth: 640 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1.3fr .5fr 1fr', gap: 'var(--space-4)', padding: 'var(--space-4) var(--space-7)', borderBottom: '1px solid var(--stroke-hair)' }}>
-                  {['Convidado', 'Formando', 'Pessoas', 'WhatsApp'].map((h) => (
+              <div style={{ minWidth: 760 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1.1fr .5fr 1.4fr 1fr', gap: 'var(--space-4)', padding: 'var(--space-4) var(--space-7)', borderBottom: '1px solid var(--stroke-hair)' }}>
+                  {['Convidado', 'Formando', 'Pessoas', 'Acompanhantes', 'WhatsApp'].map((h) => (
                     <span key={h} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
                       {h}
                     </span>
                   ))}
                 </div>
                 {dados.rsvps.map((r) => (
-                  <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '1.3fr 1.3fr .5fr 1fr', gap: 'var(--space-4)', padding: 'var(--space-5) var(--space-7)', borderBottom: '1px solid var(--stroke-hair)' }}>
+                  <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '1.1fr 1.1fr .5fr 1.4fr 1fr', gap: 'var(--space-4)', padding: 'var(--space-5) var(--space-7)', borderBottom: '1px solid var(--stroke-hair)' }}>
                     <span style={{ fontSize: 'var(--fs-body)' }}>{r.nome}</span>
                     <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{r.formando}</span>
                     <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-body)' }}>{r.pessoas}</span>
+                    <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>
+                      {r.acompanhantes && r.acompanhantes.length > 0 ? r.acompanhantes.join(', ') : '—'}
+                    </span>
                     <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>{r.whatsapp}</span>
                   </div>
                 ))}
