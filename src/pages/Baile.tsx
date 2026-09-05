@@ -63,8 +63,13 @@ export function Baile() {
       <Card variant="tagged" padding={0} style={{ overflow: 'hidden' }}>
         <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : '1.1fr .9fr' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', padding: 'var(--space-8)' }}>
-            <div style={{ display: 'flex' }}>
-              <Badge tone="gild">TRAJE ESPORTE FINO</Badge>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+              <div style={{ display: 'flex' }}>
+                <Badge tone="gild">TRAJE PASSEIO COMPLETO</Badge>
+              </div>
+              <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-faint)' }}>
+                Recomendamos evitar a cor azul marinho.
+              </span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
               <Field label="Data" value="10 de dezembro de 2026" />

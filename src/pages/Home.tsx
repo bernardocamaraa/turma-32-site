@@ -199,14 +199,14 @@ export function Home() {
           <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : '1.1fr .9fr' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', padding: 'var(--space-8)' }}>
               <div style={{ display: 'flex' }}>
-                <Badge tone="gild">TRAJE ESPORTE FINO</Badge>
+                <Badge tone="gild">TRAJE PASSEIO COMPLETO</Badge>
               </div>
               <h3
                 style={{
                   margin: 0,
                   fontFamily: 'var(--font-display)',
                   fontWeight: 400,
-                  fontSize: 'var(--fs-display-3)',
+                  fontSize: mobile ? 'var(--fs-h1)' : 'var(--fs-display-3)',
                   lineHeight: 'var(--lh-tight)',
                   letterSpacing: 'var(--tracking-display)',
                 }}
