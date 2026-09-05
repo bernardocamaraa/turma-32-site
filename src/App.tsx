@@ -2,6 +2,7 @@ import { Route, Routes, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { NavBar } from './components/NavBar';
 import { Footer } from './components/Footer';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Home } from './pages/Home';
 import { Baile } from './pages/Baile';
 import { Album } from './pages/Album';
@@ -16,11 +17,12 @@ function ScrollToTop() {
   return null;
 }
 
-export default function App() {
+function AppRoutes() {
+  const { pathname } = useLocation();
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--ink-950)', fontFamily: 'var(--font-core)' }}>
-      <ScrollToTop />
-      <NavBar />
+    // Keyed by route so navigating away from a crashed page resets the
+    // boundary instead of staying stuck until a full reload.
+    <ErrorBoundary key={pathname}>
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/baile" element={<Baile />} />
@@ -28,6 +30,16 @@ export default function App() {
         <Route path="/rsvp" element={<Rsvp />} />
         <Route path="/comissao" element={<Comissao />} />
       </Routes>
+    </ErrorBoundary>
+  );
+}
+
+export default function App() {
+  return (
+    <div style={{ minHeight: '100vh', background: 'var(--ink-950)', fontFamily: 'var(--font-core)' }}>
+      <ScrollToTop />
+      <NavBar />
+      <AppRoutes />
       <Footer />
     </div>
   );

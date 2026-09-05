@@ -16,12 +16,27 @@ export function Comissao() {
   const [erroAlbum, setErroAlbum] = useState<string | null>(null);
   const [excluindoFotoId, setExcluindoFotoId] = useState<string | null>(null);
 
+  // Defends against a stale Edge Function: git push redeploys the site, but
+  // NOT the Supabase Edge Function (that's a separate manual deploy) — if
+  // committee-data on Supabase is older than this frontend, its response
+  // can be missing a field (e.g. `fotos`) that this page now expects.
+  // Falling back to [] / false here means a mismatch renders as "0 fotos"
+  // instead of crashing the whole page blank.
+  function normalizar(resultado: ComissaoData): ComissaoData {
+    return {
+      rsvps: resultado.rsvps ?? [],
+      mensagens: resultado.mensagens ?? [],
+      albumAberto: resultado.albumAberto ?? false,
+      fotos: resultado.fotos ?? [],
+    };
+  }
+
   async function entrar() {
     setCarregando(true);
     setErroAcesso(null);
     try {
       const resultado = await buscarDadosComissao(codigo.trim());
-      setDados(resultado);
+      setDados(normalizar(resultado));
     } catch (e) {
       setErroAcesso(e instanceof Error ? e.message : 'Não foi possível entrar agora.');
     } finally {
@@ -35,7 +50,7 @@ export function Comissao() {
     setErroAlbum(null);
     try {
       const resultado = await buscarDadosComissao(codigo.trim(), { definirAlbumAberto: !dados.albumAberto });
-      setDados(resultado);
+      setDados(normalizar(resultado));
     } catch (e) {
       setErroAlbum(e instanceof Error ? e.message : 'Não foi possível mudar o álbum agora.');
     } finally {
@@ -49,7 +64,7 @@ export function Comissao() {
     setErroAlbum(null);
     try {
       const resultado = await buscarDadosComissao(codigo.trim(), { excluirFotoId: id });
-      setDados(resultado);
+      setDados(normalizar(resultado));
     } catch (e) {
       setErroAlbum(e instanceof Error ? e.message : 'Não foi possível excluir a foto agora.');
     } finally {
