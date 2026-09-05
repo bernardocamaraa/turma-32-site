@@ -3,7 +3,7 @@ import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Input } from '../components/Input';
 import { PageHeader } from '../components/SectionHeading';
-import { buscarDadosComissao, type ComissaoData } from '../lib/supabase';
+import { buscarDadosComissao, urlDaFoto, type ComissaoData } from '../lib/supabase';
 import { useIsMobile } from '../lib/useViewport';
 
 export function Comissao() {
@@ -14,6 +14,7 @@ export function Comissao() {
   const [dados, setDados] = useState<ComissaoData | null>(null);
   const [alternandoAlbum, setAlternandoAlbum] = useState(false);
   const [erroAlbum, setErroAlbum] = useState<string | null>(null);
+  const [excluindoFotoId, setExcluindoFotoId] = useState<string | null>(null);
 
   async function entrar() {
     setCarregando(true);
@@ -33,12 +34,26 @@ export function Comissao() {
     setAlternandoAlbum(true);
     setErroAlbum(null);
     try {
-      const resultado = await buscarDadosComissao(codigo.trim(), !dados.albumAberto);
+      const resultado = await buscarDadosComissao(codigo.trim(), { definirAlbumAberto: !dados.albumAberto });
       setDados(resultado);
     } catch (e) {
       setErroAlbum(e instanceof Error ? e.message : 'Não foi possível mudar o álbum agora.');
     } finally {
       setAlternandoAlbum(false);
+    }
+  }
+
+  async function excluirFoto(id: string) {
+    if (!window.confirm('Excluir essa foto do álbum? Não dá pra desfazer.')) return;
+    setExcluindoFotoId(id);
+    setErroAlbum(null);
+    try {
+      const resultado = await buscarDadosComissao(codigo.trim(), { excluirFotoId: id });
+      setDados(resultado);
+    } catch (e) {
+      setErroAlbum(e instanceof Error ? e.message : 'Não foi possível excluir a foto agora.');
+    } finally {
+      setExcluindoFotoId(null);
     }
   }
 
@@ -199,6 +214,37 @@ export function Comissao() {
                 <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)' }}>Ninguém confirmou ainda.</span>
               </div>
             ) : null}
+          </Card>
+
+          <Card className="no-print" padding={0} style={{ overflow: 'hidden' }}>
+            <div style={{ padding: 'var(--space-6) var(--space-7)', borderBottom: '1px solid var(--stroke-hair)' }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
+                Fotos do álbum · {dados.fotos.length}
+              </span>
+            </div>
+            {dados.fotos.length > 0 ? (
+              <div style={{ display: 'grid', gridTemplateColumns: mobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: 'var(--space-4)', padding: 'var(--space-6) var(--space-7)' }}>
+                {dados.fotos.map((f) => (
+                  <div key={f.id} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                    <img
+                      src={urlDaFoto(f.caminho)}
+                      alt={f.legenda ?? ''}
+                      style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--stroke-hair)' }}
+                    />
+                    {f.legenda ? (
+                      <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>{f.legenda}</span>
+                    ) : null}
+                    <Button variant="ghost" disabled={excluindoFotoId === f.id} onClick={() => excluirFoto(f.id)} style={{ padding: 0, height: 28, fontSize: 10 }}>
+                      {excluindoFotoId === f.id ? 'EXCLUINDO…' : 'EXCLUIR'}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ padding: 'var(--space-7)' }}>
+                <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)' }}>Nenhuma foto enviada ainda.</span>
+              </div>
+            )}
           </Card>
 
           <Card className="no-print" padding={0} style={{ overflow: 'hidden' }}>

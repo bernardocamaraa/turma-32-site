@@ -23,7 +23,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { codigo, definirAlbumAberto } = await req.json();
+    const { codigo, definirAlbumAberto, excluirFotoId } = await req.json();
     const expected = Deno.env.get('COMMITTEE_CODE') ?? '';
 
     if (!expected || typeof codigo !== 'string' || codigo.trim() !== expected) {
@@ -49,21 +49,43 @@ Deno.serve(async (req) => {
       if (error) throw error;
     }
 
-    const [rsvps, mensagens, configuracoes] = await Promise.all([
+    // Optional: remove one photo — its Storage file first, then the row.
+    // Also only reachable after the access-code check: a guest's anon key
+    // has no delete permission on either the table or the bucket (schema.sql),
+    // so this is the only path a photo can be removed through.
+    if (typeof excluirFotoId === 'string') {
+      const { data: foto, error: buscaError } = await supabase
+        .from('fotos')
+        .select('caminho')
+        .eq('id', excluirFotoId)
+        .maybeSingle();
+      if (buscaError) throw buscaError;
+      if (foto) {
+        const { error: storageError } = await supabase.storage.from('fotos-album').remove([foto.caminho]);
+        if (storageError) throw storageError;
+        const { error: deleteError } = await supabase.from('fotos').delete().eq('id', excluirFotoId);
+        if (deleteError) throw deleteError;
+      }
+    }
+
+    const [rsvps, mensagens, configuracoes, fotos] = await Promise.all([
       supabase.from('rsvps').select('id, formando, nome, whatsapp, pessoas, acompanhantes, criado_em').order('criado_em', { ascending: false }),
       supabase.from('mensagens').select('id, nome, mensagem, criado_em').order('criado_em', { ascending: false }),
       supabase.from('configuracoes').select('chave, valor').eq('chave', 'album_aberto').maybeSingle(),
+      supabase.from('fotos').select('id, caminho, legenda, criado_em').order('criado_em', { ascending: false }),
     ]);
 
     if (rsvps.error) throw rsvps.error;
     if (mensagens.error) throw mensagens.error;
     if (configuracoes.error) throw configuracoes.error;
+    if (fotos.error) throw fotos.error;
 
     return new Response(
       JSON.stringify({
         rsvps: rsvps.data,
         mensagens: mensagens.data,
         albumAberto: configuracoes.data?.valor ?? false,
+        fotos: fotos.data,
       }),
       { headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } },
     );

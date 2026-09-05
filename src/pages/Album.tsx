@@ -4,49 +4,46 @@ import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Dialog } from '../components/Dialog';
 import { Icon } from '../components/Icon';
+import { Input } from '../components/Input';
 import { CountdownRow } from '../components/SectionHeading';
 import { useReveal } from '../lib/useReveal';
 import { useCountdown } from '../lib/countdown';
 import { useIsMobile } from '../lib/useViewport';
-import { buscarAlbumAberto } from '../lib/supabase';
+import { buscarAlbumAberto, buscarFotos, enviarFoto, urlDaFoto, type Foto } from '../lib/supabase';
 
 const POLL_MS = 30000;
-
-const FOTOS_PLACEHOLDER: [string, string][] = [
-  ['foto · entrada', '19h42'],
-  ['foto · pista', '20h15'],
-  ['foto · mesa 04', '20h31'],
-  ['foto · valsa', '21h03'],
-  ['foto · turma inteira', '21h20'],
-  ['foto · bar', '21h48'],
-  ['foto · pista', '22h05'],
-  ['foto · varanda', '22h27'],
-  ['foto · mesa 09', '22h51'],
-  ['foto · pista', '23h14'],
-  ['foto · palco', '23h39'],
-  ['foto · saída', '00h12'],
-];
+const TAMANHO_MAXIMO = 10 * 1024 * 1024;
 
 export function Album() {
   const countdown = useCountdown();
   const mobile = useIsMobile();
   const [aberto, setAberto] = useState<boolean | null>(null);
+  const [fotos, setFotos] = useState<Foto[]>([]);
   const [dialogAberto, setDialogAberto] = useState(false);
+  const [arquivo, setArquivo] = useState<File | null>(null);
+  const [legenda, setLegenda] = useState('');
+  const [enviando, setEnviando] = useState(false);
+  const [erroEnvio, setErroEnvio] = useState<string | null>(null);
+  const [enviado, setEnviado] = useState(false);
 
   useEffect(() => {
     let ativo = true;
     async function checar() {
       try {
-        const valor = await buscarAlbumAberto();
-        if (ativo) setAberto(valor);
+        const [valorAberto, listaFotos] = await Promise.all([buscarAlbumAberto(), buscarFotos()]);
+        if (ativo) {
+          setAberto(valorAberto);
+          setFotos(listaFotos);
+        }
       } catch (e) {
         console.error(e);
         if (ativo) setAberto((atual) => atual ?? false);
       }
     }
     checar();
-    // The committee flips this from another device — polling is the simplest
-    // way for a phone sitting on the album page during the party to notice.
+    // The committee flips this from another device, and other guests upload
+    // from theirs — polling is the simplest way for a phone sitting on the
+    // album page during the party to pick up either change.
     const id = setInterval(checar, POLL_MS);
     return () => {
       ativo = false;
@@ -56,6 +53,41 @@ export function Album() {
 
   if (aberto === null) {
     return <main style={{ maxWidth: 'var(--maxw-page)', margin: '0 auto', padding: 'var(--space-9) var(--gutter-page) var(--space-10)' }} />;
+  }
+
+  function abrirDialogEnvio() {
+    setArquivo(null);
+    setLegenda('');
+    setErroEnvio(null);
+    setEnviado(false);
+    setDialogAberto(true);
+  }
+
+  function escolherArquivo(lista: FileList | null) {
+    const f = lista?.[0] ?? null;
+    if (f && f.size > TAMANHO_MAXIMO) {
+      setErroEnvio('Essa foto passa de 10MB — tenta uma versão menor.');
+      setArquivo(null);
+      return;
+    }
+    setErroEnvio(null);
+    setArquivo(f);
+  }
+
+  async function enviar() {
+    if (!arquivo) return;
+    setEnviando(true);
+    setErroEnvio(null);
+    try {
+      await enviarFoto(arquivo, legenda);
+      const listaFotos = await buscarFotos();
+      setFotos(listaFotos);
+      setEnviado(true);
+    } catch (e) {
+      setErroEnvio(e instanceof Error ? e.message : 'Não foi possível enviar a foto agora.');
+    } finally {
+      setEnviando(false);
+    }
   }
 
   return (
@@ -140,56 +172,88 @@ export function Album() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
               <Badge tone="accent">AO VIVO NA FESTA</Badge>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
-                {FOTOS_PLACEHOLDER.length} fotos enviadas
+                {fotos.length} {fotos.length === 1 ? 'foto enviada' : 'fotos enviadas'}
               </span>
             </div>
-            <Button iconLeft={<Icon name="camera" size={18} />} onClick={() => setDialogAberto(true)}>
+            <Button iconLeft={<Icon name="camera" size={18} />} onClick={abrirDialogEnvio}>
               ENVIAR FOTO
             </Button>
           </div>
-          <div style={{ display: 'grid', gap: 'var(--space-4)', gridTemplateColumns: mobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)' }}>
-            {FOTOS_PLACEHOLDER.map((foto, i) => (
-              <PhotoTile key={i} label={foto[0]} hora={foto[1]} delay={Math.min(i, 7) * 60} />
-            ))}
-          </div>
+          {fotos.length === 0 ? (
+            <Card padding="var(--space-7)">
+              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)' }}>Nenhuma foto ainda — seja o primeiro a enviar!</span>
+            </Card>
+          ) : (
+            <div style={{ display: 'grid', gap: 'var(--space-4)', gridTemplateColumns: mobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)' }}>
+              {fotos.map((foto, i) => (
+                <PhotoTile key={foto.id} foto={foto} delay={Math.min(i, 7) * 60} />
+              ))}
+            </div>
+          )}
         </>
       )}
 
       <Dialog
         open={dialogAberto}
-        title="Foto enviada"
+        title={enviado ? 'Foto enviada' : 'Enviar foto'}
         onClose={() => setDialogAberto(false)}
-        footer={<Button onClick={() => setDialogAberto(false)}>FECHAR</Button>}
+        footer={
+          enviado ? (
+            <Button onClick={() => setDialogAberto(false)}>FECHAR</Button>
+          ) : (
+            <Button disabled={!arquivo || enviando} onClick={enviar}>
+              {enviando ? 'ENVIANDO…' : 'ENVIAR'}
+            </Button>
+          )
+        }
       >
-        O envio de fotos ainda não está conectado — assim que o álbum tiver armazenamento, sua foto aparece aqui na hora.
+        {enviado ? (
+          'Sua foto já está no álbum da festa. Ela fica no ar até o fim da noite.'
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
+                Sua foto
+              </span>
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={(e) => escolherArquivo(e.target.files)}
+                style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-core)', fontSize: 'var(--fs-body-sm)' }}
+              />
+            </div>
+            <Input label="Legenda (opcional)" placeholder="Diz alguma coisa sobre essa foto" value={legenda} onChange={(e) => setLegenda(e.target.value)} />
+            {erroEnvio ? <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--state-error)' }}>{erroEnvio}</span> : null}
+          </div>
+        )}
       </Dialog>
     </main>
   );
 }
 
-function PhotoTile({ label, hora, delay }: { label: string; hora: string; delay: number }) {
-  const reveal = useReveal<HTMLDivElement>(label, delay);
+function PhotoTile({ foto, delay }: { foto: Foto; delay: number }) {
+  const reveal = useReveal<HTMLDivElement>(foto.id, delay);
+  const hora = new Date(foto.criado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   return (
     <div
       ref={reveal.ref}
       className={reveal.className}
       style={{
         ...reveal.style,
-        background: 'var(--wall-600)',
-        backgroundImage: 'url(/assets/wall-texture.png)',
-        backgroundSize: '300px',
         border: '1px solid var(--stroke-hair)',
         display: 'flex',
         flexDirection: 'column',
-        justifyContent: 'flex-end',
         gap: 2,
-        padding: 'var(--space-4)',
-        minHeight: 200,
+        overflow: 'hidden',
         transition: 'border-color 120ms var(--ease-out),box-shadow 120ms var(--ease-out),transform 120ms var(--ease-out)',
       }}
     >
-      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>{label}</span>
-      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.14em', color: 'var(--text-faint)', opacity: 0.7 }}>{hora}</span>
+      <img src={urlDaFoto(foto.caminho)} alt={foto.legenda ?? ''} style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }} />
+      <div style={{ padding: 'var(--space-3)', display: 'flex', flexDirection: 'column', gap: 2, background: 'var(--wall-600)' }}>
+        {foto.legenda ? <span style={{ fontSize: 'var(--fs-body-sm)' }}>{foto.legenda}</span> : null}
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.14em', color: 'var(--text-faint)', opacity: 0.7 }}>{hora}</span>
+      </div>
     </div>
   );
 }

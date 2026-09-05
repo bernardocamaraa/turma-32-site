@@ -59,6 +59,7 @@ export type ComissaoData = {
   rsvps: ComissaoRsvp[];
   mensagens: ComissaoMensagem[];
   albumAberto: boolean;
+  fotos: Foto[];
 };
 
 /**
@@ -75,6 +76,42 @@ export async function buscarAlbumAberto(): Promise<boolean> {
   return data?.valor ?? false;
 }
 
+export type Foto = {
+  id: string;
+  caminho: string;
+  legenda: string | null;
+  criado_em: string;
+};
+
+const FOTOS_BUCKET = 'fotos-album';
+
+/** Public URL for a photo's storage path — the bucket is public, so this is a plain URL, no signing needed. */
+export function urlDaFoto(caminho: string): string {
+  return supabase.storage.from(FOTOS_BUCKET).getPublicUrl(caminho).data.publicUrl;
+}
+
+export async function buscarFotos(): Promise<Foto[]> {
+  const { data, error } = await supabase.from('fotos').select('id, caminho, legenda, criado_em').order('criado_em', { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
+/**
+ * Uploads straight from the browser to Storage, then records the row. Both
+ * steps are only allowed while the committee has the album open — enforced
+ * by RLS on both the bucket and the table (schema.sql), not just by hiding
+ * the button in the UI, so a guest can't upload by calling the API directly
+ * once the album has closed.
+ */
+export async function enviarFoto(arquivo: File, legenda: string): Promise<void> {
+  const extensao = arquivo.name.split('.').pop()?.toLowerCase() || 'jpg';
+  const caminho = `${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${extensao}`;
+  const upload = await supabase.storage.from(FOTOS_BUCKET).upload(caminho, arquivo, { contentType: arquivo.type || undefined });
+  if (upload.error) throw upload.error;
+  const { error } = await supabase.from('fotos').insert({ caminho, legenda: legenda.trim() || null });
+  if (error) throw error;
+}
+
 /**
  * The committee area cannot just SELECT the tables with the public anon key —
  * that key is visible to every visitor's browser, so RLS blocks anon reads
@@ -82,13 +119,16 @@ export async function buscarAlbumAberto(): Promise<boolean> {
  * checked inside the `committee-data` Edge Function, which holds the service
  * role key server-side and only returns data when the code matches.
  *
- * Pass `definirAlbumAberto` to also flip the album's open/closed flag as
- * part of the same call (used by the "Liberar álbum" / "Fechar álbum"
- * button) — the response always reflects the state after that change.
+ * Pass `definirAlbumAberto` to also flip the album's open/closed flag, or
+ * `excluirFotoId` to delete one photo (Storage file + row), as part of the
+ * same call — the response always reflects the state after that change.
  */
-export async function buscarDadosComissao(codigo: string, definirAlbumAberto?: boolean): Promise<ComissaoData> {
+export async function buscarDadosComissao(
+  codigo: string,
+  opcoes?: { definirAlbumAberto?: boolean; excluirFotoId?: string },
+): Promise<ComissaoData> {
   const { data, error } = await supabase.functions.invoke<ComissaoData>('committee-data', {
-    body: { codigo, definirAlbumAberto },
+    body: { codigo, ...opcoes },
   });
   if (error) {
     const context = (error as { context?: unknown }).context;
