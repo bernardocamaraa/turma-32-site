@@ -7,7 +7,7 @@ export function Footer() {
   return (
     <footer
       ref={reveal.ref}
-      className={reveal.className}
+      className={`no-print ${reveal.className}`}
       style={{ borderTop: '1px solid var(--stroke-hair)', padding: 'var(--space-8) var(--gutter-page)' }}
     >
       <div

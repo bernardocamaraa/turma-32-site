@@ -88,3 +88,37 @@ button {
     transform: none;
   }
 }
+
+/* Printing (used by the "baixar PDF" button on the área da comissão): flips
+   the dark theme to a light, ink-friendly palette and hides nav/actions that
+   don't make sense on paper — everything else keeps rendering normally, no
+   separate print-only markup needed. */
+@media print {
+  :root {
+    --ink-950: #ffffff;
+    --ink-900: #ffffff;
+    --ink-850: #ffffff;
+    --ink-800: #f2f2f2;
+    --chalk-050: #0a0a0c;
+    --text-primary: #0a0a0c;
+    --text-muted: #333333;
+    --text-faint: #555555;
+    --accent: #0a0a0c;
+    --stroke-hair: #cccccc;
+    --stroke-muted: #999999;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .reveal {
+    opacity: 1 !important;
+    transform: none !important;
+    animation: none !important;
+  }
+}

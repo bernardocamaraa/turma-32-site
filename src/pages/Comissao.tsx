@@ -31,6 +31,10 @@ export function Comissao() {
     setCodigo('');
   }
 
+  function baixarPdf() {
+    window.print();
+  }
+
   function baixarCsv() {
     if (!dados) return;
     const linhas = [['convidado', 'formando', 'pessoas', 'whatsapp', 'quando']].concat(
@@ -103,9 +107,14 @@ export function Comissao() {
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
                 Lista de presença
               </span>
-              <Button variant="ghost" onClick={baixarCsv}>
-                BAIXAR CSV
-              </Button>
+              <div className="no-print" style={{ display: 'flex', gap: 'var(--space-3)' }}>
+                <Button variant="ghost" onClick={baixarPdf}>
+                  BAIXAR PDF
+                </Button>
+                <Button variant="ghost" onClick={baixarCsv}>
+                  BAIXAR CSV
+                </Button>
+              </div>
             </div>
             <div style={{ overflowX: 'auto' }}>
               <div style={{ minWidth: 640 }}>
@@ -157,7 +166,7 @@ export function Comissao() {
             ) : null}
           </Card>
 
-          <div style={{ display: 'flex' }}>
+          <div className="no-print" style={{ display: 'flex' }}>
             <Button variant="ghost" onClick={sair}>
               SAIR
             </Button>

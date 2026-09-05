@@ -31,6 +31,7 @@ export function NavBar() {
 
   return (
     <header
+      className="no-print"
       style={{
         position: 'sticky',
         top: 0,
