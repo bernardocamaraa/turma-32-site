@@ -42,13 +42,20 @@ export function CountdownRow({
   seg: string;
   size?: number;
 }) {
+  // clamp() instead of a fixed px size: on a narrow phone the 4 two-digit
+  // numbers plus gaps can add up to more than the available width (they were
+  // getting clipped flush against the card's right edge) — scaling with the
+  // viewport means it always fits, on any screen, without per-page tuning.
+  const fontSize = `clamp(22px, ${(size / 5.5).toFixed(2)}vw, ${size}px)`;
+  const gapSize = `clamp(6px, 2vw, ${size > 40 ? 32 : 24}px)`;
+
   const cell = (value: string, label: string, tone?: string) => (
     <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: size > 40 ? 'center' : undefined }}>
       <span
         key={tone ? value : undefined}
         style={{
           fontFamily: 'var(--font-mono)',
-          fontSize: size,
+          fontSize,
           fontWeight: 700,
           lineHeight: 1,
           color: tone,
@@ -72,7 +79,7 @@ export function CountdownRow({
   );
 
   return (
-    <div style={{ display: 'flex', gap: size > 40 ? 'var(--space-7)' : 'var(--space-6)' }}>
+    <div style={{ display: 'flex', gap: gapSize, flexWrap: 'wrap' }}>
       {cell(dias, 'dias')}
       {cell(horas, 'horas')}
       {cell(min, 'min')}
