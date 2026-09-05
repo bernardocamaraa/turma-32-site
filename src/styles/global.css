@@ -90,6 +90,17 @@ button {
   transform: none;
 }
 
+@media (max-width: 759px) {
+  /* The "tagged" card's hard offset shadow (the graffiti-sticker look) only
+     paints to the bottom-right, so on a narrow screen with tight side
+     margins it reads as the whole card being shoved left instead of a
+     stylistic accent. Shrink it on mobile so it stays a detail, not a
+     layout tell. */
+  .card-tag-shadow {
+    box-shadow: 3px 3px 0 var(--ice-300) !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation: none !important;

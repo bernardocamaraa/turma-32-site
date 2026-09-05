@@ -15,6 +15,7 @@ export function Card({
   interactive = false,
   padding = 'var(--space-6)',
   style,
+  className,
   children,
   ...rest
 }: {
@@ -31,6 +32,7 @@ export function Card({
 
   return (
     <div
+      className={[variant === 'tagged' ? 'card-tag-shadow' : '', className].filter(Boolean).join(' ') || undefined}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
