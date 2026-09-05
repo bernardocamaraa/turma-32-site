@@ -68,6 +68,10 @@ button {
   transform: translateY(10px);
 }
 
+.print-watermark {
+  display: none;
+}
+
 .reveal.is-in {
   animation: om-fade-up 640ms var(--ease-out) both;
 }
@@ -114,6 +118,20 @@ button {
 
   .no-print {
     display: none !important;
+  }
+
+  .print-watermark {
+    display: block !important;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: 340px;
+    height: auto;
+    transform: translate(-50%, -50%);
+    opacity: 0.06;
+    filter: grayscale(1);
+    z-index: -1;
+    pointer-events: none;
   }
 
   .reveal {

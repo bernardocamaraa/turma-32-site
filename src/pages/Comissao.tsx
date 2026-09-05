@@ -65,6 +65,7 @@ export function Comissao() {
         animation: 'om-fade-up 620ms var(--ease-out) both',
       }}
     >
+      {dados ? <img src="/assets/logo-32.png" alt="" aria-hidden className="print-watermark" /> : null}
       <PageHeader eyebrow="Área da comissão" title="Confirmações e mensagens" />
 
       {!dados ? (
@@ -99,7 +100,9 @@ export function Comissao() {
           <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : 'repeat(3,1fr)', gap: 'var(--space-5)' }}>
             <Stat label="Confirmações" value={pad(dados.rsvps.length)} />
             <Stat label="Pessoas confirmadas" value={pad(dados.rsvps.reduce((a, r) => a + r.pessoas, 0))} accent />
-            <Stat label="Mensagens" value={pad(dados.mensagens.length)} />
+            <div className="no-print">
+              <Stat label="Mensagens" value={pad(dados.mensagens.length)} />
+            </div>
           </div>
 
           <Card padding={0} style={{ overflow: 'hidden' }}>
@@ -142,7 +145,7 @@ export function Comissao() {
             ) : null}
           </Card>
 
-          <Card padding={0} style={{ overflow: 'hidden' }}>
+          <Card className="no-print" padding={0} style={{ overflow: 'hidden' }}>
             <div style={{ padding: 'var(--space-6) var(--space-7)', borderBottom: '1px solid var(--stroke-hair)' }}>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
                 Mensagens recebidas
