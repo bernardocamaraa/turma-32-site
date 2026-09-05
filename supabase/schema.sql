@@ -23,8 +23,36 @@ create table if not exists public.mensagens (
   criado_em timestamptz not null default now()
 );
 
+-- Single-row settings table. Today it only holds whether the party album is
+-- open to uploads — the committee flips it by hand on the day of the baile
+-- (see the "Liberar álbum" button in Área da comissão) instead of the site
+-- guessing from the visitor's own clock against a hardcoded date/time.
+create table if not exists public.configuracoes (
+  chave text primary key,
+  valor boolean not null default false
+);
+
+insert into public.configuracoes (chave, valor)
+values ('album_aberto', false)
+on conflict (chave) do nothing;
+
+-- Migration for a project created before "configuracoes" existed:
+-- create table if not exists public.configuracoes (chave text primary key, valor boolean not null default false);
+-- insert into public.configuracoes (chave, valor) values ('album_aberto', false) on conflict (chave) do nothing;
+-- alter table public.configuracoes enable row level security;
+-- create policy "anyone can read configuracoes" on public.configuracoes for select to anon using (true);
+
 alter table public.rsvps enable row level security;
 alter table public.mensagens enable row level security;
+alter table public.configuracoes enable row level security;
+
+-- Every visitor's browser needs to know if the album is open, so this one is
+-- readable by anon — it's not sensitive, just a flag. It stays write-only
+-- through the committee-data Edge Function (service role key, gated by the
+-- access code); there is deliberately no anon INSERT/UPDATE policy here.
+create policy "anyone can read configuracoes" on public.configuracoes
+  for select to anon
+  using (true);
 
 -- Guests submit the RSVP form and the "fale com a comissão" form anonymously
 -- (no login on this site), so INSERT must be open to the anon key.

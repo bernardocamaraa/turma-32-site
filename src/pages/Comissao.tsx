@@ -12,6 +12,8 @@ export function Comissao() {
   const [carregando, setCarregando] = useState(false);
   const [erroAcesso, setErroAcesso] = useState<string | null>(null);
   const [dados, setDados] = useState<ComissaoData | null>(null);
+  const [alternandoAlbum, setAlternandoAlbum] = useState(false);
+  const [erroAlbum, setErroAlbum] = useState<string | null>(null);
 
   async function entrar() {
     setCarregando(true);
@@ -23,6 +25,20 @@ export function Comissao() {
       setErroAcesso(e instanceof Error ? e.message : 'Não foi possível entrar agora.');
     } finally {
       setCarregando(false);
+    }
+  }
+
+  async function alternarAlbum() {
+    if (!dados) return;
+    setAlternandoAlbum(true);
+    setErroAlbum(null);
+    try {
+      const resultado = await buscarDadosComissao(codigo.trim(), !dados.albumAberto);
+      setDados(resultado);
+    } catch (e) {
+      setErroAlbum(e instanceof Error ? e.message : 'Não foi possível mudar o álbum agora.');
+    } finally {
+      setAlternandoAlbum(false);
     }
   }
 
@@ -102,6 +118,38 @@ export function Comissao() {
         </Card>
       ) : (
         <>
+          <Card className="no-print" padding="var(--space-6)">
+            <div
+              style={{
+                display: 'flex',
+                alignItems: mobile ? 'stretch' : 'center',
+                justifyContent: 'space-between',
+                gap: 'var(--space-5)',
+                flexDirection: mobile ? 'column' : 'row',
+              }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
+                  Álbum da festa
+                </span>
+                <span style={{ fontSize: 'var(--fs-body)' }}>
+                  {dados.albumAberto ? 'Aberto — convidados já podem enviar fotos.' : 'Fechado — ninguém consegue enviar fotos ainda.'}
+                </span>
+              </div>
+              <Button
+                size="lg"
+                variant={dados.albumAberto ? 'secondary' : 'primary'}
+                disabled={alternandoAlbum}
+                onClick={alternarAlbum}
+              >
+                {alternandoAlbum ? 'ATUALIZANDO…' : dados.albumAberto ? 'FECHAR ÁLBUM' : 'LIBERAR ÁLBUM'}
+              </Button>
+            </div>
+            {erroAlbum ? (
+              <span style={{ display: 'block', marginTop: 'var(--space-3)', fontSize: 'var(--fs-body-sm)', color: 'var(--state-error)' }}>{erroAlbum}</span>
+            ) : null}
+          </Card>
+
           <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : 'repeat(3,1fr)', gap: 'var(--space-5)' }}>
             <Stat label="Confirmações" value={pad(dados.rsvps.length)} />
             <Stat label="Pessoas confirmadas" value={pad(dados.rsvps.reduce((a, r) => a + r.pessoas, 0))} accent />

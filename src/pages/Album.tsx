@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
@@ -6,8 +6,11 @@ import { Dialog } from '../components/Dialog';
 import { Icon } from '../components/Icon';
 import { CountdownRow } from '../components/SectionHeading';
 import { useReveal } from '../lib/useReveal';
-import { BAILE, useCountdown } from '../lib/countdown';
+import { useCountdown } from '../lib/countdown';
 import { useIsMobile } from '../lib/useViewport';
+import { buscarAlbumAberto } from '../lib/supabase';
+
+const POLL_MS = 30000;
 
 const FOTOS_PLACEHOLDER: [string, string][] = [
   ['foto · entrada', '19h42'],
@@ -27,8 +30,33 @@ const FOTOS_PLACEHOLDER: [string, string][] = [
 export function Album() {
   const countdown = useCountdown();
   const mobile = useIsMobile();
-  const aberto = useMemo(() => Date.now() >= BAILE.getTime(), []);
+  const [aberto, setAberto] = useState<boolean | null>(null);
   const [dialogAberto, setDialogAberto] = useState(false);
+
+  useEffect(() => {
+    let ativo = true;
+    async function checar() {
+      try {
+        const valor = await buscarAlbumAberto();
+        if (ativo) setAberto(valor);
+      } catch (e) {
+        console.error(e);
+        if (ativo) setAberto((atual) => atual ?? false);
+      }
+    }
+    checar();
+    // The committee flips this from another device — polling is the simplest
+    // way for a phone sitting on the album page during the party to notice.
+    const id = setInterval(checar, POLL_MS);
+    return () => {
+      ativo = false;
+      clearInterval(id);
+    };
+  }, []);
+
+  if (aberto === null) {
+    return <main style={{ maxWidth: 'var(--maxw-page)', margin: '0 auto', padding: 'var(--space-9) var(--gutter-page) var(--space-10)' }} />;
+  }
 
   return (
     <main style={{ maxWidth: 'var(--maxw-page)', margin: '0 auto', padding: 'var(--space-9) var(--gutter-page) var(--space-10)', animation: 'om-fade-up 620ms var(--ease-out) both' }}>
@@ -96,13 +124,13 @@ export function Album() {
               }}
             />
             <span style={{ position: 'relative', fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '.2em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
-              Abre em
+              Falta
             </span>
             <div style={{ position: 'relative' }}>
               <CountdownRow {...countdown} size={48} />
             </div>
             <p style={{ position: 'relative', margin: 0, maxWidth: '44ch', fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)' }}>
-              No dia 10.12, às 19h, o botão de enviar foto aparece aqui para quem estiver na festa. As fotos ficam no ar durante a noite.
+              A comissão libera o envio de fotos durante a festa. Assim que abrir, o botão de enviar foto aparece aqui e as fotos ficam no ar durante a noite.
             </p>
           </div>
         </Card>

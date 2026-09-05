@@ -259,7 +259,7 @@ export function Home() {
                 Olha você curtindo!
               </h2>
               <p style={{ margin: 0, fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)', maxWidth: '52ch' }}>
-                Publique aqui suas fotos curtindo nossa festa! Abre <span style={{ fontFamily: 'var(--font-mono)' }}>10.12.2026 · 19h</span> e fecha no fim da noite.
+                Publique aqui suas fotos curtindo nossa festa! Abre durante o baile (<span style={{ fontFamily: 'var(--font-mono)' }}>10.12.2026</span>) e fecha no fim da noite.
               </p>
               <div style={{ marginTop: 'var(--space-3)', display: 'flex' }}>
                 <Button variant="ghost" onClick={() => navigate('/album')}>
@@ -280,7 +280,7 @@ export function Home() {
               }}
             >
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
-                fechado até 10.12 · 19h
+                fechado até a festa
               </span>
             </div>
           </div>

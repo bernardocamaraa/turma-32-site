@@ -58,7 +58,22 @@ export type ComissaoMensagem = {
 export type ComissaoData = {
   rsvps: ComissaoRsvp[];
   mensagens: ComissaoMensagem[];
+  albumAberto: boolean;
 };
+
+/**
+ * Whether the party album accepts uploads — flipped by hand from Área da
+ * comissão (see buscarDadosComissao below), not guessed from the visitor's
+ * own clock. Unlike rsvps/mensagens this is public: everyone visiting the
+ * album needs to know its state, and it isn't sensitive, so `configuracoes`
+ * has a plain anon SELECT policy (schema.sql) — no Edge Function needed to
+ * read it, only to change it.
+ */
+export async function buscarAlbumAberto(): Promise<boolean> {
+  const { data, error } = await supabase.from('configuracoes').select('valor').eq('chave', 'album_aberto').maybeSingle();
+  if (error) throw error;
+  return data?.valor ?? false;
+}
 
 /**
  * The committee area cannot just SELECT the tables with the public anon key —
@@ -66,10 +81,14 @@ export type ComissaoData = {
  * entirely (see supabase/schema.sql). Instead the shared access code is
  * checked inside the `committee-data` Edge Function, which holds the service
  * role key server-side and only returns data when the code matches.
+ *
+ * Pass `definirAlbumAberto` to also flip the album's open/closed flag as
+ * part of the same call (used by the "Liberar álbum" / "Fechar álbum"
+ * button) — the response always reflects the state after that change.
  */
-export async function buscarDadosComissao(codigo: string): Promise<ComissaoData> {
+export async function buscarDadosComissao(codigo: string, definirAlbumAberto?: boolean): Promise<ComissaoData> {
   const { data, error } = await supabase.functions.invoke<ComissaoData>('committee-data', {
-    body: { codigo },
+    body: { codigo, definirAlbumAberto },
   });
   if (error) {
     const context = (error as { context?: unknown }).context;
