@@ -4,7 +4,6 @@ import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Dialog } from '../components/Dialog';
 import { Icon } from '../components/Icon';
-import { AssinaturaOverlay } from '../components/AssinaturaOverlay';
 import { Input } from '../components/Input';
 import { CountdownRow } from '../components/SectionHeading';
 import { useReveal } from '../lib/useReveal';
@@ -142,7 +141,6 @@ export function Album() {
               textAlign: 'center',
             }}
           >
-            <AssinaturaOverlay size={520} duration={95} />
             <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg,rgba(10,10,12,.9),rgba(10,10,12,.6),rgba(10,10,12,.9))' }} />
             <div
               style={{
