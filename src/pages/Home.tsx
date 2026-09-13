@@ -295,6 +295,18 @@ export function Home() {
         <div
           style={{
             position: 'absolute',
+            inset: 0,
+            backgroundImage: 'url(/assets/assinaturas.png)',
+            backgroundSize: '640px',
+            backgroundPosition: 'center',
+            filter: 'invert(1)',
+            opacity: 0.1,
+            pointerEvents: 'none',
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
             left: '50%',
             top: '50%',
             width: 760,
