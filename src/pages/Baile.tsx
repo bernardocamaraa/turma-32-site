@@ -8,6 +8,7 @@ import { Input } from '../components/Input';
 import { MapEmbed, MAPS_LINK } from '../components/MapEmbed';
 import { CountdownRow, PageHeader } from '../components/SectionHeading';
 import { Dialog } from '../components/Dialog';
+import { AssinaturaOverlay } from '../components/AssinaturaOverlay';
 import { useCountdown } from '../lib/countdown';
 import { useIsMobile } from '../lib/useViewport';
 import { enviarMensagem } from '../lib/supabase';
@@ -85,6 +86,8 @@ export function Baile() {
           </div>
           <div
             style={{
+              position: 'relative',
+              overflow: 'hidden',
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'center',
@@ -97,7 +100,8 @@ export function Baile() {
               ...(mobile ? { borderTop: '1px solid var(--stroke-hair)' } : { borderLeft: '1px solid var(--stroke-hair)' }),
             }}
           >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+            <AssinaturaOverlay size={420} duration={75} />
+            <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
                 Colação de grau
               </span>
@@ -105,7 +109,7 @@ export function Baile() {
                 Acontece durante o baile, no mesmo salão. Não há cerimônia em outro dia nem em outro endereço.
               </p>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', paddingTop: 'var(--space-5)', borderTop: '1px solid var(--stroke-hair)' }}>
+            <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', paddingTop: 'var(--space-5)', borderTop: '1px solid var(--stroke-hair)' }}>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
                 Falta
               </span>

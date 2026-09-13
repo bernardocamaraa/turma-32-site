@@ -7,6 +7,7 @@ import { Logo } from '../components/Logo';
 import { MapEmbed, MAPS_LINK } from '../components/MapEmbed';
 import { CountdownRow, SectionEyebrowRule } from '../components/SectionHeading';
 import { Reveal } from '../components/Reveal';
+import { AssinaturaOverlay } from '../components/AssinaturaOverlay';
 import { useCountdown } from '../lib/countdown';
 import { useIsMobile, usePrefersReducedMotion, useScrollY } from '../lib/useViewport';
 
@@ -31,6 +32,7 @@ export function Home() {
           animation: 'om-drift 120s linear infinite',
         }}
       >
+        <AssinaturaOverlay size={520} duration={100} />
         <div
           style={{
             position: 'absolute',
@@ -222,6 +224,8 @@ export function Home() {
             </div>
             <div
               style={{
+                position: 'relative',
+                overflow: 'hidden',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'center',
@@ -234,13 +238,16 @@ export function Home() {
                 ...(mobile ? { borderTop: '1px solid var(--stroke-hair)' } : { borderLeft: '1px solid var(--stroke-hair)' }),
               }}
             >
-              <Field label="Data" value="10 de dezembro" />
-              <Field label="Horário" value="19h" />
-              <Field label="Local" value="Ballroom Casa de Festas" />
-              <div style={{ marginTop: 'var(--space-3)', display: 'flex' }}>
-                <Button variant="secondary" as="a" href={MAPS_LINK} target="_blank" rel="noopener noreferrer" iconLeft={<Icon name="map-pin" size={16} />}>
-                  Como chegar
-                </Button>
+              <AssinaturaOverlay size={420} duration={80} />
+              <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+                <Field label="Data" value="10 de dezembro" />
+                <Field label="Horário" value="19h" />
+                <Field label="Local" value="Ballroom Casa de Festas" />
+                <div style={{ marginTop: 'var(--space-3)', display: 'flex' }}>
+                  <Button variant="secondary" as="a" href={MAPS_LINK} target="_blank" rel="noopener noreferrer" iconLeft={<Icon name="map-pin" size={16} />}>
+                    Como chegar
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
@@ -269,6 +276,8 @@ export function Home() {
             </div>
             <div
               style={{
+                position: 'relative',
+                overflow: 'hidden',
                 background: 'var(--wall-500)',
                 backgroundImage: 'url(/assets/wall-texture.png)',
                 backgroundSize: '420px',
@@ -279,7 +288,8 @@ export function Home() {
                 ...(mobile ? { borderTop: '1px solid var(--stroke-hair)' } : { borderLeft: '1px solid var(--stroke-hair)' }),
               }}
             >
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
+              <AssinaturaOverlay size={420} duration={70} />
+              <span style={{ position: 'relative', fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
                 fechado até a festa
               </span>
             </div>
@@ -290,21 +300,18 @@ export function Home() {
       <Reveal
         id="confirmar"
         as="section"
-        style={{ maxWidth: 'var(--maxw-page)', margin: '0 auto', padding: 'var(--space-10) var(--gutter-page)', position: 'relative', overflow: 'hidden' }}
+        style={{
+          maxWidth: 'var(--maxw-page)',
+          margin: '0 auto',
+          padding: 'var(--space-10) var(--gutter-page)',
+          position: 'relative',
+          overflow: 'hidden',
+          background: 'var(--wall-600)',
+          backgroundImage: 'url(/assets/wall-texture.png)',
+          backgroundSize: '520px',
+        }}
       >
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            backgroundImage: 'url(/assets/assinaturas.png)',
-            backgroundSize: '520px',
-            backgroundPosition: 'center',
-            filter: 'invert(1)',
-            opacity: 0.1,
-            pointerEvents: 'none',
-            animation: 'om-drift 90s linear infinite',
-          }}
-        />
+        <AssinaturaOverlay size={520} duration={110} />
         <div
           style={{
             position: 'absolute',
