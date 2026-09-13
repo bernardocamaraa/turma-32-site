@@ -297,11 +297,12 @@ export function Home() {
             position: 'absolute',
             inset: 0,
             backgroundImage: 'url(/assets/assinaturas.png)',
-            backgroundSize: '640px',
+            backgroundSize: '520px',
             backgroundPosition: 'center',
             filter: 'invert(1)',
             opacity: 0.1,
             pointerEvents: 'none',
+            animation: 'om-drift 90s linear infinite',
           }}
         />
         <div
