@@ -128,23 +128,10 @@ export function Baile() {
             Passeio completo
           </h2>
           <p style={{ margin: 0, fontSize: 'var(--fs-body-lg)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)', maxWidth: '60ch' }}>
-            É uma noite de gala: vale caprichar. Abaixo, o que funciona bem — e
-            o que é melhor deixar no armário.
+            É uma noite de gala: vale caprichar. O que é melhor deixar no
+            armário:
           </p>
         </div>
-
-        <Card padding="var(--space-7)">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <Rotulo>O que funciona bem</Rotulo>
-            <Lista
-              itens={[
-                'Vestido longo ou midi de festa, ou terno completo com gravata',
-                'Sapato social fechado ou salto confortável — a noite é longa e tem pista',
-                'Capriche no visual: maquiagem, cabelo de gala ou smoking também são bem-vindos',
-              ]}
-            />
-          </div>
-        </Card>
 
         <Card padding="var(--space-7)">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
