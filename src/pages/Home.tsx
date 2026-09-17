@@ -9,7 +9,6 @@ import { CountdownRow, SectionEyebrowRule } from '../components/SectionHeading';
 import { Reveal } from '../components/Reveal';
 import { AvisoConfirmacao } from '../components/AvisoConfirmacao';
 import { useCountdown } from '../lib/countdown';
-import { FORMANDOS } from '../lib/formandos';
 import { useIsMobile, usePrefersReducedMotion, useScrollY } from '../lib/useViewport';
 
 export function Home() {
@@ -266,7 +265,7 @@ export function Home() {
       </Reveal>
 
       <Reveal id="saiba-mais" as="section" style={{ maxWidth: 'var(--maxw-page)', margin: '0 auto', padding: 'var(--space-9) var(--gutter-page) 0' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : 'repeat(3,1fr)', gap: 'var(--space-5)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : 'repeat(2,1fr)', gap: 'var(--space-5)' }}>
           <Atalho
             titulo="Traje da noite"
             texto="Passeio completo. Veja o que vestir — e o que evitar."
@@ -279,12 +278,8 @@ export function Home() {
             acao="VER AS DÚVIDAS"
             onClick={() => navigate('/baile#duvidas')}
           />
-          <Atalho
-            titulo={`Os ${FORMANDOS.length} formandos`}
-            texto="A turma inteira que se forma nessa noite, nome por nome."
-            acao="VER A TURMA"
-            onClick={() => navigate('/turma')}
-          />
+          {/* "Os N formandos" escondido até termos a assinatura de todo
+              mundo — devolver aqui (e no NavBar) quando o resto chegar. */}
         </div>
       </Reveal>
 
