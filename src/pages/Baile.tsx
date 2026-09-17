@@ -3,14 +3,11 @@ import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Badge } from '../components/Badge';
 import { Icon } from '../components/Icon';
-import { Input } from '../components/Input';
 import { MapEmbed, MAPS_LINK } from '../components/MapEmbed';
 import { CountdownRow, PageHeader, SectionEyebrowRule } from '../components/SectionHeading';
-import { Dialog } from '../components/Dialog';
 import { AvisoConfirmacao } from '../components/AvisoConfirmacao';
 import { useCountdown } from '../lib/countdown';
 import { useIsMobile } from '../lib/useViewport';
-import { enviarMensagem } from '../lib/supabase';
 
 /**
  * Só entram aqui respostas que a comissão já fechou. Dúvidas cuja resposta
@@ -59,30 +56,6 @@ const DUVIDAS: { pergunta: string; resposta: string }[] = [
 export function Baile() {
   const countdown = useCountdown();
   const mobile = useIsMobile();
-
-  const [nome, setNome] = useState('');
-  const [mensagem, setMensagem] = useState('');
-  const [enviando, setEnviando] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
-  const [enviado, setEnviado] = useState(false);
-
-  const naoPodeEnviar = !nome.trim() || !mensagem.trim() || enviando;
-
-  async function enviar() {
-    setEnviando(true);
-    setErro(null);
-    try {
-      await enviarMensagem({ nome: nome.trim(), mensagem: mensagem.trim() });
-      setMensagem('');
-      setEnviado(true);
-    } catch (e) {
-      const detalhe = e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : null;
-      setErro(detalhe ? `Não foi possível enviar agora: ${detalhe}` : 'Não foi possível enviar agora. Tente de novo em instantes.');
-      console.error(e);
-    } finally {
-      setEnviando(false);
-    }
-  }
 
   return (
     <main
@@ -240,60 +213,8 @@ export function Baile() {
         </Card>
       </section>
 
-      <Card padding="var(--space-7)">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-            <span
-              style={{
-                fontFamily: 'var(--font-core)',
-                fontSize: 'var(--fs-label)',
-                fontWeight: 600,
-                letterSpacing: 'var(--tracking-label)',
-                textTransform: 'uppercase',
-                color: 'var(--accent)',
-              }}
-            >
-              Fale com a comissão
-            </span>
-            <p style={{ margin: 0, fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)', maxWidth: '52ch' }}>
-              Ficou com alguma dúvida que não está aí em cima? Escreva aqui e a
-              comissão recebe. (Para confirmar presença, fale com o formando que
-              te convidou.)
-            </p>
-          </div>
-          <Input label="Seu nome" placeholder="Nome completo" value={nome} onChange={(e) => setNome(e.target.value)} />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-            <Rotulo>Sua mensagem</Rotulo>
-            <textarea
-              rows={4}
-              placeholder="Escreva a sua dúvida"
-              value={mensagem}
-              onChange={(e) => setMensagem(e.target.value)}
-              style={{
-                width: '100%',
-                boxSizing: 'border-box',
-                resize: 'vertical',
-                background: 'var(--ink-900)',
-                color: 'var(--text-primary)',
-                border: '1px solid var(--stroke-hair)',
-                borderRadius: 'var(--radius-sm)',
-                padding: 'var(--space-4)',
-                fontFamily: 'var(--font-core)',
-                fontSize: 'var(--fs-body)',
-                lineHeight: 'var(--lh-normal)',
-              }}
-            />
-          </div>
-          {erro ? <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--state-error)' }}>{erro}</span> : null}
-          <Button size="lg" disabled={naoPodeEnviar} onClick={enviar}>
-            {enviando ? 'ENVIANDO…' : 'ENVIAR MENSAGEM'}
-          </Button>
-        </div>
-      </Card>
-
-      <Dialog open={enviado} title="Mensagem enviada" onClose={() => setEnviado(false)} footer={<Button onClick={() => setEnviado(false)}>FECHAR</Button>}>
-        A comissão recebeu a sua mensagem.
-      </Dialog>
+      {/* "Fale com a comissão" escondido enquanto o Supabase está pausado
+          (reativa só daqui a 90 dias) — devolver quando o banco voltar ao ar. */}
     </main>
   );
 }

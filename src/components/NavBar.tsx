@@ -7,7 +7,8 @@ const LINKS = [
   { to: '/', label: 'Início' },
   { to: '/baile', label: 'O baile' },
   { to: '/turma', label: 'A turma' },
-  { to: '/album', label: 'Álbum' },
+  // Álbum escondido enquanto o Supabase está pausado (reativa só daqui a
+  // 90 dias) — voltar a listar aqui quando o banco estiver de novo no ar.
 ];
 
 export function NavBar() {

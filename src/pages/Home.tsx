@@ -288,42 +288,8 @@ export function Home() {
         </div>
       </Reveal>
 
-      <Reveal id="album" as="section" style={{ maxWidth: 'var(--maxw-page)', margin: '0 auto', padding: 'var(--space-9) var(--gutter-page) var(--space-10)' }}>
-        <Card padding={0} style={{ overflow: 'hidden' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : '1.1fr .9fr' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', padding: 'var(--space-8)' }}>
-              <SectionEyebrowRule>Álbum da festa</SectionEyebrowRule>
-              <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 400, fontSize: 'var(--fs-h1)', lineHeight: 'var(--lh-snug)' }}>
-                Olha você curtindo!
-              </h2>
-              <p style={{ margin: 0, fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)', maxWidth: '52ch' }}>
-                Publique aqui suas fotos curtindo nossa festa! Abre durante o baile (<span style={{ fontFamily: 'var(--font-mono)' }}>10.12.2026</span>) e fecha no fim da noite.
-              </p>
-              <div style={{ marginTop: 'var(--space-3)', display: 'flex' }}>
-                <Button variant="ghost" onClick={() => navigate('/album')}>
-                  VER O ÁLBUM
-                </Button>
-              </div>
-            </div>
-            <div
-              style={{
-                background: 'var(--wall-500)',
-                backgroundImage: 'url(/assets/wall-texture.png)',
-                backgroundSize: '420px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: 'var(--space-8)',
-                ...(mobile ? { borderTop: '1px solid var(--stroke-hair)' } : { borderLeft: '1px solid var(--stroke-hair)' }),
-              }}
-            >
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
-                fechado até a festa
-              </span>
-            </div>
-          </div>
-        </Card>
-      </Reveal>
+      {/* Álbum escondido enquanto o Supabase está pausado (reativa só daqui
+          a 90 dias) — devolver esta seção quando o banco voltar ao ar. */}
     </main>
   );
 }
