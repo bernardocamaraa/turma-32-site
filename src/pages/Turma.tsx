@@ -3,6 +3,32 @@ import { PageHeader } from '../components/SectionHeading';
 import { FORMANDOS } from '../lib/formandos';
 import { useIsMobile } from '../lib/useViewport';
 
+/**
+ * Nomes viram o slug dos arquivos em /assets/assinaturas (ex.: "Maria Luiza
+ * Pires" → "maria-luiza-pires.png"). Só 29 dos 32 formandos têm assinatura
+ * cadastrada até agora — os que faltam simplesmente não têm o arquivo, e a
+ * lista mostra só o nome nesse caso.
+ */
+function slugAssinatura(nome: string): string {
+  return nome
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+const COM_ASSINATURA = new Set([
+  'anna-carolina-russo', 'anna-clara-ribeiro', 'arthur-caetano', 'arthur-oliveira',
+  'bernardo-camara', 'bernardo-ignacio', 'caio-bezerra', 'carolina-warrak',
+  'enzo-louro', 'geovanna-russo', 'guilherme-warrak', 'isabella-guimaraes',
+  'isabella-monteiro', 'joao-pedro-jardim', 'lais-boldrim', 'laura-viana',
+  'livia-whitaker', 'lorenzo-nunes', 'lucas-loyola', 'lucas-varejao',
+  'luiza-goes', 'maian-costa', 'maria-clara-bispo', 'maria-eduarda-barroso',
+  'maria-luiza-pires', 'matheus-veiga', 'pietra-machado', 'sophia-afonso',
+  'susana-liu',
+]);
+
 export function Turma() {
   const mobile = useIsMobile();
 
@@ -47,51 +73,39 @@ export function Turma() {
             rowGap: 0,
           }}
         >
-          {FORMANDOS.map((nome, i) => (
-            <li
-              key={nome}
-              style={{
-                display: 'flex',
-                alignItems: 'baseline',
-                gap: 'var(--space-4)',
-                padding: 'var(--space-4) 0',
-                borderBottom: '1px solid var(--stroke-hair)',
-              }}
-            >
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-faint)', flex: '0 0 auto', width: 24 }}>
-                {String(i + 1).padStart(2, '0')}
-              </span>
-              <span style={{ fontFamily: 'var(--font-display)', fontWeight: 400, fontSize: 'var(--fs-h4)', lineHeight: 'var(--lh-snug)' }}>{nome}</span>
-            </li>
-          ))}
+          {FORMANDOS.map((nome, i) => {
+            const slug = slugAssinatura(nome);
+            const temAssinatura = COM_ASSINATURA.has(slug);
+            return (
+              <li
+                key={nome}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 'var(--space-4)',
+                  padding: 'var(--space-4) 0',
+                  borderBottom: '1px solid var(--stroke-hair)',
+                }}
+              >
+                <span style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-4)', minWidth: 0 }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-faint)', flex: '0 0 auto', width: 24 }}>
+                    {String(i + 1).padStart(2, '0')}
+                  </span>
+                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 400, fontSize: 'var(--fs-h4)', lineHeight: 'var(--lh-snug)' }}>{nome}</span>
+                </span>
+                {temAssinatura ? (
+                  <img
+                    src={`/assets/assinaturas/${slug}.png`}
+                    alt={`Assinatura de ${nome}`}
+                    style={{ flex: '0 0 auto', maxWidth: 110, maxHeight: 32, objectFit: 'contain' }}
+                  />
+                ) : null}
+              </li>
+            );
+          })}
         </ol>
       </Card>
-
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-4)' }}>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
-          Assinaturas da turma
-        </span>
-        {/* The asset is a repeating texture: cropping it to one band keeps it
-            as a signed detail at the end of the page instead of a huge, half
-            duplicated block. */}
-        <div
-          style={{
-            width: '100%',
-            maxWidth: 560,
-            height: 200,
-            overflow: 'hidden',
-            // Fades the crop out instead of slicing signatures in half.
-            maskImage: 'linear-gradient(to bottom,#000 62%,transparent 100%)',
-            WebkitMaskImage: 'linear-gradient(to bottom,#000 62%,transparent 100%)',
-          }}
-        >
-          <img
-            src="/assets/assinaturas.png"
-            alt="Assinaturas dos formandos da Turma 32"
-            style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', filter: 'invert(1)', opacity: 0.6 }}
-          />
-        </div>
-      </div>
     </main>
   );
 }
