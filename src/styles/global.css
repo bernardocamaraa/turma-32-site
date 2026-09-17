@@ -12,8 +12,13 @@ html, body {
   /* Safety net: a decorative absolutely-positioned glow/halo without its own
      clipping container has caused horizontal overflow before (see the
      "confirmar" section fix) — this stops that class of bug from ever
-     showing as a sideways-scrolling black gap again. */
-  overflow-x: hidden;
+     showing as a sideways-scrolling black gap again.
+
+     `clip` and not `hidden`: `overflow-x: hidden` turns body into a scroll
+     container, which silently broke the sticky header (it scrolled away with
+     the page instead of staying on top). `clip` cuts the overflow without
+     creating that scroll container. */
+  overflow-x: clip;
 }
 
 body {
@@ -34,6 +39,12 @@ a:hover {
 
 button {
   font: inherit;
+}
+
+/* The header is sticky, so an anchor jump (/baile#traje) would otherwise
+   land with the section title hidden behind it. */
+[id] {
+  scroll-margin-top: 96px;
 }
 
 @keyframes om-fade-up {

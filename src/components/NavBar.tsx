@@ -1,18 +1,17 @@
 import { useState } from 'react';
 import { Menu, X } from 'lucide-react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Button } from './Button';
+import { Link, useLocation } from 'react-router-dom';
 import { useIsMobile } from '../lib/useViewport';
 
 const LINKS = [
   { to: '/', label: 'Início' },
   { to: '/baile', label: 'O baile' },
+  { to: '/turma', label: 'A turma' },
   { to: '/album', label: 'Álbum' },
 ];
 
 export function NavBar() {
   const location = useLocation();
-  const navigate = useNavigate();
   const mobile = useIsMobile();
   const [open, setOpen] = useState(false);
 
@@ -67,12 +66,24 @@ export function NavBar() {
         ) : null}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flex: '0 0 auto' }}>
-          <Button size="sm" onClick={() => navigate('/rsvp')} style={mobile ? { padding: '0 10px', fontSize: 10 } : undefined}>
-            {mobile ? 'CONFIRMAR' : 'CONFIRMAR PRESENÇA'}
-          </Button>
-          {mobile ? (
+          {/* The site is informational only — no CTA here; the date is the
+              one thing worth carrying on every screen. */}
+          {!mobile ? (
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 12,
+                letterSpacing: '.18em',
+                color: 'var(--text-faint)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              10.12.2026 · 19H
+            </span>
+          ) : (
             <button
               aria-label={open ? 'Fechar menu' : 'Abrir menu'}
+              aria-expanded={open}
               onClick={() => setOpen((v) => !v)}
               style={{
                 display: 'flex',
@@ -90,7 +101,7 @@ export function NavBar() {
             >
               {open ? <X size={16} /> : <Menu size={16} />}
             </button>
-          ) : null}
+          )}
         </div>
       </div>
 
@@ -109,6 +120,9 @@ export function NavBar() {
               {l.label}
             </Link>
           ))}
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '.18em', color: 'var(--text-faint)' }}>
+            10.12.2026 · 19H
+          </span>
         </nav>
       ) : null}
     </header>

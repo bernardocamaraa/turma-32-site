@@ -24,7 +24,6 @@ export function Comissao() {
   // instead of crashing the whole page blank.
   function normalizar(resultado: ComissaoData): ComissaoData {
     return {
-      rsvps: resultado.rsvps ?? [],
       mensagens: resultado.mensagens ?? [],
       albumAberto: resultado.albumAberto ?? false,
       fotos: resultado.fotos ?? [],
@@ -77,26 +76,6 @@ export function Comissao() {
     setCodigo('');
   }
 
-  function baixarPdf() {
-    window.print();
-  }
-
-  function baixarCsv() {
-    if (!dados) return;
-    const linhas = [['convidado', 'formando', 'pessoas', 'acompanhantes', 'whatsapp', 'quando']].concat(
-      dados.rsvps.map((r) => [r.nome, r.formando, String(r.pessoas), (r.acompanhantes ?? []).join('; '), r.whatsapp, r.criado_em]),
-    );
-    const csv = linhas.map((l) => l.map((c) => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n');
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'turma32-confirmacoes.csv';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  }
-
   const pad = (n: number) => String(n).padStart(2, '0');
 
   return (
@@ -111,19 +90,14 @@ export function Comissao() {
         animation: 'om-fade-up 620ms var(--ease-out) both',
       }}
     >
-      {dados ? (
-        <>
-          <img src="/assets/logo-32.png" alt="" aria-hidden className="print-watermark" />
-          <img src="/assets/logo-32.png" alt="" aria-hidden className="print-footer-logo" />
-        </>
-      ) : null}
-      <PageHeader eyebrow="Área da comissão" title="Confirmações e mensagens" />
+      <PageHeader eyebrow="Área da comissão" title="Álbum e mensagens" />
 
       {!dados ? (
         <Card padding="var(--space-7)">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxWidth: 420 }}>
             <p style={{ margin: 0, fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)' }}>
-              Esta área é só da comissão. Digite o código combinado com a turma.
+              Esta área é só da comissão: liberar o álbum da festa, moderar as fotos e ler as
+              mensagens recebidas. Digite o código combinado com a turma.
             </p>
             <Input
               label="Código de acesso"
@@ -148,7 +122,7 @@ export function Comissao() {
         </Card>
       ) : (
         <>
-          <Card className="no-print" padding="var(--space-6)">
+          <Card padding="var(--space-6)">
             <div
               style={{
                 display: 'flex',
@@ -180,58 +154,12 @@ export function Comissao() {
             ) : null}
           </Card>
 
-          <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : 'repeat(3,1fr)', gap: 'var(--space-5)' }}>
-            <Stat label="Confirmações" value={pad(dados.rsvps.length)} />
-            <Stat label="Pessoas confirmadas" value={pad(dados.rsvps.reduce((a, r) => a + r.pessoas, 0))} accent />
-            <div className="no-print">
-              <Stat label="Mensagens" value={pad(dados.mensagens.length)} />
-            </div>
+          <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : 'repeat(2,1fr)', gap: 'var(--space-5)' }}>
+            <Stat label="Fotos no álbum" value={pad(dados.fotos.length)} accent />
+            <Stat label="Mensagens" value={pad(dados.mensagens.length)} />
           </div>
 
           <Card padding={0} style={{ overflow: 'hidden' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-5)', padding: 'var(--space-6) var(--space-7)', borderBottom: '1px solid var(--stroke-hair)' }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
-                Lista de presença
-              </span>
-              <div className="no-print" style={{ display: 'flex', gap: 'var(--space-3)' }}>
-                <Button variant="ghost" onClick={baixarPdf}>
-                  BAIXAR PDF
-                </Button>
-                <Button variant="ghost" onClick={baixarCsv}>
-                  BAIXAR CSV
-                </Button>
-              </div>
-            </div>
-            <div className="table-scroll" style={{ overflowX: 'auto' }}>
-              <div className="table-scroll-inner" style={{ minWidth: 760 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1.1fr .5fr 1.4fr 1fr', gap: 'var(--space-4)', padding: 'var(--space-4) var(--space-7)', borderBottom: '1px solid var(--stroke-hair)' }}>
-                  {['Convidado', 'Formando', 'Pessoas', 'Acompanhantes', 'WhatsApp'].map((h) => (
-                    <span key={h} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
-                      {h}
-                    </span>
-                  ))}
-                </div>
-                {dados.rsvps.map((r) => (
-                  <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '1.1fr 1.1fr .5fr 1.4fr 1fr', gap: 'var(--space-4)', padding: 'var(--space-5) var(--space-7)', borderBottom: '1px solid var(--stroke-hair)' }}>
-                    <span style={{ fontSize: 'var(--fs-body)' }}>{r.nome}</span>
-                    <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{r.formando}</span>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-body)' }}>{r.pessoas}</span>
-                    <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>
-                      {r.acompanhantes && r.acompanhantes.length > 0 ? r.acompanhantes.join(', ') : '—'}
-                    </span>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>{r.whatsapp}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            {dados.rsvps.length === 0 ? (
-              <div style={{ padding: 'var(--space-7)' }}>
-                <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)' }}>Ninguém confirmou ainda.</span>
-              </div>
-            ) : null}
-          </Card>
-
-          <Card className="no-print" padding={0} style={{ overflow: 'hidden' }}>
             <div style={{ padding: 'var(--space-6) var(--space-7)', borderBottom: '1px solid var(--stroke-hair)' }}>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
                 Fotos do álbum · {dados.fotos.length}
@@ -262,7 +190,7 @@ export function Comissao() {
             )}
           </Card>
 
-          <Card className="no-print" padding={0} style={{ overflow: 'hidden' }}>
+          <Card padding={0} style={{ overflow: 'hidden' }}>
             <div style={{ padding: 'var(--space-6) var(--space-7)', borderBottom: '1px solid var(--stroke-hair)' }}>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
                 Mensagens recebidas
@@ -286,7 +214,7 @@ export function Comissao() {
             ) : null}
           </Card>
 
-          <div className="no-print" style={{ display: 'flex' }}>
+          <div style={{ display: 'flex' }}>
             <Button variant="ghost" onClick={sair}>
               SAIR
             </Button>

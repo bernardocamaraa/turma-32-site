@@ -1,9 +1,9 @@
-export type Formando = {
-  nome: string;
-  cota: number;
-};
-
-const NOMES = [
+/**
+ * Os 32 formandos da turma. A lista é usada só para exibição (página "A
+ * turma") — o convite e a lista de convidados de cada formando são tratados
+ * fora do site, no portal da casa de festas.
+ */
+export const FORMANDOS: string[] = [
   'Anna Carolina Russo',
   'Anna Clara Ribeiro',
   'Arthur Caetano',
@@ -37,12 +37,3 @@ const NOMES = [
   'Suellen Bazillio',
   'Susana Liu',
 ];
-
-/** Placeholder quota — every invitation currently allows 4 guests. Update per-formando if this varies. */
-const COTA_PADRAO = 4;
-
-export const FORMANDOS: Formando[] = NOMES.map((nome) => ({ nome, cota: COTA_PADRAO }));
-
-export function cotaDe(nome: string): number {
-  return FORMANDOS.find((f) => f.nome === nome)?.cota ?? 0;
-}

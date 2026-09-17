@@ -7,7 +7,9 @@ import { Logo } from '../components/Logo';
 import { MapEmbed, MAPS_LINK } from '../components/MapEmbed';
 import { CountdownRow, SectionEyebrowRule } from '../components/SectionHeading';
 import { Reveal } from '../components/Reveal';
+import { AvisoConfirmacao } from '../components/AvisoConfirmacao';
 import { useCountdown } from '../lib/countdown';
+import { FORMANDOS } from '../lib/formandos';
 import { useIsMobile, usePrefersReducedMotion, useScrollY } from '../lib/useViewport';
 
 export function Home() {
@@ -127,11 +129,19 @@ export function Home() {
                 ...(mobile ? { flexDirection: 'column' as const, alignItems: 'stretch' as const } : { alignItems: 'center' as const }),
               }}
             >
-              <Button size="lg" onClick={() => navigate('/rsvp')}>
-                CONFIRMAR PRESENÇA
+              <Button size="lg" onClick={() => navigate('/baile')}>
+                DETALHES DA NOITE
               </Button>
-              <Button size="lg" variant="secondary" onClick={() => navigate('/baile')}>
-                SAIBA MAIS
+              <Button
+                size="lg"
+                variant="secondary"
+                as="a"
+                href={MAPS_LINK}
+                target="_blank"
+                rel="noopener noreferrer"
+                iconLeft={<Icon name="map-pin" size={16} />}
+              >
+                COMO CHEGAR
               </Button>
             </div>
             <div
@@ -214,7 +224,8 @@ export function Home() {
                 Baile de formatura
               </h3>
               <p style={{ margin: 0, fontSize: 'var(--fs-body-lg)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)', maxWidth: '34ch' }}>
-                Uma noite só, com a turma inteira reunida pela última vez.
+                Uma noite só, com a turma inteira reunida pela última vez. A
+                colação de grau acontece no mesmo lugar, durante o baile.
               </p>
               <div style={{ marginTop: 'var(--space-4)', paddingTop: 'var(--space-6)', borderTop: '1px solid var(--stroke-hair)', display: 'flex', gap: 'var(--space-6)' }}>
                 <CountdownRow {...countdown} />
@@ -250,7 +261,34 @@ export function Home() {
         </Card>
       </Reveal>
 
-      <Reveal id="album" as="section" style={{ maxWidth: 'var(--maxw-page)', margin: '0 auto', padding: 'var(--space-10) var(--gutter-page) 0' }}>
+      <Reveal id="confirmar" as="section" style={{ maxWidth: 'var(--maxw-page)', margin: '0 auto', padding: 'var(--space-9) var(--gutter-page) 0' }}>
+        <AvisoConfirmacao />
+      </Reveal>
+
+      <Reveal id="saiba-mais" as="section" style={{ maxWidth: 'var(--maxw-page)', margin: '0 auto', padding: 'var(--space-9) var(--gutter-page) 0' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : 'repeat(3,1fr)', gap: 'var(--space-5)' }}>
+          <Atalho
+            titulo="Traje da noite"
+            texto="Passeio completo. Veja o que vestir — e o que evitar."
+            acao="VER O TRAJE"
+            onClick={() => navigate('/baile#traje')}
+          />
+          <Atalho
+            titulo="Perguntas frequentes"
+            texto="Horário, colação, estacionamento, fotos e o resto das dúvidas."
+            acao="VER AS DÚVIDAS"
+            onClick={() => navigate('/baile#duvidas')}
+          />
+          <Atalho
+            titulo={`Os ${FORMANDOS.length} formandos`}
+            texto="A turma inteira que se forma nessa noite, nome por nome."
+            acao="VER A TURMA"
+            onClick={() => navigate('/turma')}
+          />
+        </div>
+      </Reveal>
+
+      <Reveal id="album" as="section" style={{ maxWidth: 'var(--maxw-page)', margin: '0 auto', padding: 'var(--space-9) var(--gutter-page) var(--space-10)' }}>
         <Card padding={0} style={{ overflow: 'hidden' }}>
           <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : '1.1fr .9fr' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', padding: 'var(--space-8)' }}>
@@ -286,61 +324,29 @@ export function Home() {
           </div>
         </Card>
       </Reveal>
-
-      <Reveal
-        id="confirmar"
-        as="section"
-        style={{ maxWidth: 'var(--maxw-page)', margin: '0 auto', padding: 'var(--space-10) var(--gutter-page)', position: 'relative', overflow: 'hidden' }}
-      >
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            backgroundImage: 'url(/assets/assinaturas.png)',
-            backgroundSize: '520px',
-            backgroundPosition: 'center',
-            filter: 'invert(1)',
-            opacity: 0.1,
-            pointerEvents: 'none',
-            animation: 'om-drift 90s linear infinite',
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            left: '50%',
-            top: '50%',
-            width: 760,
-            height: 420,
-            margin: '-210px 0 0 -380px',
-            pointerEvents: 'none',
-            background: 'radial-gradient(ellipse,rgba(169,211,232,.13),rgba(169,211,232,0) 68%)',
-            animation: 'om-sheen 11s ease-in-out infinite',
-          }}
-        />
-        <Card padding={0} style={{ overflow: 'hidden' }}>
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              gap: 'var(--space-7)',
-              padding: 'var(--space-8)',
-              ...(mobile ? { flexDirection: 'column' as const, alignItems: 'stretch' as const } : { alignItems: 'center' as const }),
-            }}
-          >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-              <SectionEyebrowRule>Confirmação de presença</SectionEyebrowRule>
-              <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 400, fontSize: 'var(--fs-h2)', lineHeight: 'var(--lh-snug)' }}>
-                Confirme a sua presença por aqui!
-              </h2>
-            </div>
-            <Button size="lg" onClick={() => navigate('/rsvp')}>
-              CONFIRMAR PRESENÇA
-            </Button>
-          </div>
-        </Card>
-      </Reveal>
     </main>
+  );
+}
+
+function Atalho({ titulo, texto, acao, onClick }: { titulo: string; texto: string; acao: string; onClick: () => void }) {
+  return (
+    <Card interactive padding="var(--space-7)" onClick={onClick} style={{ cursor: 'pointer', height: '100%' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', height: '100%' }}>
+        <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 400, fontSize: 'var(--fs-h3)', lineHeight: 'var(--lh-snug)' }}>{titulo}</h3>
+        <p style={{ margin: 0, flex: 1, fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)' }}>{texto}</p>
+        <span
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 11,
+            letterSpacing: '.18em',
+            textTransform: 'uppercase',
+            color: 'var(--accent)',
+          }}
+        >
+          {acao} →
+        </span>
+      </div>
+    </Card>
   );
 }
 

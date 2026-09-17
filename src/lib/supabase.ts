@@ -6,7 +6,7 @@ const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 if (!url || !anonKey) {
   // eslint-disable-next-line no-console
   console.warn(
-    'Supabase env vars are missing (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY). RSVP and message submission will fail until they are set — see site/.env.example.',
+    'Supabase env vars are missing (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY). Messages and the album will fail until they are set — see .env.example.',
   );
 }
 
@@ -15,38 +15,15 @@ if (!url || !anonKey) {
 // calls will fail with a network error instead of crashing the whole page.
 export const supabase = createClient(url || 'https://placeholder.supabase.co', anonKey || 'placeholder-anon-key');
 
-export type RsvpRecord = {
-  formando: string;
-  nome: string;
-  whatsapp: string;
-  pessoas: number;
-  acompanhantes: string[];
-};
-
 export type MensagemRecord = {
   nome: string;
   mensagem: string;
 };
 
-export async function enviarRsvp(record: RsvpRecord) {
-  const { error } = await supabase.from('rsvps').insert(record);
-  if (error) throw error;
-}
-
 export async function enviarMensagem(record: MensagemRecord) {
   const { error } = await supabase.from('mensagens').insert(record);
   if (error) throw error;
 }
-
-export type ComissaoRsvp = {
-  id: string;
-  formando: string;
-  nome: string;
-  whatsapp: string;
-  pessoas: number;
-  acompanhantes: string[] | null;
-  criado_em: string;
-};
 
 export type ComissaoMensagem = {
   id: string;
@@ -56,7 +33,6 @@ export type ComissaoMensagem = {
 };
 
 export type ComissaoData = {
-  rsvps: ComissaoRsvp[];
   mensagens: ComissaoMensagem[];
   albumAberto: boolean;
   fotos: Foto[];
@@ -65,7 +41,7 @@ export type ComissaoData = {
 /**
  * Whether the party album accepts uploads — flipped by hand from Área da
  * comissão (see buscarDadosComissao below), not guessed from the visitor's
- * own clock. Unlike rsvps/mensagens this is public: everyone visiting the
+ * own clock. Unlike `mensagens` this flag is public: everyone visiting the
  * album needs to know its state, and it isn't sensitive, so `configuracoes`
  * has a plain anon SELECT policy (schema.sql) — no Edge Function needed to
  * read it, only to change it.

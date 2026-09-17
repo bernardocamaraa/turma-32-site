@@ -1,7 +1,7 @@
 // Supabase Edge Function: committee-data
 //
 // Checks the shared committee access code and, if it matches, returns every
-// RSVP and message using the service role key (which bypasses RLS). This is
+// messages using the service role key (which bypasses RLS). This is
 // the only place that key is ever used — it never reaches the browser.
 //
 // Deploy with:
@@ -68,21 +68,18 @@ Deno.serve(async (req) => {
       }
     }
 
-    const [rsvps, mensagens, configuracoes, fotos] = await Promise.all([
-      supabase.from('rsvps').select('id, formando, nome, whatsapp, pessoas, acompanhantes, criado_em').order('criado_em', { ascending: false }),
+    const [mensagens, configuracoes, fotos] = await Promise.all([
       supabase.from('mensagens').select('id, nome, mensagem, criado_em').order('criado_em', { ascending: false }),
       supabase.from('configuracoes').select('chave, valor').eq('chave', 'album_aberto').maybeSingle(),
       supabase.from('fotos').select('id, caminho, legenda, criado_em').order('criado_em', { ascending: false }),
     ]);
 
-    if (rsvps.error) throw rsvps.error;
     if (mensagens.error) throw mensagens.error;
     if (configuracoes.error) throw configuracoes.error;
     if (fotos.error) throw fotos.error;
 
     return new Response(
       JSON.stringify({
-        rsvps: rsvps.data,
         mensagens: mensagens.data,
         albumAberto: configuracoes.data?.valor ?? false,
         fotos: fotos.data,

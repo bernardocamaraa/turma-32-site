@@ -3,18 +3,12 @@
 
 create extension if not exists "pgcrypto";
 
-create table if not exists public.rsvps (
-  id uuid primary key default gen_random_uuid(),
-  formando text not null,
-  nome text not null,
-  whatsapp text not null,
-  pessoas integer not null check (pessoas > 0),
-  acompanhantes text[] not null default '{}',
-  criado_em timestamptz not null default now()
-);
-
--- Migration for a project created before "acompanhantes" existed:
--- alter table public.rsvps add column if not exists acompanhantes text[] not null default '{}';
+-- The site no longer collects confirmations: the guest list is handled in the
+-- venue's own portal, where each formando logs in and registers their guests.
+-- Keeping a second list here would just create two sources of truth.
+-- If your project already ran an older version of this file, drop the table
+-- (only after checking it has nothing you want to keep):
+-- drop table if exists public.rsvps;
 
 create table if not exists public.mensagens (
   id uuid primary key default gen_random_uuid(),
@@ -73,7 +67,6 @@ on conflict (id) do nothing;
 -- create policy "anyone can view fotos-album files" on storage.objects for select to anon using (bucket_id = 'fotos-album');
 -- create policy "anon can upload to fotos-album while album is open" on storage.objects for insert to anon with check (bucket_id = 'fotos-album' and coalesce((select valor from public.configuracoes where chave = 'album_aberto'), false) = true);
 
-alter table public.rsvps enable row level security;
 alter table public.mensagens enable row level security;
 alter table public.configuracoes enable row level security;
 alter table public.fotos enable row level security;
@@ -86,24 +79,19 @@ create policy "anyone can read configuracoes" on public.configuracoes
   for select to anon
   using (true);
 
--- Guests submit the RSVP form and the "fale com a comissão" form anonymously
--- (no login on this site), so INSERT must be open to the anon key.
-create policy "anon can submit rsvps" on public.rsvps
-  for insert to anon
-  with check (true);
-
+-- Guests send the "fale com a comissão" form anonymously (no login on this
+-- site), so INSERT must be open to the anon key.
 create policy "anon can submit mensagens" on public.mensagens
   for insert to anon
   with check (true);
 
 -- Deliberately no SELECT policy for anon/authenticated: the anon key ships in
--- the browser bundle, so if these tables were readable with it, anyone could
--- read every guest's name, WhatsApp number and message without ever entering
--- the committee's access code. Reads only happen through the `committee-data`
+-- the browser bundle, so if this table were readable with it, anyone could
+-- read every message ever sent without entering the committee's access code. Reads only happen through the `committee-data`
 -- Edge Function, which holds the service role key server-side (bypassing RLS)
 -- and checks the shared access code before returning anything.
 
--- Photos are the opposite of rsvps/mensagens: the whole point is that every
+-- Photos are the opposite of mensagens: the whole point is that every
 -- visitor sees them, so SELECT is public. Anyone can also INSERT a row (no
 -- login on this site) — but only while the committee has the album open;
 -- the same check is duplicated in the Storage policy below so a photo row
