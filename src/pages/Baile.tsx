@@ -39,7 +39,7 @@ const DUVIDAS: { pergunta: string; resposta: string }[] = [
   {
     pergunta: 'Qual é o traje?',
     resposta:
-      'Passeio completo. Terno ou vestido longo/midi — e evite azul marinho, que é a cor usada pela turma.',
+      'Passeio completo. Mais detalhes na seção "Traje", logo acima nesta página.',
   },
   {
     pergunta: 'Posso tirar fotos durante a festa?',
@@ -83,9 +83,6 @@ export function Baile() {
               <div style={{ display: 'flex' }}>
                 <Badge tone="gild">TRAJE PASSEIO COMPLETO</Badge>
               </div>
-              <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-faint)' }}>
-                Recomendamos evitar a cor azul marinho.
-              </span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
               <Field label="Data" value="10 de dezembro de 2026" />
@@ -136,32 +133,18 @@ export function Baile() {
           </p>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : 'repeat(2,1fr)', gap: 'var(--space-5)' }}>
-          <Card padding="var(--space-7)" style={{ height: '100%' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-              <Rotulo>Elas</Rotulo>
-              <Lista
-                itens={[
-                  'Vestido longo ou midi de festa',
-                  'Salto confortável — a noite é longa e tem pista',
-                  'Maquiagem e cabelo de gala, se quiser caprichar',
-                ]}
-              />
-            </div>
-          </Card>
-          <Card padding="var(--space-7)" style={{ height: '100%' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-              <Rotulo>Eles</Rotulo>
-              <Lista
-                itens={[
-                  'Terno completo, com gravata',
-                  'Sapato social fechado',
-                  'Smoking também é bem-vindo',
-                ]}
-              />
-            </div>
-          </Card>
-        </div>
+        <Card padding="var(--space-7)">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <Rotulo>O que funciona bem</Rotulo>
+            <Lista
+              itens={[
+                'Vestido longo ou midi de festa, ou terno completo com gravata',
+                'Sapato social fechado ou salto confortável — a noite é longa e tem pista',
+                'Capriche no visual: maquiagem, cabelo de gala ou smoking também são bem-vindos',
+              ]}
+            />
+          </div>
+        </Card>
 
         <Card padding="var(--space-7)">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
@@ -169,7 +152,6 @@ export function Baile() {
             <Lista
               tone="var(--gild-300)"
               itens={[
-                'Azul marinho — é a cor usada pela turma na noite',
                 'Jeans, bermuda, tênis e chinelo',
                 'Look de praia ou esportivo',
               ]}
