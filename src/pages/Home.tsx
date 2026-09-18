@@ -37,8 +37,8 @@ export function Home() {
             position: 'absolute',
             inset: 0,
             backgroundImage: 'url(/assets/assinaturas-mural.png)',
-            backgroundSize: '760px',
-            opacity: 0.22,
+            backgroundSize: '1150px',
+            opacity: 0.38,
             pointerEvents: 'none',
             animation: 'om-drift 150s linear infinite',
           }}
