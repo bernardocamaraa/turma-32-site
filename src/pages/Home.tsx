@@ -36,6 +36,17 @@ export function Home() {
           style={{
             position: 'absolute',
             inset: 0,
+            backgroundImage: 'url(/assets/assinaturas-mural.png)',
+            backgroundSize: '760px',
+            opacity: 0.22,
+            pointerEvents: 'none',
+            animation: 'om-drift 150s linear infinite',
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
             background: 'linear-gradient(90deg,rgba(10,10,12,.92) 0%,rgba(10,10,12,.62) 55%,rgba(10,10,12,.9) 100%)',
           }}
         />
