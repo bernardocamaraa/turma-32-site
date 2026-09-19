@@ -279,7 +279,7 @@ export function Home() {
         <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : 'repeat(2,1fr)', gap: 'var(--space-5)' }}>
           <Atalho
             titulo="Traje da noite"
-            texto="Passeio completo. Veja o que vestir — e o que evitar."
+            texto="Passeio completo. Veja o que vestir e o que evitar."
             acao="VER O TRAJE"
             onClick={() => navigate('/baile#traje')}
           />

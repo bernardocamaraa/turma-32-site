@@ -19,7 +19,7 @@ const DUVIDAS: { pergunta: string; resposta: string }[] = [
   {
     pergunta: 'Como eu confirmo a minha presença?',
     resposta:
-      'Falando direto com o formando que te convidou. É ele quem cadastra os convidados dele — não existe confirmação por este site.',
+      'Falando direto com o formando que te convidou. É ele quem cadastra os convidados dele, não existe confirmação por este site.',
   },
   {
     pergunta: 'Posso levar mais alguém comigo?',

@@ -137,7 +137,7 @@ export function Comissao() {
                   Álbum da festa
                 </span>
                 <span style={{ fontSize: 'var(--fs-body)' }}>
-                  {dados.albumAberto ? 'Aberto — convidados já podem enviar fotos.' : 'Fechado — ninguém consegue enviar fotos ainda.'}
+                  {dados.albumAberto ? 'Aberto, convidados já podem enviar fotos.' : 'Fechado, ninguém consegue enviar fotos ainda.'}
                 </span>
               </div>
               <Button

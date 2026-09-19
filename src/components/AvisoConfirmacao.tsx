@@ -44,7 +44,7 @@ export function AvisoConfirmacao({ compact = false }: { compact?: boolean }) {
         </h2>
         <p style={{ margin: 0, fontSize: 'var(--fs-body-lg)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)', maxWidth: '58ch' }}>
           Para confirmar presença, é só falar diretamente com o formando que te
-          enviou o convite — é ele quem cadastra os convidados dele. Não existe
+          enviou o convite (é ele quem cadastra os convidados dele). Não existe
           confirmação por este site.
         </p>
         {!compact ? (

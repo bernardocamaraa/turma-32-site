@@ -66,7 +66,7 @@ export function Album() {
   function escolherArquivo(lista: FileList | null) {
     const f = lista?.[0] ?? null;
     if (f && f.size > TAMANHO_MAXIMO) {
-      setErroEnvio('Essa foto passa de 10MB — tenta uma versão menor.');
+      setErroEnvio('Essa foto passa de 10MB, tenta uma versão menor.');
       setArquivo(null);
       return;
     }
@@ -181,7 +181,7 @@ export function Album() {
           </div>
           {fotos.length === 0 ? (
             <Card padding="var(--space-7)">
-              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)' }}>Nenhuma foto ainda — seja o primeiro a enviar!</span>
+              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)' }}>Nenhuma foto ainda, seja o primeiro a enviar!</span>
             </Card>
           ) : (
             <div style={{ display: 'grid', gap: 'var(--space-4)', gridTemplateColumns: mobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)' }}>
