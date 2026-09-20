@@ -40,7 +40,7 @@ export function Home() {
             backgroundSize: '1150px',
             opacity: 0.38,
             pointerEvents: 'none',
-            animation: 'om-drift 150s linear infinite',
+            animation: 'om-drift 45s linear infinite',
           }}
         />
         <div
