@@ -259,11 +259,9 @@ export function Mesas() {
                 <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
                   <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 400, fontSize: 'var(--fs-h3)' }}>
                     Mesa {mesa.id}
-                    {mesa.reservada_para ? (
-                      <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-faint)' }}>
-                        {' '}
-                        · {mesa.reservada_para === 'professores' ? 'professores' : 'comissão'}
-                      </span>
+                    {/* The committee's tables stay unnamed for the class, like on the map. */}
+                    {mesa.reservada_para === 'professores' ? (
+                      <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-faint)' }}> · professores</span>
                     ) : null}
                   </h2>
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>
@@ -294,7 +292,7 @@ export function Mesas() {
 
                 {bloqueada ? (
                   <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>
-                    Essa mesa é reservada {mesa.reservada_para === 'professores' ? 'aos professores' : 'à comissão'}. Só a comissão marca lugares nela.
+                    {mesa.reservada_para === 'professores' ? 'Essa mesa é reservada aos professores.' : 'Essa mesa é reservada.'}
                   </span>
                 ) : fechado ? null : maximo === 0 && meusNaMesa === 0 ? (
                   <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>

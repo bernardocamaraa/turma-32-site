@@ -227,8 +227,7 @@ begin
     raise exception 'Mesa não encontrada.';
   end if;
   if v_reservada is not null and not p_comissao then
-    raise exception 'Essa mesa é reservada (%) e só a comissão pode marcar lugares nela.',
-      case v_reservada when 'professores' then 'professores' else 'comissão' end;
+    raise exception 'Essa mesa é reservada.';
   end if;
 
   select total into v_total from convidados_formando where formando = p_formando for update;
