@@ -114,8 +114,9 @@ export function MapaMesas({
         const minha = daMesa.some((r) => r.formando === formando);
         const cx = (p.x / 100) * W;
         const cy = (p.y / 100) * H;
-        const rotulo =
-          mesa.reservada_para === 'professores' ? 'Professores' : mesa.reservada_para === 'comissao' ? 'Comissão' : null;
+        // Only the teachers' table gets a name on the map; the committee's
+        // tables are marked just by the dashed border.
+        const rotulo = mesa.reservada_para === 'professores' ? 'Professores' : null;
 
         return (
           <g
@@ -185,11 +186,9 @@ export function MapaMesas({
               {ocupados}/{mesa.capacidade}
             </text>
             {rotulo ? (
-              // Above R1, below R2 and P — the gaps beside them are too
-              // narrow (dance floor on one side, the next table on the other).
               <text
                 x={cx}
-                y={p.id === 'R1' ? cy - 52 : cy + (p.formato === 'retangular' ? 54 : 32)}
+                y={cy + 32}
                 textAnchor="middle"
                 dominantBaseline="central"
                 style={{ fill: 'var(--text-faint)', fontFamily: 'var(--font-core)', fontSize: 9, letterSpacing: '.12em', textTransform: 'uppercase' }}
