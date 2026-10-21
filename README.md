@@ -72,6 +72,47 @@ O álbum liga em três peças do Supabase, todas em `schema.sql`:
   enquanto `album_aberto=true` (checado via RLS, não só na interface).
   A comissão apaga qualquer foto pela Edge Function.
 
+## Mapa das mesas (`/mesas`)
+
+Cada formando entra com o **nome** e o **código da turma** e marca em qual
+mesa a família dele vai sentar. Cada mesa tem 10 lugares, desenhados como
+bolinhas em volta dela, e vai enchendo conforme a turma marca: dourado para
+os lugares de quem está vendo e azul para os dos outros. Uma mesa pode ser
+dividida entre vários formandos (ex.: 3 + 3 + 4). Um formando também pode
+espalhar os lugares dele por mais de uma mesa, se não couber tudo numa só.
+
+- **Quantas pessoas cada formando leva** é a comissão que define, copiando
+  do portal da casa de festas (que continua sendo a lista de convidados).
+  O formando só distribui esses lugares. Isso fica no painel que aparece
+  quando se entra em `/mesas` com o **código da comissão**.
+- **Mesas reservadas**: `P` (professores) e `R1`/`R2` (as retangulares ao
+  lado da pista, da comissão). Só o código da comissão marca lugares nelas.
+- **Fechar o mapa**: o botão "Fechar mapa" congela as mudanças da turma
+  (por exemplo, quando o mapa for mandado para a casa de festas). A comissão
+  continua podendo mexer.
+- Lotação e limite de cada formando são conferidos dentro do Postgres
+  (`definir_lugares` em `schema.sql`), com trava na linha da mesa. Assim,
+  dois formandos marcando o último lugar ao mesmo tempo não estouram a mesa.
+- O desenho do mapa (posições das mesas) está em `src/lib/mesas.ts`.
+
+Como o código da turma é um só, qualquer formando consegue mexer nos
+lugares de outro. Isso foi uma escolha consciente pela simplicidade. A
+comissão vê tudo no painel e pode corrigir.
+
+Para colocar no ar, num projeto Supabase novo (o antigo está pausado):
+
+1. Rode `supabase/schema.sql` inteiro no **SQL Editor**. Se for o projeto
+   antigo, que já tem o resto, rode só a parte a partir de "Mapa de mesas".
+2. Troque `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` no `.env.local` e
+   na Vercel pelos do projeto novo.
+3. Publique a função e defina os códigos:
+   ```bash
+   supabase link --project-ref SEU_PROJECT_REF
+   supabase functions deploy mesas
+   supabase functions deploy committee-data
+   supabase secrets set TURMA_CODE=codigo-da-turma COMMITTEE_CODE=codigo-da-comissao
+   ```
+
 ## Conteúdo que a comissão edita no código
 
 - **Perguntas frequentes**: a lista `DUVIDAS` no topo de `src/pages/Baile.tsx`.
@@ -79,7 +120,7 @@ O álbum liga em três peças do Supabase, todas em `schema.sql`:
   horário de encerramento e cardápio ficaram de fora justamente porque ainda
   não estão definidos.
 - **Traje e dicas**: a mesma página, seção `#traje`.
-- **Formandos**: `src/lib/formandos.ts`.
+- **Formandos**: `src/lib/formandos.ts`. Se a lista mudar, atualize também o `insert into public.convidados_formando` em `supabase/schema.sql` (os nomes precisam ser idênticos).
 - **Data e hora do countdown**: `src/lib/countdown.ts`.
 
 ## Estrutura
@@ -88,11 +129,12 @@ O álbum liga em três peças do Supabase, todas em `schema.sql`:
 src/
   components/   # Badge, Button, Card, Input, Select, NavBar, Dialog, etc.
                  # (porte 1:1 do design system em ../project/_ds)
-  pages/        # Home, Baile, Turma, Album, Comissao
+  pages/        # Home, Baile, Turma, Album, Comissao, Mesas
   lib/          # Supabase client, countdown, formandos, hooks de motion/scroll
 supabase/
   schema.sql                        # tabelas + RLS
   functions/committee-data/index.ts # Edge Function da área da comissão
+  functions/mesas/index.ts          # Edge Function do mapa das mesas
 ```
 
 > A Edge Function é publicada à parte (`supabase functions deploy
