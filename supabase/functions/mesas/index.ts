@@ -1,12 +1,14 @@
 // Supabase Edge Function: mesas
 //
-// Backs the table map (/mesas). Every call carries an access code:
-//   - TURMA_CODE (shared with the whole class): read the map and move the
-//     seats of the formando the visitor picked, on the non-reserved tables,
+// Backs the table map. Every call carries one of two credentials:
+//   - `link`: the secret from a formando's personal URL (/mesas/<link>).
+//     Reads the map and moves that formando's own seats — never anyone
+//     else's, whatever the request body says — on the non-reserved tables,
 //     while the committee keeps the map open.
-//   - COMMITTEE_CODE (the same secret committee-data uses): all of the above
-//     on any table, even with the map closed, plus setting how many people
-//     each formando brings and opening/closing the map.
+//   - `codigo`: COMMITTEE_CODE (the same secret committee-data uses). Moves
+//     anyone's seats on any table, even with the map closed, sets how many
+//     people each formando brings, opens/closes the map, and sees (and can
+//     replace) every formando's personal link.
 //
 // The anon key can't touch the mesas tables at all (mesas.sql), so this is
 // the only way in. Capacity and per-formando limits are enforced inside
@@ -14,7 +16,7 @@
 //
 // Deploy with:
 //   supabase functions deploy mesas
-//   supabase secrets set TURMA_CODE=... COMMITTEE_CODE=...
+//   supabase secrets set COMMITTEE_CODE=...
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -36,20 +38,32 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { codigo, formando, mesa, lugares, definirConvidados, definirMesasAbertas } = await req.json();
-    const codigoTurma = Deno.env.get('TURMA_CODE') ?? '';
-    const codigoComissao = Deno.env.get('COMMITTEE_CODE') ?? '';
-    const digitado = typeof codigo === 'string' ? codigo.trim() : '';
-
-    const comissao = !!codigoComissao && digitado === codigoComissao;
-    if (!comissao && !(codigoTurma && digitado === codigoTurma)) {
-      return json({ error: 'Código incorreto.' }, 401);
-    }
+    const { codigo, link, formando, mesa, lugares, definirConvidados, definirMesasAbertas, novoLink } = await req.json();
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
+
+    // Who is calling: the committee, or the one formando the link belongs to.
+    let comissao = false;
+    let voce: string | null = null;
+    if (typeof link === 'string' && link.trim()) {
+      const { data, error } = await supabase
+        .from('convidados_formando')
+        .select('formando')
+        .eq('link', link.trim())
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return json({ error: 'Esse link não vale mais. Peça o seu para a comissão.' }, 401);
+      voce = data.formando;
+    } else {
+      const codigoComissao = Deno.env.get('COMMITTEE_CODE') ?? '';
+      if (!codigoComissao || typeof codigo !== 'string' || codigo.trim() !== codigoComissao) {
+        return json({ error: 'Código incorreto.' }, 401);
+      }
+      comissao = true;
+    }
 
     // Errors raised on purpose inside the SQL functions (`raise exception`,
     // code P0001) are messages written for the formando — pass them through.
@@ -61,9 +75,12 @@ Deno.serve(async (req) => {
       throw error;
     }
 
-    if (typeof mesa === 'string' && typeof formando === 'string' && Number.isInteger(lugares)) {
+    // A formando's link only ever moves their own seats; the committee picks
+    // whose seats to move.
+    const alvo = comissao ? formando : voce;
+    if (typeof mesa === 'string' && typeof alvo === 'string' && Number.isInteger(lugares)) {
       const falha = await rpc('definir_lugares', {
-        p_formando: formando,
+        p_formando: alvo,
         p_mesa: mesa,
         p_lugares: lugares,
         p_comissao: comissao,
@@ -86,10 +103,21 @@ Deno.serve(async (req) => {
       if (error) throw error;
     }
 
+    // Replacing a leaked link: the old URL stops working at once.
+    if (comissao && typeof novoLink === 'string') {
+      const { error } = await supabase
+        .from('convidados_formando')
+        .update({ link: crypto.randomUUID().replaceAll('-', '') })
+        .eq('formando', novoLink);
+      if (error) throw error;
+    }
+
     const [mesas, reservas, convidados, configuracao] = await Promise.all([
       supabase.from('mesas').select('id, capacidade, reservada_para'),
       supabase.from('reservas_mesa').select('formando, mesa, lugares'),
-      supabase.from('convidados_formando').select('formando, total').order('formando'),
+      // Links go only to the committee — a formando must never see a
+      // classmate's, or the whole point of personal links is gone.
+      supabase.from('convidados_formando').select(comissao ? 'formando, total, link' : 'formando, total').order('formando'),
       supabase.from('configuracoes').select('valor').eq('chave', 'mesas_abertas').maybeSingle(),
     ]);
     if (mesas.error) throw mesas.error;
@@ -99,6 +127,7 @@ Deno.serve(async (req) => {
 
     return json({
       comissao,
+      voce,
       abertas: configuracao.data?.valor ?? false,
       mesas: mesas.data,
       reservas: reservas.data,

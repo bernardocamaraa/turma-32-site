@@ -6,7 +6,8 @@ import { useIsMobile } from '../lib/useViewport';
 const LINKS = [
   { to: '/', label: 'Início' },
   { to: '/baile', label: 'O baile' },
-  { to: '/mesas', label: 'Mesas' },
+  // Mesas fica fora do menu: cada formando entra pelo link pessoal que a
+  // comissão manda, e a comissão entra pela área dela.
   // A turma escondida até termos a assinatura de todo mundo — voltar a
   // listar aqui quando o resto chegar.
   // Álbum escondido enquanto o Supabase está pausado (reativa só daqui a
