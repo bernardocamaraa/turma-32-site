@@ -36,8 +36,9 @@ insert into public.mesas (id, reservada_para) values
   ('P', 'professores')
 on conflict (id) do nothing;
 
--- How many people each formando brings, the formando included. Starts at 0:
--- the committee fills it in from the venue's portal. Names must match
+-- How many people each formando brings, the formando included. Starts at 0
+-- (not filled in yet). The committee types only the guests, as the venue's
+-- portal lists them, and the panel stores guests + 1. Names must match
 -- src/lib/formandos.ts exactly.
 --
 -- `link` is the secret part of the formando's personal URL: 122 random bits
@@ -62,7 +63,7 @@ insert into public.convidados_formando (formando) values
   ('Lívia Whitaker'), ('Lorenzo Nunes'), ('Lucas Loyola'), ('Lucas Varejão'),
   ('Luiza Goes'), ('Maian Costa'), ('Maria Clara Bispo'), ('Maria Clara França'),
   ('Maria Eduarda Barroso'), ('Maria Luiza Pires'), ('Matheus Veiga'), ('Pietra Machado'),
-  ('Raira Gabriela'), ('Sophia Afonso'), ('Suellen Bazillio'), ('Susana Liu')
+  ('Sophia Afonso'), ('Suellen Bazillio'), ('Susana Liu')
 on conflict (formando) do nothing;
 
 -- How many of a formando's seats are at a given table. A formando can be

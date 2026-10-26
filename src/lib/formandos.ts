@@ -1,5 +1,5 @@
 /**
- * Os 32 formandos da turma: aparecem na página "A turma" e no seletor de
+ * Os 31 formandos da turma: aparecem na página "A turma" e no seletor de
  * nome do mapa das mesas. O convite e a lista de convidados de cada formando
  * são tratados fora do site, no portal da casa de festas.
  *
@@ -35,7 +35,6 @@ export const FORMANDOS: string[] = [
   'Maria Luiza Pires',
   'Matheus Veiga',
   'Pietra Machado',
-  'Raira Gabriela',
   'Sophia Afonso',
   'Suellen Bazillio',
   'Susana Liu',

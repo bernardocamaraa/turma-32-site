@@ -81,9 +81,11 @@ os lugares de quem está vendo e azul para os dos outros. Uma mesa pode ser
 dividida entre vários formandos (ex.: 3 + 3 + 4). Um formando também pode
 espalhar os lugares dele por mais de uma mesa, se não couber tudo numa só.
 
-- **Quantas pessoas cada formando leva** é a comissão que define, copiando
-  do portal da casa de festas (que continua sendo a lista de convidados).
-  O formando só distribui esses lugares. Isso fica no painel que aparece
+- **Quantos convidados cada formando leva** é a comissão que define,
+  copiando do portal da casa de festas (que continua sendo a lista de
+  convidados). Ela digita só os convidados, sem contar o formando; o site
+  soma +1 pelo próprio formando e guarda o total de lugares. O formando só
+  distribui esses lugares. Isso fica no painel que aparece
   quando se entra em `/mesas` com o **código da comissão** (há um atalho
   na área da comissão; a página não aparece no menu).
 - **Links pessoais**: no mesmo painel, cada formando tem os botões "Copiar

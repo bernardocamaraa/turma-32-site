@@ -381,7 +381,7 @@ export function Mesas() {
                 </p>
               </div>
               <div style={{ display: 'flex', gap: 'var(--space-7)' }}>
-                <Numero label="pessoas" valor={total} />
+                <Numero label={total > 0 ? `você + ${total - 1}` : 'pessoas'} valor={total} />
                 <Numero label="marcadas" valor={marcados} destaque />
                 <Numero label="faltam" valor={restante} />
               </div>
@@ -615,17 +615,21 @@ function PainelComissao({
   const totalPessoas = dados.convidados.reduce((s, c) => s + c.total, 0);
   const capacidade = dados.mesas.reduce((s, m) => s + m.capacidade, 0);
 
+  // The committee types each formando's guests only, as the venue's portal
+  // lists them; the formando takes a seat too, so what's stored (and what
+  // the map counts) is guests + 1.
   async function salvarTotal(formando: string, atual: number) {
     const texto = rascunho[formando];
     if (texto === undefined) return;
-    const total = Number(texto);
+    const convidados = Number(texto);
+    const total = convidados + 1;
     const descartar = () =>
       setRascunho((r) => {
         const resto = { ...r };
         delete resto[formando];
         return resto;
       });
-    if (texto.trim() === '' || !Number.isInteger(total) || total === atual) {
+    if (texto.trim() === '' || !Number.isInteger(convidados) || convidados < 0 || total === atual) {
       descartar();
       return;
     }
@@ -670,7 +674,10 @@ function PainelComissao({
         }}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-          <span style={rotuloCampo}>Comissão · pessoas e links por formando</span>
+          <span style={rotuloCampo}>Comissão · convidados e links por formando</span>
+          <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>
+            Digite só os convidados de cada formando, sem contar ele: o site soma o formando sozinho.
+          </span>
           <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>
             {totalPessoas} pessoas para {capacidade} lugares. Mapa {dados.abertas ? 'aberto para a turma' : 'fechado para a turma'}.
           </span>
@@ -694,15 +701,17 @@ function PainelComissao({
               borderBottom: '1px solid var(--stroke-hair)',
             }}
           >
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 64px 112px', alignItems: 'center', gap: 'var(--space-4)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 64px 200px', alignItems: 'center', gap: 'var(--space-4)' }}>
               <span style={{ fontSize: 'var(--fs-body)' }}>{c.formando}</span>
               <input
                 type="number"
                 min={0}
-                max={60}
+                max={59}
                 inputMode="numeric"
-                aria-label={`Pessoas de ${c.formando}`}
-                value={rascunho[c.formando] ?? String(c.total)}
+                placeholder="—"
+                aria-label={`Convidados de ${c.formando}, sem contar o formando`}
+                // 0 people stored means "not filled in yet": show an empty box, not "-1".
+                value={rascunho[c.formando] ?? (c.total > 0 ? String(c.total - 1) : '')}
                 onChange={(e) => setRascunho((r) => ({ ...r, [c.formando]: e.target.value }))}
                 onBlur={() => salvarTotal(c.formando, c.total)}
                 onKeyDown={(e) => {
@@ -720,8 +729,8 @@ function PainelComissao({
                   fontSize: 'var(--fs-body)',
                 }}
               />
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-body-sm)', color: completo ? 'var(--state-ok)' : 'var(--text-faint)', textAlign: 'right' }}>
-                {marcados}/{c.total} no mapa
+              <span style={{ fontSize: 'var(--fs-body-sm)', color: completo ? 'var(--state-ok)' : 'var(--text-faint)', textAlign: 'right' }}>
+                {c.total > 0 ? `+1 = ${c.total} lugares · ${marcados} no mapa` : 'Falta preencher'}
               </span>
             </div>
             {c.link ? (
