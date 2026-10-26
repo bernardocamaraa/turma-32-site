@@ -5,6 +5,8 @@
 //     Reads the map and moves that formando's own seats — never anyone
 //     else's, whatever the request body says — on the non-reserved tables,
 //     while the committee keeps the map open.
+//     With `soNome: true` it only answers whose link it is ({ voce }), for
+//     the link preview.
 //   - `codigo`: COMMITTEE_CODE (the same secret committee-data uses). Moves
 //     anyone's seats on any table, even with the map closed, sets how many
 //     people each formando brings, opens/closes the map, and sees (and can
@@ -38,7 +40,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { codigo, link, formando, mesa, lugares, definirConvidados, definirMesasAbertas, novoLink } = await req.json();
+    const { codigo, link, formando, mesa, lugares, definirConvidados, definirMesasAbertas, novoLink, soNome } = await req.json();
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -57,6 +59,9 @@ Deno.serve(async (req) => {
       if (error) throw error;
       if (!data) return json({ error: 'Esse link não vale mais. Peça o seu para a comissão.' }, 401);
       voce = data.formando;
+      // The link preview (middleware.ts at the site's root) only needs the
+      // name, to put it in the card WhatsApp shows — not the whole map.
+      if (soNome === true) return json({ voce });
     } else {
       const codigoComissao = Deno.env.get('COMMITTEE_CODE') ?? '';
       if (!codigoComissao || typeof codigo !== 'string' || codigo.trim() !== codigoComissao) {

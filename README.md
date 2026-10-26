@@ -114,6 +114,32 @@ Para colocar no ar:
    supabase functions deploy mesas
    ```
 
+## Prévia dos links (WhatsApp, iMessage, Telegram…)
+
+O cartão que aparece quando alguém cola um link do site vem das tags
+`og:*` do bloco `<!-- previa -->` em `index.html`: título, descrição e a
+imagem `public/previas/turma-32.jpg`.
+
+O link pessoal de cada formando (`/mesas/<link>`) mostra o nome e a imagem
+dele. Como os apps montam a prévia sem rodar o JavaScript do site, quem
+faz isso é o `middleware.ts`, na raiz do projeto, que roda na Vercel:
+
+- **Robôs de prévia:** o middleware pergunta à função `mesas` de quem é o
+  link e troca o bloco pela versão com o nome e com
+  `public/previas/mesas/<slug>.jpg`.
+- **Pessoas abrindo o link:** passam direto, sem consulta nenhuma.
+- **Qualquer erro:** o link continua funcionando, com a prévia geral.
+
+As imagens são geradas por `scripts/gerar-previas.mjs`, a partir de
+`src/lib/formandos.ts`. Se a lista de formandos mudar, rode de novo:
+
+```bash
+node scripts/gerar-previas.mjs   # precisa do Playwright instalado
+```
+
+O WhatsApp guarda a prévia de cada endereço por um tempo. Para conferir uma
+mudança, use um link que ainda não foi enviado, ou acrescente `?1` no fim.
+
 ## Conteúdo que a comissão edita no código
 
 - **Perguntas frequentes**: a lista `DUVIDAS` no topo de `src/pages/Baile.tsx`.
@@ -121,7 +147,7 @@ Para colocar no ar:
   horário de encerramento e cardápio ficaram de fora justamente porque ainda
   não estão definidos.
 - **Traje e dicas**: a mesma página, seção `#traje`.
-- **Formandos**: `src/lib/formandos.ts`. Se a lista mudar, atualize também o `insert into public.convidados_formando` em `supabase/mesas.sql` (os nomes precisam ser idênticos).
+- **Formandos**: `src/lib/formandos.ts`. Se a lista mudar, atualize também o `insert into public.convidados_formando` em `supabase/mesas.sql` (os nomes precisam ser idênticos) e gere de novo as imagens de prévia (`node scripts/gerar-previas.mjs`).
 - **Data e hora do countdown**: `src/lib/countdown.ts`.
 
 ## Estrutura
