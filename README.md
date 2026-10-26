@@ -91,7 +91,7 @@ espalhar os lugares dele por mais de uma mesa, se não couber tudo numa só.
   (por exemplo, quando o mapa for mandado para a casa de festas). A comissão
   continua podendo mexer.
 - Lotação e limite de cada formando são conferidos dentro do Postgres
-  (`definir_lugares` em `schema.sql`), com trava na linha da mesa. Assim,
+  (`definir_lugares` em `mesas.sql`), com trava na linha da mesa. Assim,
   dois formandos marcando o último lugar ao mesmo tempo não estouram a mesa.
 - O desenho do mapa (posições das mesas) está em `src/lib/mesas.ts`.
 
@@ -99,18 +99,16 @@ Como o código da turma é um só, qualquer formando consegue mexer nos
 lugares de outro. Isso foi uma escolha consciente pela simplicidade. A
 comissão vê tudo no painel e pode corrigir.
 
-Para colocar no ar, num projeto Supabase novo (o antigo está pausado):
+Para colocar no ar:
 
-1. Rode `supabase/schema.sql` inteiro no **SQL Editor**. Se for o projeto
-   antigo, que já tem o resto, rode só a parte a partir de "Mapa de mesas".
-2. Troque `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` no `.env.local` e
-   na Vercel pelos do projeto novo.
-3. Publique a função e defina os códigos:
+1. Rode `supabase/mesas.sql` no **SQL Editor** (uma vez). Num projeto que
+   ainda não tem nada, rode `supabase/schema.sql` antes.
+2. Publique a função e defina o código da turma (o `COMMITTEE_CODE` é o
+   mesmo da área da comissão, já definido):
    ```bash
    supabase link --project-ref SEU_PROJECT_REF
    supabase functions deploy mesas
-   supabase functions deploy committee-data
-   supabase secrets set TURMA_CODE=codigo-da-turma COMMITTEE_CODE=codigo-da-comissao
+   supabase secrets set TURMA_CODE=codigo-da-turma
    ```
 
 ## Conteúdo que a comissão edita no código
@@ -120,7 +118,7 @@ Para colocar no ar, num projeto Supabase novo (o antigo está pausado):
   horário de encerramento e cardápio ficaram de fora justamente porque ainda
   não estão definidos.
 - **Traje e dicas**: a mesma página, seção `#traje`.
-- **Formandos**: `src/lib/formandos.ts`. Se a lista mudar, atualize também o `insert into public.convidados_formando` em `supabase/schema.sql` (os nomes precisam ser idênticos).
+- **Formandos**: `src/lib/formandos.ts`. Se a lista mudar, atualize também o `insert into public.convidados_formando` em `supabase/mesas.sql` (os nomes precisam ser idênticos).
 - **Data e hora do countdown**: `src/lib/countdown.ts`.
 
 ## Estrutura
@@ -133,6 +131,7 @@ src/
   lib/          # Supabase client, countdown, formandos, hooks de motion/scroll
 supabase/
   schema.sql                        # tabelas + RLS
+  mesas.sql                         # mapa das mesas (rodar depois do schema.sql)
   functions/committee-data/index.ts # Edge Function da área da comissão
   functions/mesas/index.ts          # Edge Function do mapa das mesas
 ```

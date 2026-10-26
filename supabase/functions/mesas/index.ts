@@ -8,7 +8,7 @@
 //     on any table, even with the map closed, plus setting how many people
 //     each formando brings and opening/closing the map.
 //
-// The anon key can't touch the mesas tables at all (schema.sql), so this is
+// The anon key can't touch the mesas tables at all (mesas.sql), so this is
 // the only way in. Capacity and per-formando limits are enforced inside
 // Postgres (definir_lugares), atomically, not here.
 //

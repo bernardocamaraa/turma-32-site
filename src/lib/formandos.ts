@@ -3,7 +3,7 @@
  * nome do mapa das mesas. O convite e a lista de convidados de cada formando
  * são tratados fora do site, no portal da casa de festas.
  *
- * Os mesmos nomes estão em `supabase/schema.sql` (convidados_formando): se
+ * Os mesmos nomes estão em `supabase/mesas.sql` (convidados_formando): se
  * mudar aqui, mude lá também, com a grafia idêntica.
  */
 export const FORMANDOS: string[] = [

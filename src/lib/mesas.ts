@@ -96,7 +96,7 @@ export type AlteracaoMesas =
 /**
  * Every read and write goes through the `mesas` Edge Function, which checks
  * the class (or committee) code — the anon key in the bundle can't read
- * these tables directly (supabase/schema.sql). Pass an `alteracao` to change
+ * these tables directly (supabase/mesas.sql). Pass an `alteracao` to change
  * something first; the response is always the whole map after that change,
  * so the screen never shows a stale count after a save.
  */
