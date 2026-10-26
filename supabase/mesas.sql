@@ -23,8 +23,15 @@
 create table if not exists public.mesas (
   id text primary key,
   capacidade int not null default 10 check (capacidade > 0),
-  reservada_para text check (reservada_para in ('professores', 'comissao'))
+  reservada_para text check (reservada_para in ('professores', 'comissao')),
+  ocupantes_fixos text[] not null default '{}'
 );
+
+-- People who aren't formandos but have a seat set aside — the teachers at
+-- table P. Each name takes one seat and counts towards the table's
+-- capacity; the map lists them like everyone else.
+alter table public.mesas
+  add column if not exists ocupantes_fixos text[] not null default '{}';
 
 insert into public.mesas (id, reservada_para) values
   ('E1', null), ('E2', null), ('E3', null), ('E4', null),
@@ -35,6 +42,10 @@ insert into public.mesas (id, reservada_para) values
   ('D1', null), ('D2', null), ('D3', null), ('D4', null),
   ('P', 'professores')
 on conflict (id) do nothing;
+
+update public.mesas
+set ocupantes_fixos = array['Vitor', 'Gustavo', 'Flávia', 'Diniz', 'Cristiano', 'Ozael', 'Cleidson', 'Cláudio', 'Araújo', 'Lorena']
+where id = 'P';
 
 -- How many people each formando brings, the formando included. Starts at 0
 -- (not filled in yet). The committee types only the guests, as the venue's
@@ -102,6 +113,7 @@ as $$
 declare
   v_capacidade int;
   v_reservada text;
+  v_fixos int;
   v_total int;
   v_ocupados int;
   v_meus_outros int;
@@ -114,7 +126,7 @@ begin
     raise exception 'O mapa de mesas está fechado pela comissão.';
   end if;
 
-  select capacidade, reservada_para into v_capacidade, v_reservada from mesas where id = p_mesa for update;
+  select capacidade, reservada_para, cardinality(ocupantes_fixos) into v_capacidade, v_reservada, v_fixos from mesas where id = p_mesa for update;
   if not found then
     raise exception 'Mesa não encontrada.';
   end if;
@@ -127,7 +139,8 @@ begin
     raise exception 'Formando não encontrado.';
   end if;
 
-  select coalesce(sum(lugares), 0) into v_ocupados from reservas_mesa where mesa = p_mesa and formando <> p_formando;
+  -- Seats set aside for non-formandos (ocupantes_fixos) are taken too.
+  select coalesce(sum(lugares), 0) + v_fixos into v_ocupados from reservas_mesa where mesa = p_mesa and formando <> p_formando;
   if v_ocupados + p_lugares > v_capacidade then
     raise exception 'Essa mesa só tem % lugar(es) livre(s).', v_capacidade - v_ocupados;
   end if;

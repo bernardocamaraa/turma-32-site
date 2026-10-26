@@ -164,7 +164,9 @@ export function Mesas() {
   const mesa = dados?.mesas.find((m) => m.id === selecionada) ?? null;
   const naMesa = dados?.reservas.filter((r) => r.mesa === selecionada) ?? [];
   const meusNaMesa = naMesa.find((r) => r.formando === nome)?.lugares ?? 0;
-  const ocupadosOutros = naMesa.reduce((s, r) => s + (r.formando === nome ? 0 : r.lugares), 0);
+  // The teachers at table P hold seats without being formandos.
+  const fixos = mesa?.ocupantes_fixos ?? [];
+  const ocupadosOutros = naMesa.reduce((s, r) => s + (r.formando === nome ? 0 : r.lugares), 0) + fixos.length;
   const maximo = mesa ? Math.max(Math.min(mesa.capacidade - ocupadosOutros, meusNaMesa + restante), 0) : 0;
   const bloqueada = !!mesa?.reservada_para && !dados?.comissao;
   const fechado = !!dados && !dados.abertas && !dados.comissao;
@@ -175,7 +177,8 @@ export function Mesas() {
     if (!dados || !id) return;
     const m = dados.mesas.find((x) => x.id === id);
     const meus = dados.reservas.find((r) => r.mesa === id && r.formando === nome)?.lugares ?? 0;
-    const outros = dados.reservas.filter((r) => r.mesa === id && r.formando !== nome).reduce((s, r) => s + r.lugares, 0);
+    const outros =
+      dados.reservas.filter((r) => r.mesa === id && r.formando !== nome).reduce((s, r) => s + r.lugares, 0) + (m?.ocupantes_fixos?.length ?? 0);
     // Already seated here → start from that; otherwise suggest the whole
     // group, or as much of it as still fits.
     setQuantidade(meus > 0 ? meus : Math.max(Math.min(restante, (m?.capacidade ?? 0) - outros), 0));
@@ -228,9 +231,34 @@ export function Mesas() {
               </li>
             ))}
         </ul>
-      ) : (
+      ) : fixos.length === 0 ? (
         <p style={{ margin: 0, fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Ninguém marcou essa mesa ainda.</p>
-      )}
+      ) : null}
+
+      {fixos.length > 0 ? (
+        <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+          {fixos.map((pessoa, i) => (
+            <li
+              key={pessoa}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 'var(--space-3)',
+                height: 34,
+                padding: '0 14px',
+                borderRadius: 'var(--radius-pill)',
+                background: 'rgba(245,245,247,.08)',
+                fontSize: 'var(--fs-body-sm)',
+                fontWeight: 500,
+                animation: `om-fade-up 600ms var(--ease-out) ${200 + i * 50}ms both`,
+              }}
+            >
+              <span aria-hidden style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--smoke-300)' }} />
+              {pessoa}
+            </li>
+          ))}
+        </ul>
+      ) : null}
 
       {bloqueada ? (
         <p style={{ margin: 0, fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>
@@ -401,13 +429,14 @@ export function Mesas() {
                     formando={nome}
                     selecionada={selecionada}
                     onSelecionar={selecionar}
-                    painel={mobile ? null : ladoDoPainel}
+                    painel={mobile ? 'baixo' : ladoDoPainel}
                   />
                 </div>
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-5)', marginTop: 'var(--space-5)' }}>
                 <Legenda cor="var(--gild-400)" texto="Seus lugares" />
                 <Legenda cor="var(--ice-300)" texto="Outros formandos" />
+                <Legenda cor="var(--smoke-300)" texto="Professores" />
                 <Legenda texto="Livre" />
                 <Legenda tracejada texto="Mesa reservada" />
               </div>
@@ -613,6 +642,7 @@ function PainelComissao({
   const marcadosPor = new Map<string, number>();
   for (const r of dados.reservas) marcadosPor.set(r.formando, (marcadosPor.get(r.formando) ?? 0) + r.lugares);
   const totalPessoas = dados.convidados.reduce((s, c) => s + c.total, 0);
+  const professores = dados.mesas.reduce((s, m) => s + (m.ocupantes_fixos?.length ?? 0), 0);
   const capacidade = dados.mesas.reduce((s, m) => s + m.capacidade, 0);
 
   // The committee types each formando's guests only, as the venue's portal
@@ -679,7 +709,8 @@ function PainelComissao({
             Digite só os convidados de cada formando, sem contar ele: o site soma o formando sozinho.
           </span>
           <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>
-            {totalPessoas} pessoas para {capacidade} lugares. Mapa {dados.abertas ? 'aberto para a turma' : 'fechado para a turma'}.
+            {totalPessoas} pessoas da turma{professores ? ` e ${professores} professores` : ''} para {capacidade} lugares. Mapa{' '}
+            {dados.abertas ? 'aberto para a turma' : 'fechado para a turma'}.
           </span>
           {erro ? <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--state-error)' }}>{erro}</span> : null}
         </div>

@@ -118,7 +118,7 @@ Deno.serve(async (req) => {
     }
 
     const [mesas, reservas, convidados, configuracao] = await Promise.all([
-      supabase.from('mesas').select('id, capacidade, reservada_para'),
+      supabase.from('mesas').select('id, capacidade, reservada_para, ocupantes_fixos'),
       supabase.from('reservas_mesa').select('formando, mesa, lugares'),
       // Links go only to the committee — a formando must never see a
       // classmate's, or the whole point of personal links is gone.
