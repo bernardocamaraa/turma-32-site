@@ -18,11 +18,13 @@ const ESCALA = { redonda: 1.9, retangular: 1.6 } as const;
 const R_LUGARES = 27;
 const R_LUGAR = 3;
 
-type EstadoLugar = 'meu' | 'outro' | 'livre';
+type EstadoLugar = 'meu' | 'outro' | 'fixo' | 'livre';
 
 const COR_LUGAR: Record<EstadoLugar, { fill: string; stroke: string }> = {
   meu: { fill: 'var(--gild-400)', stroke: 'var(--gild-400)' },
   outro: { fill: 'var(--ice-300)', stroke: 'var(--ice-300)' },
+  // Seats held by non-formandos (the teachers): silver, apart from the class.
+  fixo: { fill: 'var(--smoke-300)', stroke: 'var(--smoke-300)' },
   livre: { fill: 'var(--ink-900)', stroke: 'var(--smoke-400)' },
 };
 
@@ -59,6 +61,9 @@ type MesaDesenhada = {
   cy: number;
   /** Who sits here, own seats first. */
   daMesa: Reserva[];
+  /** Non-formandos with a seat here (mesas.ocupantes_fixos). */
+  fixos: string[];
+  /** Seats taken, by formandos and fixed occupants alike. */
   ocupados: number;
   minha: boolean;
 };
@@ -121,10 +126,11 @@ export function MapaMesas({
   /** Called with a table id to open it, or null to close the open one. */
   onSelecionar: (id: string | null) => void;
   /**
-   * Which side of the map the page covers with its details panel while a
-   * table is open — the open table keeps to the other side.
+   * Which part of the map the page covers with its details panel while a
+   * table is open — a side on a wide screen, the bottom on a phone (the
+   * sheet) — so the open table keeps to the part still in view.
    */
-  painel?: 'esquerda' | 'direita' | null;
+  painel?: 'esquerda' | 'direita' | 'baixo' | null;
 }) {
   const uid = useId().replace(/:/g, '');
   const porId = new Map(mesas.map((m) => [m.id, m]));
@@ -135,6 +141,7 @@ export function MapaMesas({
     const daMesa = reservas
       .filter((r) => r.mesa === p.id)
       .sort((a, b) => (a.formando === formando ? -1 : b.formando === formando ? 1 : a.formando.localeCompare(b.formando, 'pt-BR')));
+    const fixos = mesa.ocupantes_fixos ?? [];
     return [
       {
         p,
@@ -142,7 +149,8 @@ export function MapaMesas({
         cx: (p.x / 100) * W,
         cy: (p.y / 100) * H,
         daMesa,
-        ocupados: daMesa.reduce((s, r) => s + r.lugares, 0),
+        fixos,
+        ocupados: daMesa.reduce((s, r) => s + r.lugares, 0) + fixos.length,
         minha: daMesa.some((r) => r.formando === formando),
       },
     ];
@@ -210,7 +218,7 @@ export function MapaMesas({
           role="button"
           tabIndex={0}
           aria-pressed={selecionada === d.p.id}
-          aria-label={`Mesa ${d.p.id}${d.daMesa.length ? `: ${d.daMesa.map((r) => r.formando).join(', ')}` : ', vazia'}. ${d.ocupados} de ${d.mesa.capacidade} lugares ocupados.`}
+          aria-label={`Mesa ${d.p.id}${d.daMesa.length || d.fixos.length ? `: ${[...d.daMesa.map((r) => r.formando), ...d.fixos].join(', ')}` : ', vazia'}. ${d.ocupados} de ${d.mesa.capacidade} lugares ocupados.`}
           onClick={() => onSelecionar(d.p.id)}
           onKeyDown={(e) => teclado(e, d.p.id)}
           transform={`translate(${d.cx} ${d.cy})`}
@@ -257,8 +265,8 @@ function RotuloProfessores({ desenhadas }: { desenhadas: MesaDesenhada[] }) {
 /**
  * The open table: the rest of the map dims, the table grows from where it
  * sits (nudged inward if it would spill off the edge) and its seats pop in
- * one by one around it — gold for the viewer's, blue for classmates', empty
- * for free ones. Clicking the dimmed map closes it.
+ * one by one around it — gold for the viewer's, blue for classmates', silver
+ * for the teachers, empty for free ones. Clicking the dimmed map closes it.
  */
 function MesaAberta({
   d,
@@ -270,18 +278,23 @@ function MesaAberta({
   d: MesaDesenhada;
   formando: string;
   uid: string;
-  painel: 'esquerda' | 'direita' | null;
+  painel: 'esquerda' | 'direita' | 'baixo' | null;
   onFechar: () => void;
 }) {
   const s = ESCALA[d.p.formato];
   const a = alcance(d.p);
-  // Keep clear of the details panel: it covers about 40% of the map's width.
+  // Keep clear of the details panel: beside the map it covers about 40% of
+  // its width; as a phone's bottom sheet, roughly the lower half.
   const minX = painel === 'esquerda' ? W * 0.42 + a.x : a.x + 4;
   const maxX = painel === 'direita' ? W * 0.58 - a.x : W - a.x - 4;
+  const maxY = painel === 'baixo' ? Math.max(H * 0.55 - a.y, a.y + 4) : H - a.y - 4;
   const x1 = clamp(d.cx, minX, maxX);
-  const y1 = clamp(d.cy, a.y + 4, H - a.y - 4);
+  const y1 = clamp(d.cy, a.y + 4, maxY);
 
-  const estados: EstadoLugar[] = d.daMesa.flatMap((r) => Array<EstadoLugar>(r.lugares).fill(r.formando === formando ? 'meu' : 'outro'));
+  const estados: EstadoLugar[] = [
+    ...d.daMesa.flatMap((r) => Array<EstadoLugar>(r.lugares).fill(r.formando === formando ? 'meu' : 'outro')),
+    ...d.fixos.map((): EstadoLugar => 'fixo'),
+  ];
   while (estados.length < d.mesa.capacidade) estados.push('livre');
 
   return (

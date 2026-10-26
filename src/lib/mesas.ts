@@ -65,6 +65,12 @@ export type Mesa = {
   id: string;
   capacidade: number;
   reservada_para: 'professores' | 'comissao' | null;
+  /**
+   * People who aren't formandos but already hold a seat here — the teachers
+   * at table P. One seat each. Optional so the page still works against an
+   * older `mesas` function that doesn't send it.
+   */
+  ocupantes_fixos?: string[];
 };
 
 export type Reserva = {
