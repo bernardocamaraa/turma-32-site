@@ -5,7 +5,7 @@ import { useIsMobile } from '../lib/useViewport';
 
 /**
  * Nomes viram o slug dos arquivos em /assets/assinaturas (ex.: "Maria Luiza
- * Pires" → "maria-luiza-pires.png"). Só 29 dos 32 formandos têm assinatura
+ * Pires" → "maria-luiza-pires.png"). Só 29 dos 31 formandos têm assinatura
  * cadastrada até agora — os que faltam simplesmente não têm o arquivo, e a
  * lista mostra só o nome nesse caso.
  */
