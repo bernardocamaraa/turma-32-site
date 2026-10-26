@@ -2,13 +2,13 @@ import type { CSSProperties, ReactNode } from 'react';
 
 type Tone = 'neutral' | 'ice' | 'gild' | 'ok' | 'error' | 'accent';
 
-const TONES: Record<Tone, { bg: string; fg: string; bd: string }> = {
-  neutral: { bg: 'rgba(244,247,250,.1)', fg: 'var(--chalk-050)', bd: 'var(--stroke-muted)' },
-  ice: { bg: 'rgba(169,211,232,.16)', fg: 'var(--ice-300)', bd: 'rgba(169,211,232,.5)' },
-  accent: { bg: 'rgba(169,211,232,.16)', fg: 'var(--ice-300)', bd: 'rgba(169,211,232,.5)' },
-  gild: { bg: 'rgba(201,169,106,.16)', fg: 'var(--gild-300)', bd: 'rgba(201,169,106,.55)' },
-  ok: { bg: 'rgba(127,185,138,.14)', fg: 'var(--state-ok)', bd: 'rgba(127,185,138,.5)' },
-  error: { bg: 'rgba(216,117,106,.14)', fg: 'var(--state-error)', bd: 'rgba(216,117,106,.5)' },
+const TONES: Record<Tone, { bg: string; fg: string }> = {
+  neutral: { bg: 'rgba(245,245,247,.1)', fg: 'var(--chalk-050)' },
+  ice: { bg: 'rgba(169,211,232,.14)', fg: 'var(--ice-300)' },
+  accent: { bg: 'rgba(169,211,232,.14)', fg: 'var(--ice-300)' },
+  gild: { bg: 'rgba(201,169,106,.16)', fg: 'var(--gild-300)' },
+  ok: { bg: 'rgba(127,185,138,.14)', fg: 'var(--state-ok)' },
+  error: { bg: 'rgba(255,105,97,.14)', fg: 'var(--state-error)' },
 };
 
 export function Badge({
@@ -26,16 +26,14 @@ export function Badge({
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        height: 22,
-        padding: '0 8px',
+        height: 26,
+        padding: '0 12px',
         background: t.bg,
         color: t.fg,
-        border: '1px solid ' + t.bd,
-        borderRadius: 'var(--radius-sm)',
-        fontFamily: 'var(--font-mono)',
-        fontSize: 'var(--fs-label)',
-        letterSpacing: '.1em',
-        textTransform: 'uppercase',
+        borderRadius: 'var(--radius-pill)',
+        fontFamily: 'var(--font-core)',
+        fontSize: 13,
+        fontWeight: 500,
         ...style,
       }}
     >

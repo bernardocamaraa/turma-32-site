@@ -1,58 +1,28 @@
 import { Link } from 'react-router-dom';
-import { useReveal } from '../lib/useReveal';
 
+/** Small, quiet print at the bottom, the way Apple closes a page. */
 export function Footer() {
-  const reveal = useReveal('footer');
-
   return (
-    <footer
-      ref={reveal.ref}
-      className={`no-print ${reveal.className}`}
-      style={{ borderTop: '1px solid var(--stroke-hair)', padding: 'var(--space-8) var(--gutter-page)' }}
-    >
+    <footer className="no-print" style={{ background: 'var(--ink-850)', borderTop: '1px solid var(--stroke-hair)' }}>
       <div
         style={{
           maxWidth: 'var(--maxw-page)',
           margin: '0 auto',
+          padding: 'var(--space-7) var(--gutter-page) var(--space-8)',
           display: 'flex',
+          flexWrap: 'wrap',
           alignItems: 'center',
-          justifyContent: 'center',
-          flexDirection: 'column',
-          gap: 'var(--space-4)',
-          textAlign: 'center',
+          justifyContent: 'space-between',
+          gap: 'var(--space-5)',
+          fontSize: 12,
+          color: 'var(--text-faint)',
         }}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-3)' }}>
-          <img
-            src="/assets/logo-32.png"
-            alt="Turma 32"
-            style={{ width: 'auto', height: 48, objectFit: 'contain', opacity: 0.32 }}
-          />
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '.12em', color: 'var(--text-faint)' }}>
-            Formatura 2026 · Comissão de formatura
-          </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+          <img src="/assets/logo-32.png" alt="" style={{ height: 28, width: 'auto', opacity: 0.5 }} />
+          <span>Turma 32 · Formatura 2026. Feito pela comissão de formatura.</span>
         </div>
-        <span
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 11,
-            letterSpacing: '.16em',
-            textTransform: 'uppercase',
-            color: 'var(--text-faint)',
-          }}
-        >
-          10.12.2026 · 19h
-        </span>
-        <Link
-          to="/comissao"
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 10,
-            letterSpacing: '.18em',
-            textTransform: 'uppercase',
-            color: 'var(--text-faint)',
-          }}
-        >
+        <Link to="/comissao" style={{ color: 'var(--text-faint)', textDecoration: 'none' }}>
           Área da comissão
         </Link>
       </div>

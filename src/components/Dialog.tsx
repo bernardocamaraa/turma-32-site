@@ -65,7 +65,6 @@ export function Dialog({
                   fontFamily: 'var(--font-core)',
                   fontSize: 'var(--fs-label)',
                   letterSpacing: 'var(--tracking-label)',
-                  textTransform: 'uppercase',
                   color: 'var(--accent)',
                 }}
               >

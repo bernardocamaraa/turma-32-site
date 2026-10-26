@@ -37,7 +37,7 @@ export class ErrorBoundary extends Component<Props, State> {
             fontFamily: 'var(--font-core)',
           }}
         >
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--accent)' }}>
+          <span style={{ fontSize: 14, color: 'var(--accent)' }}>
             Algo deu errado
           </span>
           <p style={{ margin: 0, maxWidth: '48ch', color: 'var(--text-muted)' }}>
@@ -55,7 +55,6 @@ export class ErrorBoundary extends Component<Props, State> {
               fontFamily: 'var(--font-core)',
               fontWeight: 600,
               letterSpacing: '.1em',
-              textTransform: 'uppercase',
               cursor: 'pointer',
             }}
           >

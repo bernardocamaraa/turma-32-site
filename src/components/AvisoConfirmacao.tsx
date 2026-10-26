@@ -1,4 +1,5 @@
 import { Card } from './Card';
+import { SectionEyebrowRule } from './SectionHeading';
 import { useIsMobile } from '../lib/useViewport';
 
 /**
@@ -10,49 +11,25 @@ export function AvisoConfirmacao({ compact = false }: { compact?: boolean }) {
   const mobile = useIsMobile();
 
   return (
-    <Card accent padding={0} style={{ overflow: 'hidden' }}>
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 'var(--space-4)',
-          padding: mobile ? 'var(--space-6)' : 'var(--space-7) var(--space-8)',
-        }}
-      >
-        <span
-          style={{
-            fontFamily: 'var(--font-core)',
-            fontSize: 'var(--fs-label)',
-            fontWeight: 600,
-            letterSpacing: 'var(--tracking-label)',
-            textTransform: 'uppercase',
-            color: 'var(--accent)',
-          }}
-        >
-          Confirmação de presença
-        </span>
+    <Card padding={mobile ? 'var(--space-7) var(--space-6)' : 'var(--space-8)'}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', maxWidth: '40rem' }}>
+        <SectionEyebrowRule>Confirmação de presença</SectionEyebrowRule>
         <h2
           style={{
             margin: 0,
             fontFamily: 'var(--font-display)',
-            fontWeight: 400,
-            fontSize: compact ? 'var(--fs-h3)' : 'var(--fs-h2)',
+            fontWeight: 700,
+            fontSize: compact ? 'var(--fs-h2)' : 'var(--fs-h1)',
             lineHeight: 'var(--lh-snug)',
+            letterSpacing: 'var(--tracking-display)',
           }}
         >
-          Fale com quem te convidou
+          Fale com quem te convidou.
         </h2>
-        <p style={{ margin: 0, fontSize: 'var(--fs-body-lg)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)', maxWidth: '58ch' }}>
-          Para confirmar presença, é só falar diretamente com o formando que te
-          enviou o convite (é ele quem cadastra os convidados dele). Não existe
-          confirmação por este site.
+        <p style={{ margin: 0, fontSize: 'var(--fs-body-lg)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)' }}>
+          Quem confirma a sua presença é o formando que te mandou o convite: é ele quem
+          cadastra os convidados dele. Não existe confirmação por este site.
         </p>
-        {!compact ? (
-          <p style={{ margin: 0, fontSize: 'var(--fs-body-sm)', lineHeight: 'var(--lh-normal)', color: 'var(--text-faint)', maxWidth: '58ch' }}>
-            Este site é só informativo: aqui ficam a data, o local, o traje e as
-            dúvidas mais comuns da noite.
-          </p>
-        ) : null}
       </div>
     </Card>
   );

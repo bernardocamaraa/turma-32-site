@@ -1,334 +1,263 @@
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
-import { Card } from '../components/Card';
-import { Badge } from '../components/Badge';
-import { Icon } from '../components/Icon';
-import { Logo } from '../components/Logo';
-import { MapEmbed, MAPS_LINK } from '../components/MapEmbed';
+import { MAPS_LINK } from '../components/MapEmbed';
 import { CountdownRow, SectionEyebrowRule } from '../components/SectionHeading';
-import { Reveal } from '../components/Reveal';
 import { AvisoConfirmacao } from '../components/AvisoConfirmacao';
+import { Bloco, Grande, LinkSeta, MapaInclinado, Pequeno, Revela, Titulo } from '../components/Cena';
 import { useCountdown } from '../lib/countdown';
-import { useIsMobile, usePrefersReducedMotion, useScrollY } from '../lib/useViewport';
+import { trecho, useProgressoRolagem } from '../lib/motion';
+import { useIsMobile, usePrefersReducedMotion } from '../lib/useViewport';
 
 export function Home() {
-  const navigate = useNavigate();
-  const countdown = useCountdown();
-  const mobile = useIsMobile();
-  const reducedMotion = usePrefersReducedMotion();
-  const parallaxOn = !mobile && !reducedMotion;
-  const y = useScrollY(parallaxOn);
-
   return (
     <main>
-      <section
-        style={{
-          position: 'relative',
-          overflow: 'hidden',
-          borderBottom: '1px solid var(--stroke-hair)',
-          background: 'var(--wall-600)',
-          backgroundImage: 'url(/assets/wall-texture.png)',
-          backgroundSize: '520px',
-          animation: 'om-drift 120s linear infinite',
-        }}
-      >
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            backgroundImage: 'url(/assets/assinaturas-mural.png)',
-            backgroundSize: '1150px',
-            opacity: 0.38,
-            pointerEvents: 'none',
-            animation: 'om-drift 45s linear infinite',
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            background: 'linear-gradient(90deg,rgba(10,10,12,.92) 0%,rgba(10,10,12,.62) 55%,rgba(10,10,12,.9) 100%)',
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            left: '-8%',
-            bottom: '-30%',
-            width: 620,
-            height: 620,
-            pointerEvents: 'none',
-            background: 'radial-gradient(circle,rgba(169,211,232,.12),rgba(169,211,232,0) 66%)',
-            animation: 'om-sheen 13s ease-in-out infinite',
-            transform: parallaxOn ? `translateY(${(y * 0.16).toFixed(1)}px)` : undefined,
-          }}
-        />
-        <div
-          style={{
-            maxWidth: 'var(--maxw-page)',
-            margin: '0 auto',
-            position: 'relative',
-            ...(mobile
-              ? { display: 'flex', flexDirection: 'column-reverse' as const, gap: 'var(--space-7)', padding: 'var(--space-9) var(--gutter-page)' }
-              : {
-                  display: 'grid',
-                  gridTemplateColumns: '1.15fr .85fr',
-                  gap: 'var(--space-9)',
-                  alignItems: 'center',
-                  padding: 'var(--space-10) var(--gutter-page)',
-                }),
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 'var(--space-6)',
-              animation: 'om-fade-up 620ms var(--ease-out) both',
-            }}
-          >
-            <span
-              style={{
-                fontFamily: 'var(--font-core)',
-                fontSize: 'var(--fs-label)',
-                fontWeight: 600,
-                letterSpacing: 'var(--tracking-label)',
-                textTransform: 'uppercase',
-                color: 'var(--accent)',
-                animation: 'om-fade-up 560ms var(--ease-out) 60ms both',
-              }}
-            >
-              Turma 32 · Formatura 2026
-            </span>
-            <h1
-              style={{
-                margin: 0,
-                fontFamily: 'var(--font-display)',
-                fontWeight: 400,
-                lineHeight: 'var(--lh-tight)',
-                letterSpacing: 'var(--tracking-display)',
-                textWrap: 'pretty' as never,
-                fontSize: mobile ? 'var(--fs-h1)' : 'var(--fs-display-2)',
-                animation: 'om-fade-up 640ms var(--ease-out) 120ms both',
-              }}
-            >
-              Três anos.
-              <br />
-              Em apenas
-              <br />
-              uma noite.
-            </h1>
-            <p
-              style={{
-                margin: 0,
-                fontSize: 'var(--fs-body-lg)',
-                lineHeight: 'var(--lh-normal)',
-                color: 'var(--text-muted)',
-                maxWidth: '42ch',
-                animation: 'om-fade-up 640ms var(--ease-out) 200ms both',
-              }}
-            >
-              Tudo sobre a noite mais aguardada do ano em um só lugar
-            </p>
-            <div
-              style={{
-                display: 'flex',
-                gap: 'var(--space-5)',
-                flexWrap: 'wrap',
-                animation: 'om-fade-up 640ms var(--ease-out) 280ms both',
-                ...(mobile ? { flexDirection: 'column' as const, alignItems: 'stretch' as const } : { alignItems: 'center' as const }),
-              }}
-            >
-              <Button size="lg" onClick={() => navigate('/baile')}>
-                DETALHES DA NOITE
-              </Button>
-              <Button
-                size="lg"
-                variant="secondary"
-                as="a"
-                href={MAPS_LINK}
-                target="_blank"
-                rel="noopener noreferrer"
-                iconLeft={<Icon name="map-pin" size={16} />}
-              >
-                COMO CHEGAR
-              </Button>
-            </div>
-            <div
-              style={{
-                marginTop: 'var(--space-5)',
-                paddingTop: 'var(--space-6)',
-                borderTop: '1px solid var(--stroke-hair)',
-                display: 'flex',
-                gap: 'var(--space-6)',
-                animation: 'om-fade-up 640ms var(--ease-out) 360ms both',
-              }}
-            >
-              <CountdownRow {...countdown} />
-            </div>
-          </div>
-          <div
-            style={{
-              position: 'relative',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              animation: 'om-fade-in 900ms var(--ease-out) 200ms both',
-            }}
-          >
-            <div
-              style={{
-                position: 'absolute',
-                left: '50%',
-                top: '50%',
-                width: 520,
-                height: 520,
-                margin: '-260px 0 0 -260px',
-                pointerEvents: 'none',
-                background: 'radial-gradient(circle,rgba(169,211,232,.26),rgba(169,211,232,.08) 42%,rgba(169,211,232,0) 70%)',
-                animation: 'om-sheen 9s ease-in-out infinite',
-                transform: parallaxOn ? `translateY(${(y * 0.1).toFixed(1)}px)` : undefined,
-              }}
-            />
-            <div
-              style={{
-                position: 'relative',
-                display: 'flex',
-                animation: 'om-glow 7s ease-in-out infinite',
-                transform: parallaxOn ? `translateY(${(y * -0.05).toFixed(1)}px)` : undefined,
-              }}
-            >
-              <Logo size={mobile ? 220 : 340} />
-            </div>
-          </div>
-        </div>
+      <Abertura />
+      <TextoQueAcende />
+      <Contagem />
+      <ANoite />
+      <section style={{ maxWidth: 'var(--maxw-page)', margin: '0 auto', padding: 'var(--space-10) var(--gutter-page) 0' }}>
+        <MapaInclinado />
       </section>
-
-      <Reveal
-        id="evento"
-        as="section"
-        style={{ maxWidth: 'var(--maxw-page)', margin: '0 auto', padding: 'var(--space-10) var(--gutter-page) 0' }}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginBottom: 'var(--space-7)' }}>
-          <SectionEyebrowRule>O evento</SectionEyebrowRule>
-          <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 400, fontSize: 'var(--fs-h1)', lineHeight: 'var(--lh-snug)' }}>
-            O dia mais esperado de todos
-          </h2>
-        </div>
-        <Card variant="tagged" padding={0} style={{ overflow: 'hidden' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : '1.1fr .9fr' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', padding: 'var(--space-8)' }}>
-              <div style={{ display: 'flex' }}>
-                <Badge tone="gild">TRAJE PASSEIO COMPLETO</Badge>
-              </div>
-              <h3
-                style={{
-                  margin: 0,
-                  fontFamily: 'var(--font-display)',
-                  fontWeight: 400,
-                  fontSize: mobile ? 'var(--fs-h1)' : 'var(--fs-display-3)',
-                  lineHeight: 'var(--lh-tight)',
-                  letterSpacing: 'var(--tracking-display)',
-                }}
-              >
-                Baile de formatura
-              </h3>
-              <p style={{ margin: 0, fontSize: 'var(--fs-body-lg)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)', maxWidth: '34ch' }}>
-                Uma noite só, com a turma inteira reunida pela última vez. A
-                colação de grau acontece no mesmo lugar, durante o baile.
-              </p>
-              <div style={{ marginTop: 'var(--space-4)', paddingTop: 'var(--space-6)', borderTop: '1px solid var(--stroke-hair)', display: 'flex', gap: 'var(--space-6)' }}>
-                <CountdownRow {...countdown} />
-              </div>
-            </div>
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'center',
-                gap: 'var(--space-5)',
-                padding: 'var(--space-8)',
-                background: 'var(--wall-500)',
-                backgroundImage: 'url(/assets/wall-texture.png)',
-                backgroundSize: '420px',
-                backgroundBlendMode: 'overlay',
-                ...(mobile ? { borderTop: '1px solid var(--stroke-hair)' } : { borderLeft: '1px solid var(--stroke-hair)' }),
-              }}
-            >
-              <Field label="Data" value="10 de dezembro" />
-              <Field label="Horário" value="19h" />
-              <Field label="Local" value="Ballroom Casa de Festas" />
-              <div style={{ marginTop: 'var(--space-3)', display: 'flex' }}>
-                <Button variant="secondary" as="a" href={MAPS_LINK} target="_blank" rel="noopener noreferrer" iconLeft={<Icon name="map-pin" size={16} />}>
-                  Como chegar
-                </Button>
-              </div>
-            </div>
-          </div>
-          <div style={{ borderTop: '1px solid var(--stroke-hair)' }}>
-            <MapEmbed height={320} />
-          </div>
-        </Card>
-      </Reveal>
-
-      <Reveal id="confirmar" as="section" style={{ maxWidth: 'var(--maxw-page)', margin: '0 auto', padding: 'var(--space-9) var(--gutter-page) 0' }}>
-        <AvisoConfirmacao />
-      </Reveal>
-
-      <Reveal id="saiba-mais" as="section" style={{ maxWidth: 'var(--maxw-page)', margin: '0 auto', padding: 'var(--space-9) var(--gutter-page) 0' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : 'repeat(2,1fr)', gap: 'var(--space-5)' }}>
-          <Atalho
-            titulo="Traje da noite"
-            texto="Passeio completo. Veja o que vestir e o que evitar."
-            acao="VER O TRAJE"
-            onClick={() => navigate('/baile#traje')}
-          />
-          <Atalho
-            titulo="Perguntas frequentes"
-            texto="Horário, colação, estacionamento, fotos e o resto das dúvidas."
-            acao="VER AS DÚVIDAS"
-            onClick={() => navigate('/baile#duvidas')}
-          />
-          {/* "Os N formandos" escondido até termos a assinatura de todo
-              mundo — devolver aqui (e no NavBar) quando o resto chegar. */}
-        </div>
-      </Reveal>
-
-      {/* Álbum escondido enquanto o Supabase está pausado (reativa só daqui
-          a 90 dias) — devolver esta seção quando o banco voltar ao ar. */}
+      <section style={{ maxWidth: 'var(--maxw-page)', margin: '0 auto', padding: 'var(--space-10) var(--gutter-page) 0' }}>
+        <Revela>
+          <AvisoConfirmacao />
+        </Revela>
+      </section>
+      <Fechamento />
     </main>
   );
 }
 
-function Atalho({ titulo, texto, acao, onClick }: { titulo: string; texto: string; acao: string; onClick: () => void }) {
+/**
+ * Scene 1. The class logo over the wall of signatures, then the headline.
+ * The section is taller than the screen and its content is pinned, so the
+ * first stretch of scrolling plays the scene: the logo shrinks back and
+ * fades, the signatures drift up, and the page hands over to scene 2.
+ */
+function Abertura() {
+  const mobile = useIsMobile();
+  const reduzido = usePrefersReducedMotion();
+  const { ref, progresso } = useProgressoRolagem<HTMLElement>('fixo');
+  // Under reduced motion the scene stays in its opening, readable state.
+  const p = reduzido ? 0 : progresso;
+  const saida = trecho(p, 0.1, 0.75);
+
   return (
-    <Card interactive padding="var(--space-7)" onClick={onClick} style={{ cursor: 'pointer', height: '100%' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', height: '100%' }}>
-        <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 400, fontSize: 'var(--fs-h3)', lineHeight: 'var(--lh-snug)' }}>{titulo}</h3>
-        <p style={{ margin: 0, flex: 1, fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)' }}>{texto}</p>
-        <span
+    <section ref={ref} style={{ height: reduzido ? 'auto' : mobile ? '150vh' : '170vh', position: 'relative' }}>
+      <div className="cena-fixa" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {/* The signatures of the class, faint and drifting, fading to black at the edges. */}
+        <div
+          aria-hidden
           style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 11,
-            letterSpacing: '.18em',
-            textTransform: 'uppercase',
-            color: 'var(--accent)',
+            position: 'absolute',
+            inset: '-10%',
+            backgroundImage: 'url(/assets/assinaturas-mural.png)',
+            backgroundSize: mobile ? '760px' : '1150px',
+            opacity: 0.22 * (1 - saida * 0.6),
+            transform: `translateY(${(-p * 120).toFixed(1)}px) scale(${(1 + p * 0.08).toFixed(3)})`,
+            WebkitMaskImage: 'radial-gradient(ellipse 60% 55% at 50% 50%, #000 20%, transparent 75%)',
+            maskImage: 'radial-gradient(ellipse 60% 55% at 50% 50%, #000 20%, transparent 75%)',
+            animation: 'om-drift 90s linear infinite',
+            pointerEvents: 'none',
+          }}
+        />
+        <div
+          style={{
+            position: 'relative',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            textAlign: 'center',
+            gap: mobile ? 'var(--space-6)' : 'var(--space-7)',
+            padding: '0 var(--gutter-page)',
+            transform: `translateY(${(-saida * 80).toFixed(1)}px)`,
+            opacity: 1 - saida,
           }}
         >
-          {acao} →
-        </span>
+          {/* The entrance animation and the scroll-driven shrink live on
+              different elements: an animation that holds its end state
+              would otherwise override the inline transform. */}
+          <div style={{ animation: 'om-rise 1600ms var(--ease-out) 100ms both' }}>
+            <img
+              src="/assets/logo-32.png"
+              alt="Turma 32"
+              style={{
+                display: 'block',
+                height: mobile ? 168 : 240,
+                width: 'auto',
+                transform: `scale(${(1 - saida * 0.18).toFixed(3)})`,
+                filter: 'drop-shadow(0 0 60px rgba(169,211,232,.18))',
+              }}
+            />
+          </div>
+          <h1
+            className="texto-prata"
+            style={{
+              margin: 0,
+              fontFamily: 'var(--font-display)',
+              fontWeight: 700,
+              fontSize: 'var(--fs-display-1)',
+              lineHeight: 0.98,
+              letterSpacing: '-.035em',
+              animation: 'om-rise 1600ms var(--ease-out) 450ms both',
+            }}
+          >
+            Três anos.
+            <br />
+            Uma noite.
+          </h1>
+          <p
+            style={{
+              margin: 0,
+              fontSize: 'var(--fs-body-lg)',
+              color: 'var(--text-muted)',
+              animation: 'om-rise 1600ms var(--ease-out) 800ms both',
+            }}
+          >
+            Baile de formatura da Turma 32 · 10 de dezembro de 2026
+          </p>
+        </div>
       </div>
-    </Card>
+    </section>
   );
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+const FRASE =
+  'Foram três anos dividindo a mesma sala, as mesmas provas e as mesmas piadas internas. Agora são trinta e dois formandos, uma colação de grau e um baile. Uma noite só, para fechar tudo isso do jeito certo.';
+
+/**
+ * Scene 2. A paragraph that lights up word by word as you scroll through
+ * it — Apple's way of making you read one sentence slowly.
+ */
+function TextoQueAcende() {
+  const mobile = useIsMobile();
+  const reduzido = usePrefersReducedMotion();
+  const { ref, progresso } = useProgressoRolagem<HTMLElement>('fixo');
+  const palavras = FRASE.split(' ');
+  const acesas = Math.round(trecho(progresso, 0.05, 0.85) * palavras.length);
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
-        {label}
-      </span>
-      <span style={{ fontSize: 'var(--fs-h4)', fontWeight: 600 }}>{value}</span>
-    </div>
+    <section ref={ref} style={{ height: reduzido ? 'auto' : mobile ? '220vh' : '260vh', position: 'relative' }}>
+      <div
+        className={reduzido ? undefined : 'cena-fixa'}
+        style={{ display: 'flex', alignItems: 'center', padding: reduzido ? 'var(--space-10) 0' : undefined }}
+      >
+        <p
+          style={{
+            maxWidth: 'var(--maxw-page)',
+            margin: '0 auto',
+            padding: '0 var(--gutter-page)',
+            fontFamily: 'var(--font-display)',
+            fontWeight: 700,
+            fontSize: mobile ? 32 : 'clamp(40px, 4.6vw, 64px)',
+            lineHeight: 1.12,
+            letterSpacing: '-.03em',
+          }}
+        >
+          {palavras.map((palavra, i) => (
+            <span
+              key={i}
+              style={{
+                color: i < acesas ? 'var(--chalk-050)' : '#2c2c2e',
+                transition: 'color 400ms var(--ease-out)',
+              }}
+            >
+              {palavra}{' '}
+            </span>
+          ))}
+        </p>
+      </div>
+    </section>
   );
 }
+
+/** Scene 3. How long until the night, as large as the page allows. */
+function Contagem() {
+  const countdown = useCountdown();
+  return (
+    <section style={{ padding: 'var(--space-10) var(--gutter-page)', textAlign: 'center' }}>
+      <Revela style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-7)' }}>
+        <SectionEyebrowRule>Contagem regressiva</SectionEyebrowRule>
+        <CountdownRow {...countdown} size={96} />
+        <p style={{ margin: 0, fontSize: 'var(--fs-body-lg)', color: 'var(--text-muted)' }}>
+          Até quinta-feira, 10 de dezembro, às 19h.
+        </p>
+      </Revela>
+    </section>
+  );
+}
+
+/** Scene 4. The practical facts of the night, as tiles that rise in one after another. */
+function ANoite() {
+  const mobile = useIsMobile();
+  const navigate = useNavigate();
+
+  return (
+    <section style={{ maxWidth: 'var(--maxw-page)', margin: '0 auto', padding: 'var(--space-9) var(--gutter-page) 0' }}>
+      <Revela style={{ marginBottom: 'var(--space-8)' }}>
+        <Titulo>A noite, em resumo.</Titulo>
+      </Revela>
+      <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : 'repeat(6, 1fr)', gap: mobile ? 12 : 20 }}>
+        <Bloco atraso={0} coluna={mobile ? undefined : 'span 4'} destaque>
+          <Pequeno>Quinta-feira</Pequeno>
+          <Grande tamanho="clamp(56px, 8vw, 104px)">10 de dezembro</Grande>
+          <Pequeno>de 2026</Pequeno>
+        </Bloco>
+        <Bloco atraso={100} coluna={mobile ? undefined : 'span 2'}>
+          <Pequeno>Convidados a partir das</Pequeno>
+          <Grande tamanho="clamp(56px, 7vw, 88px)">19h</Grande>
+          <Pequeno>Formandos chegam às 18h30.</Pequeno>
+        </Bloco>
+        <Bloco atraso={0} coluna={mobile ? undefined : 'span 3'}>
+          <Pequeno>Local</Pequeno>
+          <Grande tamanho="clamp(32px, 3.6vw, 44px)">Ballroom Casa de Festas</Grande>
+          <Pequeno>Nova Iguaçu</Pequeno>
+          <LinkSeta href={MAPS_LINK}>Como chegar</LinkSeta>
+        </Bloco>
+        <Bloco atraso={100} coluna={mobile ? undefined : 'span 3'}>
+          <Pequeno>Traje</Pequeno>
+          <Grande tamanho="clamp(32px, 3.6vw, 44px)">Passeio completo</Grande>
+          <Pequeno>É uma noite de gala: vale caprichar.</Pequeno>
+          <LinkSeta onClick={() => navigate('/baile#traje')}>Ver o traje</LinkSeta>
+        </Bloco>
+        <Bloco atraso={0} coluna={mobile ? undefined : 'span 6'}>
+          <Pequeno>Colação de grau</Pequeno>
+          <Grande tamanho="clamp(28px, 3vw, 40px)">Na mesma noite, no mesmo salão, durante o baile.</Grande>
+        </Bloco>
+      </div>
+    </section>
+  );
+}
+
+/** The close: one line, and the way to everything else. */
+function Fechamento() {
+  const navigate = useNavigate();
+  return (
+    <section style={{ padding: 'var(--space-11) var(--gutter-page)', textAlign: 'center' }}>
+      <Revela style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-6)' }}>
+        <h2
+          className="texto-gelo"
+          style={{
+            margin: 0,
+            fontFamily: 'var(--font-display)',
+            fontWeight: 700,
+            fontSize: 'var(--fs-display-2)',
+            lineHeight: 'var(--lh-tight)',
+            letterSpacing: '-.035em',
+          }}
+        >
+          Até lá.
+        </h2>
+        <div style={{ display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap', justifyContent: 'center' }}>
+          <Button size="lg" onClick={() => navigate('/baile')}>
+            Detalhes da noite
+          </Button>
+          <Button size="lg" variant="secondary" onClick={() => navigate('/baile#duvidas')}>
+            Perguntas frequentes
+          </Button>
+        </div>
+      </Revela>
+    </section>
+  );
+}
+

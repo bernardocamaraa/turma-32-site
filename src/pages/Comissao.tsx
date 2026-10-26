@@ -98,8 +98,8 @@ export function Comissao() {
           <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
             Mapa das mesas: pessoas por formando e o link pessoal de cada um.
           </span>
-          <Link to="/mesas" style={{ fontFamily: 'var(--font-core)', fontSize: 13, fontWeight: 600, letterSpacing: '.14em', color: 'var(--accent)', textDecoration: 'none' }}>
-            ABRIR MAPA DAS MESAS →
+          <Link to="/mesas" style={{ fontFamily: 'var(--font-core)', fontSize: 15, color: 'var(--accent)', textDecoration: 'none' }}>
+            Abrir o mapa das mesas
           </Link>
         </div>
       </Card>
@@ -127,7 +127,7 @@ export function Comissao() {
             {erroAcesso ? <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--gild-400)' }}>{erroAcesso}</span> : null}
             <div style={{ display: 'flex' }}>
               <Button size="lg" disabled={!codigo.trim() || carregando} onClick={entrar}>
-                {carregando ? 'ENTRANDO…' : 'ENTRAR'}
+                {carregando ? 'Entrando…' : 'Entrar'}
               </Button>
             </div>
           </div>
@@ -145,7 +145,7 @@ export function Comissao() {
               }}
             >
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
+                <span style={{ fontSize: 14, color: 'var(--text-faint)' }}>
                   Álbum da festa
                 </span>
                 <span style={{ fontSize: 'var(--fs-body)' }}>
@@ -158,7 +158,7 @@ export function Comissao() {
                 disabled={alternandoAlbum}
                 onClick={alternarAlbum}
               >
-                {alternandoAlbum ? 'ATUALIZANDO…' : dados.albumAberto ? 'FECHAR ÁLBUM' : 'LIBERAR ÁLBUM'}
+                {alternandoAlbum ? 'Atualizando…' : dados.albumAberto ? 'Fechar álbum' : 'Liberar álbum'}
               </Button>
             </div>
             {erroAlbum ? (
@@ -173,7 +173,7 @@ export function Comissao() {
 
           <Card padding={0} style={{ overflow: 'hidden' }}>
             <div style={{ padding: 'var(--space-6) var(--space-7)', borderBottom: '1px solid var(--stroke-hair)' }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
+              <span style={{ fontSize: 14, color: 'var(--text-faint)' }}>
                 Fotos do álbum · {dados.fotos.length}
               </span>
             </div>
@@ -190,7 +190,7 @@ export function Comissao() {
                       <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>{f.legenda}</span>
                     ) : null}
                     <Button variant="ghost" disabled={excluindoFotoId === f.id} onClick={() => excluirFoto(f.id)} style={{ padding: 0, height: 28, fontSize: 10 }}>
-                      {excluindoFotoId === f.id ? 'EXCLUINDO…' : 'EXCLUIR'}
+                      {excluindoFotoId === f.id ? 'Excluindo…' : 'Excluir'}
                     </Button>
                   </div>
                 ))}
@@ -204,7 +204,7 @@ export function Comissao() {
 
           <Card padding={0} style={{ overflow: 'hidden' }}>
             <div style={{ padding: 'var(--space-6) var(--space-7)', borderBottom: '1px solid var(--stroke-hair)' }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
+              <span style={{ fontSize: 14, color: 'var(--text-faint)' }}>
                 Mensagens recebidas
               </span>
             </div>
@@ -228,7 +228,7 @@ export function Comissao() {
 
           <div style={{ display: 'flex' }}>
             <Button variant="ghost" onClick={sair}>
-              SAIR
+              Sair
             </Button>
           </div>
         </>
@@ -241,7 +241,7 @@ function Stat({ label, value, accent }: { label: string; value: string; accent?:
   return (
     <Card padding="var(--space-6)">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>{label}</span>
+        <span style={{ fontSize: 14, color: 'var(--text-faint)' }}>{label}</span>
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 40, fontWeight: 700, lineHeight: 1, color: accent ? 'var(--accent)' : undefined }}>{value}</span>
       </div>
     </Card>

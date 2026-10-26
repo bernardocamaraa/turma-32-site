@@ -1,5 +1,4 @@
 import { useEffect, useId, type CSSProperties, type KeyboardEvent } from 'react';
-import { FORMANDOS } from '../lib/formandos';
 import { ESCADA, PISTA, POSICOES_MESAS, type Mesa, type PosicaoMesa, type Reserva } from '../lib/mesas';
 
 // Drawn in the same 602×336 space the venue's floor plan uses, so positions
@@ -7,8 +6,9 @@ import { ESCADA, PISTA, POSICOES_MESAS, type Mesa, type PosicaoMesa, type Reserv
 const W = 602;
 const H = 336;
 
-// At rest a table is just its outline, the names of who sits there and a
-// fill that rises with occupancy. The seats only show on the open table.
+// At rest a table is only its shape and a fill that rises with occupancy —
+// no numbers, no names. Who sits where shows on the open table and in the
+// panel beside it (pages/Mesas.tsx).
 const R_MESA = 21;
 const RET = { w: 34, h: 84 };
 
@@ -25,28 +25,6 @@ const COR_LUGAR: Record<EstadoLugar, { fill: string; stroke: string }> = {
   outro: { fill: 'var(--ice-300)', stroke: 'var(--ice-300)' },
   livre: { fill: 'var(--ink-900)', stroke: 'var(--smoke-400)' },
 };
-
-/**
- * The name shown on the map — the shortest form no classmate shares: the
- * first name ("Enzo"), else first name and surname initial ("Bernardo C."),
- * else first name and surname ("Maria Bispo" vs "Maria Barroso").
- */
-function formasCurtas(nome: string): string[] {
-  const partes = nome.split(' ');
-  const primeiro = partes[0];
-  const ultimo = partes[partes.length - 1];
-  return [primeiro, `${primeiro} ${ultimo[0]}.`, `${primeiro} ${ultimo}`];
-}
-
-const APELIDOS = new Map(
-  FORMANDOS.map((nome) => {
-    const formas = formasCurtas(nome);
-    const unica = formas.find((forma, i) => !FORMANDOS.some((outro) => outro !== nome && formasCurtas(outro)[i] === forma));
-    return [nome, unica ?? nome];
-  }),
-);
-
-const apelido = (nome: string) => APELIDOS.get(nome) ?? nome.split(' ')[0];
 
 /** Seat positions around a table, centered on (0,0). */
 function lugaresEmVolta(p: PosicaoMesa, capacidade: number): { x: number; y: number }[] {
@@ -85,9 +63,9 @@ type MesaDesenhada = {
   minha: boolean;
 };
 
-/** The table itself: outline, rising fill and names. Drawn centered on (0,0). */
-function CorpoMesa({ d, formando, clipId }: { d: MesaDesenhada; formando: string; clipId: string }) {
-  const { p, mesa, daMesa, ocupados, minha } = d;
+/** The table itself: outline and the fill that rises with occupancy. Drawn centered on (0,0). */
+function CorpoMesa({ d, clipId }: { d: MesaDesenhada; clipId: string }) {
+  const { p, mesa, ocupados, minha } = d;
   const redonda = p.formato === 'redonda';
   const meiaAltura = redonda ? R_MESA : RET.h / 2;
   const nivel = Math.min(ocupados / mesa.capacidade, 1);
@@ -98,16 +76,6 @@ function CorpoMesa({ d, formando, clipId }: { d: MesaDesenhada; formando: string
     strokeWidth: minha ? 1.6 : 1.2,
     strokeDasharray: mesa.reservada_para ? '3 3' : undefined,
   };
-
-  // Up to three lines fit inside a round table; past that, "+N".
-  const maxLinhas = redonda ? 3 : 6;
-  const nomes = daMesa.length > maxLinhas ? daMesa.slice(0, maxLinhas - 1) : daMesa;
-  const resto = daMesa.length - nomes.length;
-  const linhas = [
-    ...nomes.map((r) => ({ texto: apelido(r.formando), meu: r.formando === formando })),
-    ...(resto > 0 ? [{ texto: `+${resto}`, meu: false }] : []),
-  ];
-  const passo = 8.5;
 
   return (
     <>
@@ -133,30 +101,6 @@ function CorpoMesa({ d, formando, clipId }: { d: MesaDesenhada; formando: string
       ) : (
         <rect x={-RET.w / 2} y={-RET.h / 2} width={RET.w} height={RET.h} rx={3} style={contorno} />
       )}
-      {linhas.map((l, i) => (
-        <text
-          key={i}
-          x={0}
-          y={(i - (linhas.length - 1) / 2) * passo}
-          textAnchor="middle"
-          dominantBaseline="central"
-          style={{
-            fill: l.meu ? 'var(--gild-300)' : 'var(--text-primary)',
-            fontFamily: 'var(--font-core)',
-            // Archivo's narrow width (the site loads its wdth axis) fits
-            // names inside a table without shrinking them to unreadable.
-            fontStretch: '72%',
-            fontSize: 7.5,
-            fontWeight: l.meu ? 600 : 500,
-            // A dark halo keeps names readable over the fill and the outline.
-            stroke: 'var(--ink-850)',
-            strokeWidth: 2.4,
-            paintOrder: 'stroke',
-          }}
-        >
-          {l.texto}
-        </text>
-      ))}
     </>
   );
 }
@@ -167,6 +111,7 @@ export function MapaMesas({
   formando,
   selecionada,
   onSelecionar,
+  painel = null,
 }: {
   mesas: Mesa[];
   reservas: Reserva[];
@@ -175,6 +120,11 @@ export function MapaMesas({
   selecionada: string | null;
   /** Called with a table id to open it, or null to close the open one. */
   onSelecionar: (id: string | null) => void;
+  /**
+   * Which side of the map the page covers with its details panel while a
+   * table is open — the open table keeps to the other side.
+   */
+  painel?: 'esquerda' | 'direita' | null;
 }) {
   const uid = useId().replace(/:/g, '');
   const porId = new Map(mesas.map((m) => [m.id, m]));
@@ -234,7 +184,7 @@ export function MapaMesas({
         y={((PISTA.y + PISTA.h / 2) / 100) * H}
         textAnchor="middle"
         dominantBaseline="central"
-        style={{ fill: 'var(--text-faint)', fontFamily: 'var(--font-display)', fontSize: 24 }}
+        style={{ fill: 'var(--text-faint)', fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 20, letterSpacing: '-.02em' }}
       >
         Pista
       </text>
@@ -243,7 +193,7 @@ export function MapaMesas({
         x={(ESCADA.x / 100) * W}
         y={(ESCADA.y / 100) * H}
         textAnchor="middle"
-        style={{ fill: 'var(--text-faint)', fontFamily: 'var(--font-display)', fontSize: 13 }}
+        style={{ fill: 'var(--text-faint)', fontFamily: 'var(--font-core)', fontSize: 11 }}
       >
         Escada
       </text>
@@ -274,13 +224,15 @@ export function MapaMesas({
             height={d.p.formato === 'retangular' ? 92 : 50}
             style={{ fill: 'transparent' }}
           />
-          <CorpoMesa d={d} formando={formando} clipId={`${uid}-${d.p.id}`} />
+          <g className="mesa-alvo">
+            <CorpoMesa d={d} clipId={`${uid}-${d.p.id}`} />
+          </g>
         </g>
       ))}
 
       <RotuloProfessores desenhadas={desenhadas} />
 
-      {aberta ? <MesaAberta key={aberta.p.id} d={aberta} formando={formando} uid={uid} onFechar={() => onSelecionar(null)} /> : null}
+      {aberta ? <MesaAberta key={aberta.p.id} d={aberta} formando={formando} uid={uid} painel={painel} onFechar={() => onSelecionar(null)} /> : null}
     </svg>
   );
 }
@@ -295,7 +247,7 @@ function RotuloProfessores({ desenhadas }: { desenhadas: MesaDesenhada[] }) {
       y={p.cy + R_MESA + 12}
       textAnchor="middle"
       dominantBaseline="central"
-      style={{ fill: 'var(--text-faint)', fontFamily: 'var(--font-display)', fontSize: 11, pointerEvents: 'none' }}
+      style={{ fill: 'var(--text-faint)', fontFamily: 'var(--font-core)', fontSize: 10, pointerEvents: 'none' }}
     >
       Professores
     </text>
@@ -308,10 +260,25 @@ function RotuloProfessores({ desenhadas }: { desenhadas: MesaDesenhada[] }) {
  * one by one around it — gold for the viewer's, blue for classmates', empty
  * for free ones. Clicking the dimmed map closes it.
  */
-function MesaAberta({ d, formando, uid, onFechar }: { d: MesaDesenhada; formando: string; uid: string; onFechar: () => void }) {
+function MesaAberta({
+  d,
+  formando,
+  uid,
+  painel,
+  onFechar,
+}: {
+  d: MesaDesenhada;
+  formando: string;
+  uid: string;
+  painel: 'esquerda' | 'direita' | null;
+  onFechar: () => void;
+}) {
   const s = ESCALA[d.p.formato];
   const a = alcance(d.p);
-  const x1 = clamp(d.cx, a.x + 4, W - a.x - 4);
+  // Keep clear of the details panel: it covers about 40% of the map's width.
+  const minX = painel === 'esquerda' ? W * 0.42 + a.x : a.x + 4;
+  const maxX = painel === 'direita' ? W * 0.58 - a.x : W - a.x - 4;
+  const x1 = clamp(d.cx, minX, maxX);
   const y1 = clamp(d.cy, a.y + 4, H - a.y - 4);
 
   const estados: EstadoLugar[] = d.daMesa.flatMap((r) => Array<EstadoLugar>(r.lugares).fill(r.formando === formando ? 'meu' : 'outro'));
@@ -338,7 +305,23 @@ function MesaAberta({ d, formando, uid, onFechar }: { d: MesaDesenhada; formando
           } as CSSProperties
         }
       >
-        <CorpoMesa d={d} formando={formando} clipId={`${uid}-${d.p.id}-aberta`} />
+        <CorpoMesa d={d} clipId={`${uid}-${d.p.id}-aberta`} />
+        <text
+          y={-1.5}
+          textAnchor="middle"
+          dominantBaseline="central"
+          style={{ fill: 'var(--chalk-050)', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13, letterSpacing: '-.03em' }}
+        >
+          {d.ocupados}
+        </text>
+        <text
+          y={9}
+          textAnchor="middle"
+          dominantBaseline="central"
+          style={{ fill: 'var(--text-muted)', fontFamily: 'var(--font-core)', fontSize: 4.2 }}
+        >
+          de {d.mesa.capacidade}
+        </text>
         {lugaresEmVolta(d.p, d.mesa.capacidade).map((pos, i) => (
           <circle
             key={i}

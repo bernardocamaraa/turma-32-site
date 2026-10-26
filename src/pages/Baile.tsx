@@ -1,11 +1,8 @@
-import { useState } from 'react';
-import { Button } from '../components/Button';
-import { Card } from '../components/Card';
-import { Badge } from '../components/Badge';
-import { Icon } from '../components/Icon';
-import { MapEmbed, MAPS_LINK } from '../components/MapEmbed';
-import { CountdownRow, PageHeader, SectionEyebrowRule } from '../components/SectionHeading';
+import { useId, useState } from 'react';
+import { Plus } from 'lucide-react';
+import { CountdownRow, SectionEyebrowRule } from '../components/SectionHeading';
 import { AvisoConfirmacao } from '../components/AvisoConfirmacao';
+import { Bloco, Grande, MapaInclinado, Pequeno, Revela, Titulo } from '../components/Cena';
 import { useCountdown } from '../lib/countdown';
 import { useIsMobile } from '../lib/useViewport';
 
@@ -39,7 +36,7 @@ const DUVIDAS: { pergunta: string; resposta: string }[] = [
   {
     pergunta: 'Qual é o traje?',
     resposta:
-      'Passeio completo. Mais detalhes na seção "Traje", logo acima nesta página.',
+      'Passeio completo. Mais detalhes na parte "Traje", logo acima nesta página.',
   },
   {
     pergunta: 'Posso tirar fotos durante a festa?',
@@ -56,130 +53,100 @@ const DUVIDAS: { pergunta: string; resposta: string }[] = [
 export function Baile() {
   const countdown = useCountdown();
   const mobile = useIsMobile();
+  const secao = { maxWidth: 'var(--maxw-page)', margin: '0 auto', padding: 'var(--space-10) var(--gutter-page) 0' };
 
   return (
-    <main
-      style={{
-        maxWidth: 'var(--maxw-page)',
-        margin: '0 auto',
-        padding: 'var(--space-9) var(--gutter-page) var(--space-10)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 'var(--space-8)',
-        animation: 'om-fade-up 620ms var(--ease-out) both',
-      }}
-    >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-        <PageHeader eyebrow="O baile" title="Baile de formatura da Turma 32" />
-        <p style={{ margin: 0, marginTop: 'calc(-1 * var(--space-4))', fontSize: 'var(--fs-body-lg)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)', maxWidth: '60ch' }}>
-          A colação de grau acontece no mesmo dia, no mesmo local, durante o baile. Uma noite só, do começo ao fim.
-        </p>
-      </div>
-
-      <Card variant="tagged" padding={0} style={{ overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : '1.1fr .9fr' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', padding: 'var(--space-8)' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-              <div style={{ display: 'flex' }}>
-                <Badge tone="gild">TRAJE PASSEIO COMPLETO</Badge>
-              </div>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
-              <Field label="Data" value="10 de dezembro de 2026" />
-              <Field label="Chegada dos formandos" value="18h30" />
-              <Field label="Abertura para convidados" value="19h" />
-              <Field label="Local" value="Ballroom Casa de Festas · Nova Iguaçu" />
-            </div>
+    <main style={{ paddingBottom: 'var(--space-11)' }}>
+      <header style={{ ...secao, paddingTop: 'var(--space-10)', textAlign: 'center' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-5)' }}>
+          <div style={{ animation: 'om-rise 1400ms var(--ease-out) 80ms both' }}>
+            <SectionEyebrowRule>O baile</SectionEyebrowRule>
           </div>
-          <div
+          <div style={{ animation: 'om-rise 1400ms var(--ease-out) 250ms both' }}>
+            <Titulo como="h1" tamanho="var(--fs-display-2)">
+              Uma noite só,
+              <br />
+              do começo ao fim.
+            </Titulo>
+          </div>
+          <p
             style={{
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'center',
-              gap: 'var(--space-6)',
-              padding: 'var(--space-8)',
-              background: 'var(--wall-500)',
-              backgroundImage: 'url(/assets/wall-texture.png)',
-              backgroundSize: '420px',
-              backgroundBlendMode: 'overlay',
-              ...(mobile ? { borderTop: '1px solid var(--stroke-hair)' } : { borderLeft: '1px solid var(--stroke-hair)' }),
+              margin: 0,
+              maxWidth: '36rem',
+              fontSize: 'var(--fs-body-lg)',
+              lineHeight: 'var(--lh-normal)',
+              color: 'var(--text-muted)',
+              animation: 'om-rise 1400ms var(--ease-out) 420ms both',
             }}
           >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-              <Rotulo>Colação de grau</Rotulo>
-              <p style={{ margin: 0, fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)', maxWidth: '40ch' }}>
-                Acontece durante o baile, no mesmo salão. Não há cerimônia em outro dia nem em outro endereço.
-              </p>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', paddingTop: 'var(--space-5)', borderTop: '1px solid var(--stroke-hair)' }}>
-              <Rotulo>Falta</Rotulo>
-              <CountdownRow {...countdown} />
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      <AvisoConfirmacao compact />
-
-      <section id="traje" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-          <SectionEyebrowRule>Traje</SectionEyebrowRule>
-          <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 400, fontSize: 'var(--fs-h1)', lineHeight: 'var(--lh-snug)' }}>
-            Passeio completo
-          </h2>
-          <p style={{ margin: 0, fontSize: 'var(--fs-body-lg)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)', maxWidth: '60ch' }}>
-            É uma noite de gala: vale caprichar. O que é melhor deixar no
-            armário:
+            O baile de formatura da Turma 32 e a colação de grau acontecem juntos, no mesmo dia e no mesmo salão.
           </p>
         </div>
+      </header>
 
-        <Card padding="var(--space-7)">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <Rotulo>Melhor evitar</Rotulo>
-            <Lista
-              tone="var(--gild-300)"
-              itens={[
-                'Jeans, bermuda, tênis e chinelo',
-                'Look de praia ou esportivo',
-              ]}
-            />
-          </div>
-        </Card>
+      <section style={secao}>
+        <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : 'repeat(6, 1fr)', gap: mobile ? 12 : 20 }}>
+          <Bloco coluna={mobile ? undefined : 'span 3'} destaque>
+            <Pequeno>Quinta-feira</Pequeno>
+            <Grande tamanho="clamp(48px, 6vw, 80px)">10 de dezembro de 2026</Grande>
+          </Bloco>
+          <Bloco atraso={100} coluna={mobile ? undefined : 'span 3'}>
+            <Pequeno>Faltam</Pequeno>
+            <CountdownRow {...countdown} />
+          </Bloco>
+          <Bloco coluna={mobile ? undefined : 'span 2'}>
+            <Pequeno>Chegada dos formandos</Pequeno>
+            <Grande tamanho="clamp(48px, 5vw, 64px)">18h30</Grande>
+          </Bloco>
+          <Bloco atraso={100} coluna={mobile ? undefined : 'span 2'}>
+            <Pequeno>Abertura para convidados</Pequeno>
+            <Grande tamanho="clamp(48px, 5vw, 64px)">19h</Grande>
+          </Bloco>
+          <Bloco atraso={200} coluna={mobile ? undefined : 'span 2'}>
+            <Pequeno>Colação de grau</Pequeno>
+            <Grande tamanho="clamp(24px, 2.4vw, 30px)">Durante o baile, no mesmo salão.</Grande>
+            <Pequeno>Não há cerimônia em outro dia nem em outro endereço.</Pequeno>
+          </Bloco>
+        </div>
       </section>
 
-      <Card padding={0} style={{ overflow: 'hidden' }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: mobile ? 'flex-start' : 'center',
-            justifyContent: 'space-between',
-            gap: mobile ? 'var(--space-4)' : 'var(--space-6)',
-            flexDirection: mobile ? 'column' : 'row',
-            padding: mobile ? 'var(--space-6)' : 'var(--space-7) var(--space-8)',
-          }}
-        >
-          <Rotulo>Como chegar</Rotulo>
-          <Button variant="secondary" as="a" href={MAPS_LINK} target="_blank" rel="noopener noreferrer" iconLeft={<Icon name="map-pin" size={16} />}>
-            Abrir no Maps
-          </Button>
-        </div>
-        <div style={{ borderTop: '1px solid var(--stroke-hair)' }}>
-          <MapEmbed height={360} />
-        </div>
-      </Card>
+      <section style={secao}>
+        <Revela>
+          <AvisoConfirmacao compact />
+        </Revela>
+      </section>
 
-      <section id="duvidas" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+      <section id="traje" style={secao}>
+        <Revela style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxWidth: '44rem' }}>
+          <SectionEyebrowRule>Traje</SectionEyebrowRule>
+          <Titulo>Passeio completo.</Titulo>
+          <p style={{ margin: 0, fontSize: 'var(--fs-body-lg)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)' }}>
+            É uma noite de gala: vale caprichar. O que é melhor deixar no armário são jeans, bermuda, tênis e
+            chinelo, e qualquer look de praia ou esportivo.
+          </p>
+        </Revela>
+      </section>
+
+      <section style={secao}>
+        <Revela style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', marginBottom: 'var(--space-8)' }}>
+          <SectionEyebrowRule>Como chegar</SectionEyebrowRule>
+          <Titulo>Ballroom Casa de Festas, Nova Iguaçu.</Titulo>
+        </Revela>
+        <MapaInclinado />
+      </section>
+
+      <section id="duvidas" style={secao}>
+        <Revela style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', marginBottom: 'var(--space-7)' }}>
           <SectionEyebrowRule>Perguntas frequentes</SectionEyebrowRule>
-          <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 400, fontSize: 'var(--fs-h1)', lineHeight: 'var(--lh-snug)' }}>
-            As dúvidas de sempre
-          </h2>
-        </div>
-        <Card padding={0} style={{ overflow: 'hidden' }}>
-          {DUVIDAS.map((d, i) => (
-            <Duvida key={d.pergunta} {...d} primeira={i === 0} />
-          ))}
-        </Card>
+          <Titulo>As dúvidas de sempre.</Titulo>
+        </Revela>
+        <Revela>
+          <div style={{ borderTop: '1px solid var(--stroke-hair)' }}>
+            {DUVIDAS.map((d) => (
+              <Duvida key={d.pergunta} {...d} />
+            ))}
+          </div>
+        </Revela>
       </section>
 
       {/* "Fale com a comissão" escondido enquanto o Supabase está pausado
@@ -188,88 +155,78 @@ export function Baile() {
   );
 }
 
-function Duvida({ pergunta, resposta, primeira }: { pergunta: string; resposta: string; primeira: boolean }) {
+/**
+ * One question. The answer slides open (grid rows 0fr → 1fr, so the height
+ * animates without measuring) and the plus turns into a cross.
+ */
+function Duvida({ pergunta, resposta }: { pergunta: string; resposta: string }) {
   const [aberta, setAberta] = useState(false);
+  const id = useId();
 
   return (
-    <div style={{ borderTop: primeira ? 'none' : '1px solid var(--stroke-hair)' }}>
+    <div style={{ borderBottom: '1px solid var(--stroke-hair)' }}>
       <button
         onClick={() => setAberta((v) => !v)}
         aria-expanded={aberta}
+        aria-controls={id}
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: 'var(--space-5)',
           width: '100%',
-          padding: 'var(--space-6) var(--space-7)',
+          minHeight: 72,
+          padding: 'var(--space-5) 0',
           background: 'transparent',
           border: 'none',
           color: 'var(--text-primary)',
           textAlign: 'left',
           cursor: 'pointer',
+          fontFamily: 'var(--font-display)',
           fontSize: 'var(--fs-body-lg)',
           fontWeight: 600,
+          letterSpacing: '-.015em',
           lineHeight: 'var(--lh-snug)',
         }}
       >
         {pergunta}
-        <Icon
-          name="chevron-down"
-          size={18}
+        <Plus
+          size={22}
+          strokeWidth={1.6}
+          aria-hidden
           style={{
             flex: '0 0 auto',
-            color: 'var(--accent)',
-            transform: aberta ? 'rotate(180deg)' : 'none',
-            transition: 'transform var(--dur) var(--ease-out)',
+            color: 'var(--text-muted)',
+            transform: aberta ? 'rotate(45deg)' : 'none',
+            transition: 'transform var(--dur-slow) var(--ease-out)',
           }}
         />
       </button>
-      {aberta ? (
-        <p
-          style={{
-            margin: 0,
-            padding: '0 var(--space-7) var(--space-6)',
-            fontSize: 'var(--fs-body)',
-            lineHeight: 'var(--lh-normal)',
-            color: 'var(--text-muted)',
-            maxWidth: '68ch',
-            animation: 'om-fade-up 260ms var(--ease-out) both',
-          }}
-        >
-          {resposta}
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-function Lista({ itens, tone }: { itens: string[]; tone?: string }) {
-  return (
-    <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-      {itens.map((item) => (
-        <li key={item} style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'baseline' }}>
-          <span style={{ flex: '0 0 auto', width: 6, height: 6, borderRadius: '50%', background: tone ?? 'var(--accent)' }} />
-          <span style={{ fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)' }}>{item}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function Rotulo({ children }: { children: string }) {
-  return (
-    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
-      {children}
-    </span>
-  );
-}
-
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <Rotulo>{label}</Rotulo>
-      <span style={{ fontSize: 'var(--fs-h4)', fontWeight: 600 }}>{value}</span>
+      <div
+        id={id}
+        style={{
+          display: 'grid',
+          gridTemplateRows: aberta ? '1fr' : '0fr',
+          transition: 'grid-template-rows var(--dur-slow) var(--ease-out)',
+        }}
+      >
+        <div style={{ overflow: 'hidden' }}>
+          <p
+            style={{
+              margin: 0,
+              padding: '0 var(--space-8) var(--space-6) 0',
+              fontSize: 'var(--fs-body)',
+              lineHeight: 'var(--lh-normal)',
+              color: 'var(--text-muted)',
+              maxWidth: '44rem',
+              opacity: aberta ? 1 : 0,
+              transition: 'opacity var(--dur-slow) var(--ease-out)',
+            }}
+          >
+            {resposta}
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

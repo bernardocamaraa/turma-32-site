@@ -18,7 +18,7 @@ export function Input({
   const [focus, setFocus] = useState(false);
   const autoId = useId();
   const uid = id || autoId;
-  const bd = error ? 'var(--state-error)' : focus ? 'var(--chalk-050)' : 'var(--stroke-muted)';
+  const bd = error ? 'var(--state-error)' : focus ? 'var(--accent)' : 'var(--stroke-hair)';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', ...style }}>
@@ -27,9 +27,8 @@ export function Input({
           htmlFor={uid}
           style={{
             fontFamily: 'var(--font-core)',
-            fontSize: 'var(--fs-label)',
-            letterSpacing: 'var(--tracking-label)',
-            textTransform: 'uppercase',
+            fontSize: 'var(--fs-body-sm)',
+            fontWeight: 500,
             color: 'var(--text-muted)',
           }}
         >
@@ -44,8 +43,8 @@ export function Input({
           gap: 'var(--space-3)',
           height: 'var(--control-h)',
           padding: '0 var(--space-4)',
-          background: 'rgba(244,247,250,.04)',
-          border: '2px solid ' + bd,
+          background: 'var(--ink-800)',
+          border: '1px solid ' + bd,
           borderRadius: 'var(--radius-sm)',
           opacity: rest.disabled ? 0.4 : 1,
           boxShadow: focus ? 'var(--glow-spray-tight)' : 'none',
