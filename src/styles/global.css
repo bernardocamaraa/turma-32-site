@@ -26,6 +26,39 @@ body {
   background: var(--ink-950);
   color: var(--text-primary);
   font-family: var(--font-core);
+  font-size: var(--fs-body);
+  letter-spacing: var(--tracking-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  /* Countdown digits, seat counts and dates don't jitter as they change. */
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: rgba(169, 211, 232, .35);
+}
+
+/* Keyboard focus is always visible; mouse clicks don't draw it. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* Headlines with the silver fade used on Apple's dark pages. */
+.texto-prata {
+  background: var(--grad-headline);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.texto-gelo {
+  background: var(--grad-ice);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 a {
@@ -48,8 +81,13 @@ button {
 }
 
 @keyframes om-fade-up {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(28px); }
   to { opacity: 1; transform: none; }
+}
+
+@keyframes om-rise {
+  from { opacity: 0; transform: translateY(40px) scale(.98); filter: blur(6px); }
+  to { opacity: 1; transform: none; filter: none; }
 }
 
 @keyframes om-fade-in {
@@ -93,14 +131,46 @@ button {
   from { opacity: 0; transform: scale(0); }
 }
 
+/* A scene pinned to the viewport while its (taller) section scrolls past —
+   see lib/motion.ts. svh so a phone's collapsing toolbar doesn't resize it. */
+.cena-fixa {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100svh;
+  overflow: hidden;
+}
+
 .mesa-lugar {
   transform-box: fill-box;
   transform-origin: center;
 }
 
+/* A table leans in under the pointer or keyboard focus, so it's clear it opens. */
+.mesa-alvo {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+
+g[role="button"]:hover .mesa-alvo,
+g[role="button"]:focus-visible .mesa-alvo {
+  transform: scale(1.09);
+}
+
+/* The open table's details: beside the map on a wide screen, rising as a
+   sheet from the bottom edge on a phone. */
+@keyframes painel-ao-lado {
+  from { opacity: 0; transform: translateY(-50%) scale(.96); filter: blur(4px); }
+}
+
+@keyframes painel-folha {
+  from { transform: translateY(100%); }
+}
+
 .reveal {
   opacity: 0;
-  transform: translateY(10px);
+  transform: translateY(40px);
 }
 
 .print-watermark,
@@ -109,7 +179,7 @@ button {
 }
 
 .reveal.is-in {
-  animation: om-fade-up 640ms var(--ease-out) both;
+  animation: om-rise 1100ms var(--ease-out) both;
 }
 
 .reveal.no-motion {
@@ -124,7 +194,7 @@ button {
      stylistic accent. Shrink it on mobile so it stays a detail, not a
      layout tell. */
   .card-tag-shadow {
-    box-shadow: 3px 3px 0 var(--ice-300) !important;
+    box-shadow: none !important;
   }
 }
 

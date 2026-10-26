@@ -99,7 +99,6 @@ export function Album() {
             fontSize: 'var(--fs-label)',
             fontWeight: 600,
             letterSpacing: 'var(--tracking-label)',
-            textTransform: 'uppercase',
             color: 'var(--accent)',
           }}
         >
@@ -155,7 +154,7 @@ export function Album() {
                 animation: 'om-sheen 9s ease-in-out infinite',
               }}
             />
-            <span style={{ position: 'relative', fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '.2em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
+            <span style={{ position: 'relative', fontSize: 14, color: 'var(--text-faint)' }}>
               Falta
             </span>
             <div style={{ position: 'relative' }}>
@@ -170,13 +169,13 @@ export function Album() {
         <>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-6)', marginBottom: 'var(--space-6)', flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-              <Badge tone="accent">AO VIVO NA FESTA</Badge>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
+              <Badge tone="accent">Ao vivo na festa</Badge>
+              <span style={{ fontSize: 14, color: 'var(--text-faint)' }}>
                 {fotos.length} {fotos.length === 1 ? 'foto enviada' : 'fotos enviadas'}
               </span>
             </div>
             <Button iconLeft={<Icon name="camera" size={18} />} onClick={abrirDialogEnvio}>
-              ENVIAR FOTO
+              Enviar foto
             </Button>
           </div>
           {fotos.length === 0 ? (
@@ -199,10 +198,10 @@ export function Album() {
         onClose={() => setDialogAberto(false)}
         footer={
           enviado ? (
-            <Button onClick={() => setDialogAberto(false)}>FECHAR</Button>
+            <Button onClick={() => setDialogAberto(false)}>Fechar</Button>
           ) : (
             <Button disabled={!arquivo || enviando} onClick={enviar}>
-              {enviando ? 'ENVIANDO…' : 'ENVIAR'}
+              {enviando ? 'Enviando…' : 'Enviar'}
             </Button>
           )
         }
@@ -212,7 +211,7 @@ export function Album() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
+              <span style={{ fontSize: 14, color: 'var(--text-faint)' }}>
                 Sua foto
               </span>
               <input

@@ -25,9 +25,8 @@ export function Select({
           htmlFor={uid}
           style={{
             fontFamily: 'var(--font-core)',
-            fontSize: 'var(--fs-label)',
-            letterSpacing: 'var(--tracking-label)',
-            textTransform: 'uppercase',
+            fontSize: 'var(--fs-body-sm)',
+            fontWeight: 500,
             color: 'var(--text-muted)',
           }}
         >
@@ -40,8 +39,8 @@ export function Select({
           display: 'flex',
           alignItems: 'center',
           height: 'var(--control-h)',
-          background: 'rgba(244,247,250,.04)',
-          border: '2px solid ' + (focus ? 'var(--chalk-050)' : 'var(--stroke-muted)'),
+          background: 'var(--ink-800)',
+          border: '1px solid ' + (focus ? 'var(--accent)' : 'var(--stroke-hair)'),
           borderRadius: 'var(--radius-sm)',
           opacity: rest.disabled ? 0.4 : 1,
           transition: 'border-color var(--dur-fast) var(--ease-out)',

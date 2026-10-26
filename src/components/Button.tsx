@@ -3,17 +3,19 @@ import { useState, type CSSProperties, type MouseEventHandler, type ReactNode } 
 type Variant = 'primary' | 'gild' | 'secondary' | 'ghost';
 type Size = 'sm' | 'md' | 'lg';
 
-const SIZES: Record<Size, { h: string; px: number; fs: number; off: number }> = {
-  sm: { h: 'var(--control-h-sm)', px: 14, fs: 11, off: 3 },
-  md: { h: 'var(--control-h)', px: 22, fs: 13, off: 4 },
-  lg: { h: 'var(--control-h-lg)', px: 30, fs: 15, off: 5 },
+const SIZES: Record<Size, { h: string; px: number; fs: number }> = {
+  sm: { h: 'var(--control-h-sm)', px: 16, fs: 14 },
+  md: { h: 'var(--control-h)', px: 22, fs: 15 },
+  lg: { h: 'var(--control-h-lg)', px: 28, fs: 17 },
 };
 
-const SKINS: Record<Variant, { background: string; color: string; border: string; shadow: string }> = {
-  primary: { background: 'var(--chalk-050)', color: 'var(--ink-900)', border: '2px solid var(--chalk-050)', shadow: 'var(--ice-300)' },
-  gild: { background: 'var(--gild-400)', color: 'var(--ink-900)', border: '2px solid var(--gild-400)', shadow: 'var(--ink-950)' },
-  secondary: { background: 'transparent', color: 'var(--chalk-050)', border: '2px solid var(--chalk-050)', shadow: 'var(--ice-500)' },
-  ghost: { background: 'transparent', color: 'var(--text-muted)', border: '2px solid transparent', shadow: 'transparent' },
+// Pill buttons, Apple-style: one solid light pill for the main action, a
+// translucent one for the alternative, and a plain text link for the rest.
+const SKINS: Record<Variant, { background: string; hover: string; color: string; border: string }> = {
+  primary: { background: 'var(--chalk-050)', hover: '#ffffff', color: '#000000', border: 'transparent' },
+  gild: { background: 'var(--gild-400)', hover: 'var(--gild-300)', color: '#000000', border: 'transparent' },
+  secondary: { background: 'rgba(245,245,247,.1)', hover: 'rgba(245,245,247,.16)', color: 'var(--chalk-050)', border: 'transparent' },
+  ghost: { background: 'transparent', hover: 'transparent', color: 'var(--accent)', border: 'transparent' },
 };
 
 type ButtonProps = {
@@ -53,8 +55,7 @@ export function Button({
   const k = SKINS[variant] || SKINS.primary;
   const [hover, setHover] = useState(false);
   const [press, setPress] = useState(false);
-  const lift = disabled ? 0 : press ? 0 : hover ? 1 : 0;
-  const off = disabled ? 0 : press ? 0 : s.off;
+  const ghost = variant === 'ghost';
 
   const sharedStyle: CSSProperties = {
     display: fullWidth ? 'flex' : 'inline-flex',
@@ -63,23 +64,24 @@ export function Button({
     justifyContent: 'center',
     gap: 8,
     height: s.h,
-    padding: '0 ' + s.px + 'px',
+    padding: ghost ? '0 4px' : '0 ' + s.px + 'px',
     boxSizing: 'border-box',
     fontFamily: 'var(--font-core)',
     fontSize: s.fs + 'px',
-    fontWeight: 600,
-    letterSpacing: '.14em',
-    textTransform: 'uppercase',
-    textDecoration: 'none',
-    background: k.background,
-    color: variant === 'ghost' && hover && !disabled ? 'var(--chalk-050)' : k.color,
-    border: k.border,
-    borderRadius: 'var(--radius-sm)',
-    boxShadow: off ? off + 'px ' + off + 'px 0 ' + k.shadow : 'none',
-    transform: `translate(${press ? s.off + 'px' : lift ? '-1px' : '0'},${press ? s.off + 'px' : lift ? '-1px' : '0'})`,
+    fontWeight: ghost ? 400 : 500,
+    letterSpacing: '-.01em',
+    whiteSpace: 'nowrap',
+    textDecoration: ghost && hover && !disabled ? 'underline' : 'none',
+    textUnderlineOffset: 3,
+    background: hover && !disabled ? k.hover : k.background,
+    color: k.color,
+    border: '1px solid ' + k.border,
+    borderRadius: 'var(--radius-pill)',
+    transform: press && !disabled ? 'scale(.97)' : 'none',
     opacity: disabled ? 0.38 : 1,
     cursor: disabled ? 'not-allowed' : 'pointer',
-    transition: 'transform var(--dur-fast) var(--ease-out),box-shadow var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out)',
+    transition: 'transform var(--dur-fast) var(--ease-out), background var(--dur) var(--ease-out)',
+    WebkitTapHighlightColor: 'transparent',
     ...style,
   };
 
@@ -89,8 +91,9 @@ export function Button({
       setHover(false);
       setPress(false);
     },
-    onMouseDown: () => setPress(true),
-    onMouseUp: () => setPress(false),
+    onPointerDown: () => setPress(true),
+    onPointerUp: () => setPress(false),
+    onPointerCancel: () => setPress(false),
   };
 
   if (as === 'a') {

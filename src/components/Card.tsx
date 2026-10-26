@@ -2,11 +2,14 @@ import { useState, type CSSProperties, type HTMLAttributes, type ReactNode } fro
 
 type Variant = 'wall' | 'outline' | 'invert' | 'tagged';
 
+// Rounded tiles on a raised surface, the way Apple's dark pages group
+// content. 'tagged' (the old graffiti-sticker card) now reads as the same
+// tile with a slightly brighter edge, so existing callers keep working.
 const SKINS: Record<Variant, { background: string; border: string; color: string }> = {
-  wall: { background: 'var(--bg-elev)', border: '1px solid var(--stroke-hair)', color: 'var(--text-primary)' },
-  outline: { background: 'transparent', border: '2px solid var(--chalk-050)', color: 'var(--text-primary)' },
-  invert: { background: 'var(--chalk-050)', border: '2px solid var(--chalk-050)', color: 'var(--ink-900)' },
-  tagged: { background: 'var(--bg-elev)', border: '2px solid var(--chalk-050)', color: 'var(--text-primary)' },
+  wall: { background: 'var(--ink-850)', border: '1px solid var(--stroke-hair)', color: 'var(--text-primary)' },
+  outline: { background: 'transparent', border: '1px solid var(--stroke-muted)', color: 'var(--text-primary)' },
+  invert: { background: 'var(--chalk-050)', border: '1px solid var(--chalk-050)', color: '#000000' },
+  tagged: { background: 'var(--ink-850)', border: '1px solid var(--stroke-muted)', color: 'var(--text-primary)' },
 };
 
 export function Card({
@@ -20,6 +23,7 @@ export function Card({
   ...rest
 }: {
   variant?: Variant;
+  /** Marks the card as the one to act on: a hairline of the accent color around it. */
   accent?: boolean;
   interactive?: boolean;
   padding?: string | number;
@@ -28,22 +32,21 @@ export function Card({
 } & HTMLAttributes<HTMLDivElement>) {
   const [hover, setHover] = useState(false);
   const k = SKINS[variant] || SKINS.wall;
-  const off = variant === 'tagged' ? 6 : 0;
 
   return (
     <div
-      className={[variant === 'tagged' ? 'card-tag-shadow' : '', className].filter(Boolean).join(' ') || undefined}
+      className={className}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
         position: 'relative',
         padding,
-        borderRadius: 'var(--radius-sm)',
+        borderRadius: 'var(--radius-lg)',
         ...k,
-        boxShadow: off ? (interactive && hover ? '8px 8px 0 var(--ice-300)' : '6px 6px 0 var(--ice-300)') : 'none',
-        transform: interactive && hover ? 'translate(-2px,-2px)' : 'none',
-        borderLeft: accent ? '3px solid var(--accent)' : k.border,
-        transition: 'transform var(--dur) var(--ease-out),box-shadow var(--dur) var(--ease-out),border-color var(--dur) var(--ease-out)',
+        border: accent ? '1px solid rgba(169,211,232,.45)' : k.border,
+        transform: interactive && hover ? 'scale(1.015)' : 'none',
+        boxShadow: interactive && hover ? '0 24px 60px rgba(0,0,0,.5)' : 'none',
+        transition: 'transform var(--dur-slow) var(--ease-out), box-shadow var(--dur-slow) var(--ease-out), border-color var(--dur) var(--ease-out)',
         ...style,
       }}
       {...rest}
