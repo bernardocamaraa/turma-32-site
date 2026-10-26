@@ -82,6 +82,22 @@ button {
   to { transform: scaleX(1); }
 }
 
+/* Table map (components/MapaMesas.tsx). Only the starting point is given:
+   the end state is each element's own inline style, so with reduced motion
+   (animations off, below) the open table simply appears in place. */
+@keyframes mesa-abre {
+  from { transform: translate(var(--x0), var(--y0)) scale(1); }
+}
+
+@keyframes mesa-lugar {
+  from { opacity: 0; transform: scale(0); }
+}
+
+.mesa-lugar {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
 .reveal {
   opacity: 0;
   transform: translateY(10px);

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
@@ -62,6 +62,20 @@ export function Mesas() {
   const [quantidade, setQuantidade] = useState(0);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const painelMesa = useRef<HTMLDivElement>(null);
+
+  // On a phone the panel to mark seats can sit below the map, off screen.
+  // Once the table has finished opening, scroll just enough for the top of
+  // the panel to peek in at the bottom — the open table stays in view.
+  useEffect(() => {
+    if (!selecionada) return;
+    const id = setTimeout(() => {
+      const topo = painelMesa.current?.getBoundingClientRect().top;
+      const visivel = window.innerHeight - 140;
+      if (topo !== undefined && topo > visivel) window.scrollBy({ top: topo - visivel, behavior: 'smooth' });
+    }, 450);
+    return () => clearTimeout(id);
+  }, [selecionada]);
 
   const acesso: AcessoMesas = link ? { link } : { codigo: codigo.trim() };
   const nome = dados?.voce ?? escolhido;
@@ -150,10 +164,10 @@ export function Mesas() {
   const bloqueada = !!mesa?.reservada_para && !dados?.comissao;
   const fechado = !!dados && !dados.abertas && !dados.comissao;
 
-  function selecionar(id: string) {
+  function selecionar(id: string | null) {
     setSelecionada(id);
     setErro(null);
-    if (!dados) return;
+    if (!dados || !id) return;
     const m = dados.mesas.find((x) => x.id === id);
     const meus = dados.reservas.find((r) => r.mesa === id && r.formando === nome)?.lugares ?? 0;
     const outros = dados.reservas.filter((r) => r.mesa === id && r.formando !== nome).reduce((s, r) => s + r.lugares, 0);
@@ -270,7 +284,7 @@ export function Mesas() {
               <span style={{ display: 'block', marginBottom: 'var(--space-3)', ...rotuloCampo }}>Arraste para o lado para ver o mapa todo</span>
             ) : null}
             <div style={{ overflowX: 'auto' }}>
-              <div style={{ minWidth: 560, maxWidth: 960, margin: '0 auto' }}>
+              <div style={{ minWidth: mobile ? 660 : 560, maxWidth: 960, margin: '0 auto' }}>
                 <MapaMesas mesas={dados.mesas} reservas={dados.reservas} formando={nome} selecionada={selecionada} onSelecionar={selecionar} />
               </div>
             </div>
@@ -283,88 +297,90 @@ export function Mesas() {
           </Card>
 
           {mesa ? (
-            <Card accent padding="var(--space-6)">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
-                  <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 400, fontSize: 'var(--fs-h3)' }}>
-                    Mesa {mesa.id}
-                    {/* The committee's tables stay unnamed for the class, like on the map. */}
-                    {mesa.reservada_para === 'professores' ? (
-                      <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-faint)' }}> · professores</span>
-                    ) : null}
-                  </h2>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>
-                    {ocupadosOutros + meusNaMesa} de {mesa.capacidade} ocupados
-                  </span>
-                </div>
+            <div ref={painelMesa}>
+              <Card accent padding="var(--space-6)">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
+                    <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 400, fontSize: 'var(--fs-h3)' }}>
+                      Mesa {mesa.id}
+                      {/* The committee's tables stay unnamed for the class, like on the map. */}
+                      {mesa.reservada_para === 'professores' ? (
+                        <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-faint)' }}> · professores</span>
+                      ) : null}
+                    </h2>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>
+                      {ocupadosOutros + meusNaMesa} de {mesa.capacidade} ocupados
+                    </span>
+                  </div>
 
-                {naMesa.length > 0 ? (
-                  <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                    {naMesa
-                      .slice()
-                      .sort((a, b) => a.formando.localeCompare(b.formando, 'pt-BR'))
-                      .map((r) => (
-                        <li key={r.formando} style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-4)', fontSize: 'var(--fs-body)' }}>
-                          <span style={{ color: r.formando === nome ? 'var(--gild-300)' : 'var(--text-primary)' }}>
-                            {r.formando}
-                            {r.formando === nome ? ' (você)' : ''}
-                          </span>
-                          <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
-                            {r.lugares} {r.lugares === 1 ? 'lugar' : 'lugares'}
-                          </span>
-                        </li>
-                      ))}
-                  </ul>
-                ) : (
-                  <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)' }}>Ninguém marcou essa mesa ainda.</span>
-                )}
+                  {naMesa.length > 0 ? (
+                    <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                      {naMesa
+                        .slice()
+                        .sort((a, b) => a.formando.localeCompare(b.formando, 'pt-BR'))
+                        .map((r) => (
+                          <li key={r.formando} style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-4)', fontSize: 'var(--fs-body)' }}>
+                            <span style={{ color: r.formando === nome ? 'var(--gild-300)' : 'var(--text-primary)' }}>
+                              {r.formando}
+                              {r.formando === nome ? ' (você)' : ''}
+                            </span>
+                            <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
+                              {r.lugares} {r.lugares === 1 ? 'lugar' : 'lugares'}
+                            </span>
+                          </li>
+                        ))}
+                    </ul>
+                  ) : (
+                    <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)' }}>Ninguém marcou essa mesa ainda.</span>
+                  )}
 
-                {bloqueada ? (
-                  <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>
-                    {mesa.reservada_para === 'professores' ? 'Essa mesa é reservada aos professores.' : 'Essa mesa é reservada.'}
-                  </span>
-                ) : fechado ? null : maximo === 0 && meusNaMesa === 0 ? (
-                  <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>
-                    {total === 0 ? 'Você ainda não tem lugares para distribuir.' : restante === 0 ? 'Você já marcou todos os seus lugares em outras mesas.' : 'Essa mesa está cheia.'}
-                  </span>
-                ) : (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-5)', flexWrap: 'wrap' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                      <span style={rotuloCampo}>Seus lugares aqui</span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                        <Button variant="secondary" size="sm" disabled={quantidade <= 0 || salvando} onClick={() => setQuantidade((q) => q - 1)} style={{ width: 36, padding: 0 }}>
-                          −
+                  {bloqueada ? (
+                    <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>
+                      {mesa.reservada_para === 'professores' ? 'Essa mesa é reservada aos professores.' : 'Essa mesa é reservada.'}
+                    </span>
+                  ) : fechado ? null : maximo === 0 && meusNaMesa === 0 ? (
+                    <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>
+                      {total === 0 ? 'Você ainda não tem lugares para distribuir.' : restante === 0 ? 'Você já marcou todos os seus lugares em outras mesas.' : 'Essa mesa está cheia.'}
+                    </span>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-5)', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                        <span style={rotuloCampo}>Seus lugares aqui</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                          <Button variant="secondary" size="sm" disabled={quantidade <= 0 || salvando} onClick={() => setQuantidade((q) => q - 1)} style={{ width: 36, padding: 0 }}>
+                            −
+                          </Button>
+                          <span aria-live="polite" style={{ fontFamily: 'var(--font-mono)', fontSize: 28, fontWeight: 700, minWidth: 40, textAlign: 'center' }}>
+                            {quantidade}
+                          </span>
+                          <Button variant="secondary" size="sm" disabled={quantidade >= maximo || salvando} onClick={() => setQuantidade((q) => q + 1)} style={{ width: 36, padding: 0 }}>
+                            +
+                          </Button>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+                        <Button
+                          disabled={salvando || quantidade === meusNaMesa || quantidade > maximo}
+                          onClick={() => marcar(quantidade)}
+                        >
+                          {salvando ? 'SALVANDO…' : meusNaMesa > 0 ? 'ATUALIZAR' : 'MARCAR'}
                         </Button>
-                        <span aria-live="polite" style={{ fontFamily: 'var(--font-mono)', fontSize: 28, fontWeight: 700, minWidth: 40, textAlign: 'center' }}>
-                          {quantidade}
-                        </span>
-                        <Button variant="secondary" size="sm" disabled={quantidade >= maximo || salvando} onClick={() => setQuantidade((q) => q + 1)} style={{ width: 36, padding: 0 }}>
-                          +
-                        </Button>
+                        {meusNaMesa > 0 ? (
+                          <Button
+                            variant="ghost"
+                            disabled={salvando}
+                            onClick={() => marcar(0)}
+                          >
+                            SAIR DESTA MESA
+                          </Button>
+                        ) : null}
                       </div>
                     </div>
-                    <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-                      <Button
-                        disabled={salvando || quantidade === meusNaMesa || quantidade > maximo}
-                        onClick={() => marcar(quantidade)}
-                      >
-                        {salvando ? 'SALVANDO…' : meusNaMesa > 0 ? 'ATUALIZAR' : 'MARCAR'}
-                      </Button>
-                      {meusNaMesa > 0 ? (
-                        <Button
-                          variant="ghost"
-                          disabled={salvando}
-                          onClick={() => marcar(0)}
-                        >
-                          SAIR DESTA MESA
-                        </Button>
-                      ) : null}
-                    </div>
-                  </div>
-                )}
-                {erro ? <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--state-error)' }}>{erro}</span> : null}
-              </div>
-            </Card>
+                  )}
+                  {erro ? <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--state-error)' }}>{erro}</span> : null}
+                </div>
+              </Card>
+            </div>
           ) : null}
 
           {dados.comissao ? <PainelComissao dados={dados} salvando={salvando} alterar={alterar} /> : null}
