@@ -6,6 +6,7 @@ import { useIsMobile } from '../lib/useViewport';
 const LINKS = [
   { to: '/', label: 'Início' },
   { to: '/baile', label: 'O baile' },
+  { to: '/mesas', label: 'Mesas' },
   // A turma escondida até termos a assinatura de todo mundo — voltar a
   // listar aqui quando o resto chegar.
   // Álbum escondido enquanto o Supabase está pausado (reativa só daqui a

@@ -1,7 +1,10 @@
 /**
- * Os 32 formandos da turma. A lista é usada só para exibição (página "A
- * turma") — o convite e a lista de convidados de cada formando são tratados
- * fora do site, no portal da casa de festas.
+ * Os 32 formandos da turma: aparecem na página "A turma" e no seletor de
+ * nome do mapa das mesas. O convite e a lista de convidados de cada formando
+ * são tratados fora do site, no portal da casa de festas.
+ *
+ * Os mesmos nomes estão em `supabase/mesas.sql` (convidados_formando): se
+ * mudar aqui, mude lá também, com a grafia idêntica.
  */
 export const FORMANDOS: string[] = [
   'Anna Carolina Russo',

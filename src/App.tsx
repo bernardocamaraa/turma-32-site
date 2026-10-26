@@ -8,6 +8,7 @@ import { Baile } from './pages/Baile';
 import { Album } from './pages/Album';
 import { Turma } from './pages/Turma';
 import { Comissao } from './pages/Comissao';
+import { Mesas } from './pages/Mesas';
 
 function ScrollToTop() {
   const { pathname, hash } = useLocation();
@@ -39,6 +40,7 @@ function AppRoutes() {
         <Route path="/turma" element={<Turma />} />
         <Route path="/album" element={<Album />} />
         <Route path="/comissao" element={<Comissao />} />
+        <Route path="/mesas" element={<Mesas />} />
         {/* Any old link (a shared /rsvp URL, a typo) lands on the home page
             instead of a blank screen. */}
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -122,3 +122,5 @@ create policy "anon can upload to fotos-album while album is open" on storage.ob
     bucket_id = 'fotos-album'
     and coalesce((select valor from public.configuracoes where chave = 'album_aberto'), false) = true
   );
+
+-- The table map (/mesas) lives in supabase/mesas.sql — run it after this file.
