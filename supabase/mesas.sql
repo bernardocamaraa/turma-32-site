@@ -10,9 +10,11 @@
 -- formando brings — copied from the venue's portal, which stays the one
 -- guest list — and the formando only distributes those seats.
 --
--- Nothing here is readable or writable with the anon key: the map is behind
--- the class code, so every read and write goes through the `mesas` Edge
--- Function (service role key), the same pattern as committee-data.
+-- Each formando gets a personal link (/mesas/<link>) and can only move their
+-- own seats with it — a shared class code would let anyone move anyone's.
+-- Nothing here is readable or writable with the anon key: every read and
+-- write goes through the `mesas` Edge Function (service role key), which
+-- finds the formando by the link, the same pattern as committee-data.
 -- ---------------------------------------------------------------------------
 
 -- One row per table on the map. `reservada_para` marks the tables formandos
@@ -36,11 +38,21 @@ on conflict (id) do nothing;
 
 -- How many people each formando brings, the formando included. Starts at 0:
 -- the committee fills it in from the venue's portal. Names must match
--- src/lib/formandos.ts exactly — the Edge Function looks formandos up here.
+-- src/lib/formandos.ts exactly.
+--
+-- `link` is the secret part of the formando's personal URL: 122 random bits
+-- (a UUID without dashes), so it can't be guessed from a classmate's.
+-- The committee can swap it for a new one if a link leaks.
 create table if not exists public.convidados_formando (
   formando text primary key,
-  total int not null default 0 check (total >= 0 and total <= 60)
+  total int not null default 0 check (total >= 0 and total <= 60),
+  link text not null unique default replace(gen_random_uuid()::text, '-', '')
 );
+
+-- For a project that ran this file before `link` existed: adding the column
+-- with a volatile default gives every existing row its own value.
+alter table public.convidados_formando
+  add column if not exists link text not null unique default replace(gen_random_uuid()::text, '-', '');
 
 insert into public.convidados_formando (formando) values
   ('Anna Carolina Russo'), ('Anna Clara Ribeiro'), ('Arthur Caetano'), ('Arthur Oliveira'),

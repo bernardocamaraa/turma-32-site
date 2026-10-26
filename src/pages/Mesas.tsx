@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Input } from '../components/Input';
@@ -6,30 +7,29 @@ import { MapaMesas } from '../components/MapaMesas';
 import { Select } from '../components/Select';
 import { PageHeader } from '../components/SectionHeading';
 import { FORMANDOS } from '../lib/formandos';
-import { buscarMesas, type AlteracaoMesas, type DadosMesas } from '../lib/mesas';
+import { buscarMesas, urlDoFormando, type AcessoMesas, type AlteracaoMesas, type DadosMesas } from '../lib/mesas';
 import { useIsMobile } from '../lib/useViewport';
 
 const POLL_MS = 20000;
-const CHAVE_LOGIN = 'turma32-mesas';
+const CHAVE_CODIGO = 'turma32-mesas-comissao';
 
-// Remembers who's on this device so a formando coming back doesn't retype
-// the code. Storage can be blocked (private mode, previews) — then the page
-// just asks again.
-function lerLogin(): { nome: string; codigo: string } | null {
+// Remembers the committee code on this device so it isn't retyped on every
+// visit. Formandos don't need this: their personal link is the login.
+// Storage can be blocked (private mode, previews) — then the page just asks.
+function lerCodigo(): string {
   try {
-    const salvo = JSON.parse(localStorage.getItem(CHAVE_LOGIN) ?? 'null');
-    return salvo && typeof salvo.nome === 'string' && typeof salvo.codigo === 'string' ? salvo : null;
+    return localStorage.getItem(CHAVE_CODIGO) ?? '';
   } catch {
-    return null;
+    return '';
   }
 }
 
-function salvarLogin(valor: { nome: string; codigo: string } | null) {
+function salvarCodigo(valor: string | null) {
   try {
-    if (valor) localStorage.setItem(CHAVE_LOGIN, JSON.stringify(valor));
-    else localStorage.removeItem(CHAVE_LOGIN);
+    if (valor) localStorage.setItem(CHAVE_CODIGO, valor);
+    else localStorage.removeItem(CHAVE_CODIGO);
   } catch {
-    // ignore — see lerLogin
+    // ignore — see lerCodigo
   }
 }
 
@@ -41,10 +41,20 @@ const rotuloCampo = {
   color: 'var(--text-faint)',
 };
 
+/**
+ * Two ways in:
+ * - /mesas/<link>: a formando's personal URL. Opens straight on the map and
+ *   can only move that formando's seats (the Edge Function decides whose,
+ *   from the link — not from anything this page sends).
+ * - /mesas: the committee, with its code. Can move anyone's seats and gets
+ *   the panel with each formando's link to send out.
+ */
 export function Mesas() {
   const mobile = useIsMobile();
-  const [nome, setNome] = useState(() => lerLogin()?.nome ?? '');
-  const [codigo, setCodigo] = useState(() => lerLogin()?.codigo ?? '');
+  const { link } = useParams<{ link?: string }>();
+  const [codigo, setCodigo] = useState(() => (link ? '' : lerCodigo()));
+  // Whose seats the committee is moving; for a formando it comes from the link.
+  const [escolhido, setEscolhido] = useState('');
   const [dados, setDados] = useState<DadosMesas | null>(null);
   const [entrando, setEntrando] = useState(false);
   const [erroAcesso, setErroAcesso] = useState<string | null>(null);
@@ -53,25 +63,28 @@ export function Mesas() {
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
+  const acesso: AcessoMesas = link ? { link } : { codigo: codigo.trim() };
+  const nome = dados?.voce ?? escolhido;
+
   async function entrar() {
     setEntrando(true);
     setErroAcesso(null);
     try {
-      const resultado = await buscarMesas(codigo.trim());
+      const resultado = await buscarMesas(acesso);
       setDados(resultado);
-      salvarLogin({ nome, codigo: codigo.trim() });
+      if (!link) salvarCodigo(codigo.trim());
     } catch (e) {
       setErroAcesso(e instanceof Error ? e.message : 'Não foi possível entrar agora.');
-      salvarLogin(null);
+      if (!link) salvarCodigo(null);
     } finally {
       setEntrando(false);
     }
   }
 
-  // Coming back on the same device: log straight in with what was saved.
+  // A personal link logs in by itself; the committee too, with a saved code.
   useEffect(() => {
-    if (nome && codigo) entrar();
-  }, []);
+    if (link || codigo) entrar();
+  }, [link]);
 
   // Other formandos are filling tables at the same time — refresh the map
   // every so often so the counts don't go stale while someone is deciding.
@@ -82,7 +95,7 @@ export function Mesas() {
     const id = setInterval(async () => {
       if (document.hidden) return;
       try {
-        const resultado = await buscarMesas(codigo.trim());
+        const resultado = await buscarMesas(acesso);
         if (ativo) setDados(resultado);
       } catch (e) {
         console.error(e);
@@ -92,13 +105,13 @@ export function Mesas() {
       ativo = false;
       clearInterval(id);
     };
-  }, [logado, codigo]);
+  }, [logado, link, codigo]);
 
   /** Applies a change and returns the error message to show, or null if it worked. */
   async function alterar(alteracao: AlteracaoMesas): Promise<string | null> {
     setSalvando(true);
     try {
-      setDados(await buscarMesas(codigo.trim(), alteracao));
+      setDados(await buscarMesas(acesso, alteracao));
       return null;
     } catch (e) {
       return e instanceof Error ? e.message : 'Não foi possível salvar agora.';
@@ -116,9 +129,10 @@ export function Mesas() {
   }
 
   function sair() {
-    salvarLogin(null);
+    salvarCodigo(null);
     setDados(null);
     setCodigo('');
+    setEscolhido('');
     setSelecionada(null);
     setErro(null);
   }
@@ -162,16 +176,29 @@ export function Mesas() {
     >
       <PageHeader eyebrow="Área dos formandos" title="Mapa das mesas" />
 
-      {!dados ? (
+      {!dados && link ? (
+        // A personal link: nothing to type, just loading or a dead link.
+        <Card padding="var(--space-7)">
+          <p style={{ margin: 0, fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-normal)', color: erroAcesso ? 'var(--state-error)' : 'var(--text-muted)' }}>
+            {erroAcesso ?? 'Abrindo o seu mapa…'}
+          </p>
+          {erroAcesso && !entrando ? (
+            <div style={{ display: 'flex', marginTop: 'var(--space-5)' }}>
+              <Button variant="secondary" onClick={entrar}>
+                TENTAR DE NOVO
+              </Button>
+            </div>
+          ) : null}
+        </Card>
+      ) : !dados ? (
         <Card padding="var(--space-7)">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxWidth: 420 }}>
             <p style={{ margin: 0, fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)' }}>
-              Escolha seu nome e digite o código da turma para marcar a mesa da sua família.
-              Cada mesa tem 10 lugares e vai enchendo conforme a turma marca.
+              Cada formando marca a mesa pelo link pessoal que recebeu da comissão. Se você
+              é formando, abra o seu link. Esta entrada é só da comissão.
             </p>
-            <Select label="Seu nome" options={FORMANDOS} value={nome} onChange={(e) => setNome(e.target.value)} />
             <Input
-              label="Código da turma"
+              label="Código da comissão"
               placeholder="••••••"
               type="password"
               value={codigo}
@@ -180,12 +207,12 @@ export function Mesas() {
                 setErroAcesso(null);
               }}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && nome && codigo.trim() && !entrando) entrar();
+                if (e.key === 'Enter' && codigo.trim() && !entrando) entrar();
               }}
             />
             {erroAcesso ? <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--state-error)' }}>{erroAcesso}</span> : null}
             <div style={{ display: 'flex' }}>
-              <Button size="lg" disabled={!nome || !codigo.trim() || entrando} onClick={entrar}>
+              <Button size="lg" disabled={!codigo.trim() || entrando} onClick={entrar}>
                 {entrando ? 'ENTRANDO…' : 'ENTRAR'}
               </Button>
             </div>
@@ -208,11 +235,11 @@ export function Mesas() {
                 {dados.comissao ? (
                   <Select
                     options={FORMANDOS}
-                    value={nome}
+                    placeholder="Escolha um formando"
+                    value={escolhido}
                     onChange={(e) => {
-                      setNome(e.target.value);
+                      setEscolhido(e.target.value);
                       setSelecionada(null);
-                      salvarLogin({ nome: e.target.value, codigo: codigo.trim() });
                     }}
                   />
                 ) : (
@@ -226,7 +253,9 @@ export function Mesas() {
               </div>
             </div>
             <p style={{ margin: 'var(--space-4) 0 0', fontSize: 'var(--fs-body-sm)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)' }}>
-              {fechado
+              {dados.comissao && !nome
+                ? 'Escolha um formando acima para marcar os lugares dele.'
+                : fechado
                 ? 'A comissão fechou o mapa. Ele fica só para consulta.'
                 : total === 0
                   ? 'A comissão ainda não cadastrou quantas pessoas você leva. Assim que cadastrar, você consegue marcar.'
@@ -340,11 +369,13 @@ export function Mesas() {
 
           {dados.comissao ? <PainelComissao dados={dados} salvando={salvando} alterar={alterar} /> : null}
 
-          <div style={{ display: 'flex' }}>
-            <Button variant="ghost" onClick={sair}>
-              SAIR
-            </Button>
-          </div>
+          {dados.comissao ? (
+            <div style={{ display: 'flex' }}>
+              <Button variant="ghost" onClick={sair}>
+                SAIR
+              </Button>
+            </div>
+          ) : null}
         </>
       )}
     </main>
@@ -394,6 +425,7 @@ function PainelComissao({
 }) {
   const [rascunho, setRascunho] = useState<Record<string, string>>({});
   const [erro, setErro] = useState<string | null>(null);
+  const [copiado, setCopiado] = useState<string | null>(null);
   const marcadosPor = new Map<string, number>();
   for (const r of dados.reservas) marcadosPor.set(r.formando, (marcadosPor.get(r.formando) ?? 0) + r.lugares);
   const totalPessoas = dados.convidados.reduce((s, c) => s + c.total, 0);
@@ -419,6 +451,23 @@ function PainelComissao({
     if (!falha) descartar();
   }
 
+  async function copiarLink(formando: string, link: string) {
+    try {
+      await navigator.clipboard.writeText(urlDoFormando(link));
+      setCopiado(formando);
+      setTimeout(() => setCopiado((atual) => (atual === formando ? null : atual)), 2000);
+    } catch {
+      // Clipboard can be blocked (old browser, no permission): show the URL
+      // so it can be copied by hand.
+      window.prompt('Copie o link:', urlDoFormando(link));
+    }
+  }
+
+  async function trocarLink(formando: string) {
+    if (!window.confirm(`Gerar um link novo para ${formando}? O link antigo para de funcionar na hora.`)) return;
+    setErro(await alterar({ novoLink: formando }));
+  }
+
   async function alternarMapa() {
     setErro(await alterar({ definirMesasAbertas: !dados.abertas }));
   }
@@ -437,7 +486,7 @@ function PainelComissao({
         }}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-          <span style={rotuloCampo}>Comissão · pessoas por formando</span>
+          <span style={rotuloCampo}>Comissão · pessoas e links por formando</span>
           <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>
             {totalPessoas} pessoas para {capacidade} lugares. Mapa {dados.abertas ? 'aberto para a turma' : 'fechado para a turma'}.
           </span>
@@ -454,42 +503,65 @@ function PainelComissao({
           <div
             key={c.formando}
             style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 64px 112px',
-              alignItems: 'center',
-              gap: 'var(--space-4)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 'var(--space-2)',
               padding: 'var(--space-3) var(--space-7)',
               borderBottom: '1px solid var(--stroke-hair)',
             }}
           >
-            <span style={{ fontSize: 'var(--fs-body)' }}>{c.formando}</span>
-            <input
-              type="number"
-              min={0}
-              max={60}
-              inputMode="numeric"
-              aria-label={`Pessoas de ${c.formando}`}
-              value={rascunho[c.formando] ?? String(c.total)}
-              onChange={(e) => setRascunho((r) => ({ ...r, [c.formando]: e.target.value }))}
-              onBlur={() => salvarTotal(c.formando, c.total)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-              }}
-              style={{
-                height: 32,
-                width: '100%',
-                padding: '0 var(--space-3)',
-                background: 'rgba(244,247,250,.04)',
-                border: '1px solid var(--stroke-muted)',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--text-primary)',
-                fontFamily: 'var(--font-mono)',
-                fontSize: 'var(--fs-body)',
-              }}
-            />
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-body-sm)', color: completo ? 'var(--state-ok)' : 'var(--text-faint)', textAlign: 'right' }}>
-              {marcados}/{c.total} no mapa
-            </span>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 64px 112px', alignItems: 'center', gap: 'var(--space-4)' }}>
+              <span style={{ fontSize: 'var(--fs-body)' }}>{c.formando}</span>
+              <input
+                type="number"
+                min={0}
+                max={60}
+                inputMode="numeric"
+                aria-label={`Pessoas de ${c.formando}`}
+                value={rascunho[c.formando] ?? String(c.total)}
+                onChange={(e) => setRascunho((r) => ({ ...r, [c.formando]: e.target.value }))}
+                onBlur={() => salvarTotal(c.formando, c.total)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                }}
+                style={{
+                  height: 32,
+                  width: '100%',
+                  padding: '0 var(--space-3)',
+                  background: 'rgba(244,247,250,.04)',
+                  border: '1px solid var(--stroke-muted)',
+                  borderRadius: 'var(--radius-sm)',
+                  color: 'var(--text-primary)',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 'var(--fs-body)',
+                }}
+              />
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-body-sm)', color: completo ? 'var(--state-ok)' : 'var(--text-faint)', textAlign: 'right' }}>
+                {marcados}/{c.total} no mapa
+              </span>
+            </div>
+            {c.link ? (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)', marginLeft: -12 }}>
+                <Button variant="ghost" size="sm" onClick={() => copiarLink(c.formando, c.link!)}>
+                  {copiado === c.formando ? 'COPIADO!' : 'COPIAR LINK'}
+                </Button>
+                <Button
+                  as="a"
+                  variant="ghost"
+                  size="sm"
+                  target="_blank"
+                  rel="noreferrer"
+                  href={`https://wa.me/?text=${encodeURIComponent(
+                    `Oi ${c.formando.split(' ')[0]}! Esse é o seu link para marcar a mesa da sua família na formatura. Não passe pra ninguém: ${urlDoFormando(c.link)}`,
+                  )}`}
+                >
+                  MANDAR NO WHATSAPP
+                </Button>
+                <Button variant="ghost" size="sm" disabled={salvando} onClick={() => trocarLink(c.formando)}>
+                  NOVO LINK
+                </Button>
+              </div>
+            ) : null}
           </div>
         );
       })}

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Input } from '../components/Input';
@@ -91,6 +92,17 @@ export function Comissao() {
       }}
     >
       <PageHeader eyebrow="Área da comissão" title="Álbum e mensagens" />
+
+      <Card padding="var(--space-6)">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-5)', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+            Mapa das mesas: pessoas por formando e o link pessoal de cada um.
+          </span>
+          <Link to="/mesas" style={{ fontFamily: 'var(--font-core)', fontSize: 13, fontWeight: 600, letterSpacing: '.14em', color: 'var(--accent)', textDecoration: 'none' }}>
+            ABRIR MAPA DAS MESAS →
+          </Link>
+        </div>
+      </Card>
 
       {!dados ? (
         <Card padding="var(--space-7)">

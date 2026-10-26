@@ -76,11 +76,15 @@ export type Reserva = {
 export type ConvidadosFormando = {
   formando: string;
   total: number;
+  /** Secret part of the formando's personal URL — only sent to the committee. */
+  link?: string;
 };
 
 export type DadosMesas = {
   /** True when the code typed was the committee's — unlocks reserved tables and the admin panel. */
   comissao: boolean;
+  /** The formando a personal link belongs to (null for the committee). */
+  voce: string | null;
   /** Whether formandos can still change their seats (the committee can always). */
   abertas: boolean;
   mesas: Mesa[];
@@ -91,18 +95,27 @@ export type DadosMesas = {
 export type AlteracaoMesas =
   | { formando: string; mesa: string; lugares: number }
   | { definirConvidados: { formando: string; total: number } }
-  | { definirMesasAbertas: boolean };
+  | { definirMesasAbertas: boolean }
+  | { novoLink: string };
+
+/** Who's asking: a formando by their personal link, or the committee by its code. */
+export type AcessoMesas = { link: string } | { codigo: string };
+
+/** The personal URL the committee sends each formando. */
+export function urlDoFormando(link: string): string {
+  return `${window.location.origin}/mesas/${link}`;
+}
 
 /**
  * Every read and write goes through the `mesas` Edge Function, which checks
- * the class (or committee) code — the anon key in the bundle can't read
+ * the personal link (or committee code) — the anon key in the bundle can't read
  * these tables directly (supabase/mesas.sql). Pass an `alteracao` to change
  * something first; the response is always the whole map after that change,
  * so the screen never shows a stale count after a save.
  */
-export async function buscarMesas(codigo: string, alteracao?: AlteracaoMesas): Promise<DadosMesas> {
+export async function buscarMesas(acesso: AcessoMesas, alteracao?: AlteracaoMesas): Promise<DadosMesas> {
   const { data, error } = await supabase.functions.invoke<DadosMesas>('mesas', {
-    body: { codigo, ...alteracao },
+    body: { ...acesso, ...alteracao },
   });
   if (error) {
     const context = (error as { context?: unknown }).context;

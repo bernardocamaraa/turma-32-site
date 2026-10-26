@@ -41,6 +41,7 @@ function AppRoutes() {
         <Route path="/album" element={<Album />} />
         <Route path="/comissao" element={<Comissao />} />
         <Route path="/mesas" element={<Mesas />} />
+        <Route path="/mesas/:link" element={<Mesas />} />
         {/* Any old link (a shared /rsvp URL, a typo) lands on the home page
             instead of a blank screen. */}
         <Route path="*" element={<Navigate to="/" replace />} />
