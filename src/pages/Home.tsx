@@ -123,7 +123,7 @@ function Abertura() {
 }
 
 const FRASE =
-  'Foram três anos dividindo a mesma sala, as mesmas provas e as mesmas piadas internas. Agora são trinta e dois formandos, uma colação de grau e um baile. Uma noite só, para fechar tudo isso do jeito certo.';
+  'Três turmas diferentes em um lugar só, uma mistura que tinha tudo pra dar errado mas deu muito certo. Agora, vamos celebrar essa união e fim de ciclo da melhor maneira possível!';
 
 /**
  * Scene 2. A paragraph that lights up word by word as you scroll through
