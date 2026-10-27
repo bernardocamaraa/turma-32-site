@@ -1,15 +1,23 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
 import { Check, Search } from 'lucide-react';
-import { AbasArea } from '../components/AbasArea';
 import { Badge } from '../components/Badge';
+import { BotoesLink } from '../components/BotoesLink';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Input } from '../components/Input';
 import { PageHeader } from '../components/SectionHeading';
 import { lerCodigo, salvarCodigo } from '../lib/codigoComissao';
-import type { AcessoMesas } from '../lib/mesas';
-import { buscarVotacao, type AcaoVotacao, type DadosVotacao, type Pergunta, type Resultado, type TipoPergunta } from '../lib/votacao';
+import {
+  buscarVotacao,
+  urlDaVotacao,
+  type AcaoVotacao,
+  type AcessoVotacao,
+  type DadosVotacao,
+  type Pergunta,
+  type Resultado,
+  type TipoPergunta,
+} from '../lib/votacao';
 import { useIsMobile } from '../lib/useViewport';
 
 const POLL_MS = 20000;
@@ -19,11 +27,13 @@ const pequeno = { fontSize: 'var(--fs-body-sm)', color: 'var(--text-faint)' };
 const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
 
 /**
- * The class vote. Two ways in, like the table map:
- * - /votacao/<link>: a formando's personal link. Votes once per question;
- *   sees a result once the committee releases it.
- * - /votacao: the committee, with its code. Creates questions, follows who
- *   still has to vote, closes them and releases the results.
+ * The class vote — its own page, apart from the table map. Two ways in:
+ * - /votacao/<link>: a formando's personal voting link (not the table
+ *   map's). Votes once per question; sees a result once the committee
+ *   releases it.
+ * - /votacao: the committee, with its code. Sends out the voting links,
+ *   creates questions, follows who still has to vote, closes them and
+ *   releases the results.
  */
 export function Votacao() {
   const { link } = useParams<{ link?: string }>();
@@ -33,7 +43,7 @@ export function Votacao() {
   const [erroAcesso, setErroAcesso] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
-  const acesso: AcessoMesas = link ? { link } : { codigo: codigo.trim() };
+  const acesso: AcessoVotacao = link ? { link } : { codigo: codigo.trim() };
 
   async function entrar() {
     setEntrando(true);
@@ -105,8 +115,7 @@ export function Votacao() {
         gap: 'var(--space-7)',
       }}
     >
-      <PageHeader eyebrow={dados?.comissao ? 'Área da comissão' : 'Área dos formandos'} title="Votação." />
-      <AbasArea link={link} />
+      <PageHeader eyebrow={dados?.comissao ? 'Comissão · Turma 32' : 'Turma 32'} title="Votação da turma." />
 
       {!dados && link ? (
         <Card padding="var(--space-7)">
@@ -125,8 +134,8 @@ export function Votacao() {
         <Card padding="var(--space-7)">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxWidth: 420 }}>
             <p style={texto}>
-              Cada formando vota pelo link pessoal que recebeu da comissão. Se você é formando, abra o seu link. Esta
-              entrada é só da comissão.
+              Cada formando vota pelo link de votação que recebeu da comissão (é diferente do link das mesas). Se você é
+              formando, abra o seu link. Esta entrada é só da comissão.
             </p>
             <Input
               label="Código da comissão"
@@ -151,6 +160,7 @@ export function Votacao() {
         </Card>
       ) : dados.comissao ? (
         <>
+          <LinksDaVotacao links={dados.links ?? []} salvando={salvando} agir={agir} />
           <NovaPergunta salvando={salvando} agir={agir} />
           {dados.perguntas.length === 0 ? (
             <p style={texto}>Nenhuma votação criada ainda.</p>
@@ -616,6 +626,66 @@ function PerguntaComissao({
           </Button>
         </div>
       </div>
+    </Card>
+  );
+}
+
+/**
+ * Each formando's voting link, for the committee to send — the same three
+ * buttons as on the table map. Folded by default: it's 31 rows.
+ */
+function LinksDaVotacao({
+  links,
+  salvando,
+  agir,
+}: {
+  links: { formando: string; link: string }[];
+  salvando: boolean;
+  agir: (a: AcaoVotacao) => Promise<string | null>;
+}) {
+  const [erro, setErro] = useState<string | null>(null);
+
+  return (
+    <Card padding={0} style={{ overflow: 'hidden' }}>
+      <details>
+        <summary
+          style={{
+            cursor: 'pointer',
+            padding: 'var(--space-6) var(--space-7)',
+            fontFamily: 'var(--font-display)',
+            fontSize: 'var(--fs-h4)',
+            fontWeight: 600,
+            letterSpacing: '-.015em',
+          }}
+        >
+          Links de votação dos formandos ({links.length})
+          <span style={{ display: 'block', marginTop: 'var(--space-2)', fontFamily: 'var(--font-core)', fontSize: 'var(--fs-body-sm)', fontWeight: 400, color: 'var(--text-faint)' }}>
+            Cada formando tem o seu, diferente do link das mesas. Toque para abrir a lista.
+          </span>
+        </summary>
+        {erro ? <p style={{ ...texto, color: 'var(--state-error)', padding: '0 var(--space-7) var(--space-4)' }}>{erro}</p> : null}
+        {links.map((l) => (
+          <div
+            key={l.formando}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 'var(--space-2)',
+              padding: 'var(--space-3) var(--space-7)',
+              borderTop: '1px solid var(--stroke-hair)',
+            }}
+          >
+            <span style={{ fontSize: 'var(--fs-body)' }}>{l.formando}</span>
+            <BotoesLink
+              formando={l.formando}
+              url={urlDaVotacao(l.link)}
+              mensagem={`Oi ${l.formando.split(' ')[0]}! Esse é o seu link para votar nas votações da turma. O voto é secreto. Não passe pra ninguém:`}
+              salvando={salvando}
+              onNovoLink={async () => setErro(await agir({ acao: 'novoLink', formando: l.formando }))}
+            />
+          </div>
+        ))}
+      </details>
     </Card>
   );
 }

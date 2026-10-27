@@ -118,8 +118,11 @@ Para colocar no ar:
 
 ## Votação (`/votacao`)
 
-Os formandos votam pelo mesmo link pessoal das mesas: a página tem as abas
-**Mesas** e **Votação**, e `/votacao/<link>` também funciona direto.
+A votação é uma página à parte do mapa das mesas. Cada formando vota pelo
+seu **link de votação** (`/votacao/<link>`), que é diferente do link das
+mesas: quem tem um não mexe no outro. A comissão pega os links em
+`/votacao`, com o código dela, em "Links de votação dos formandos", com
+os mesmos botões das mesas: copiar, mandar no WhatsApp e gerar um novo.
 
 - **Perguntas:** a comissão cria em `/votacao`, com o código dela. As opções
   são os próprios formandos ("o mais engraçado"; ninguém vota em si mesmo)

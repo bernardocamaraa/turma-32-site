@@ -49,9 +49,13 @@ export function slug(nome: string): string {
 
 const escapar = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-/** Whose personal link this is, or null — asks the `mesas` Edge Function, which only answers the name. */
-async function donoDoLink(link: string): Promise<string | null> {
-  const resposta = await fetch(`${SUPABASE_URL}/functions/v1/mesas`, {
+/**
+ * Whose personal link this is, or null. Table-map links and voting links
+ * are different secrets, so each is asked of its own Edge Function, which
+ * only answers the name.
+ */
+async function donoDoLink(funcao: 'mesas' | 'votacao', link: string): Promise<string | null> {
+  const resposta = await fetch(`${SUPABASE_URL}/functions/v1/${funcao}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -103,7 +107,8 @@ export default async function middleware(request: Request): Promise<Response> {
     const link = decodeURIComponent(url.pathname.split('/')[2] ?? '');
     if (!/^[a-z0-9]{16,64}$/i.test(link)) return seguir();
 
-    const [nome, pagina] = await Promise.all([donoDoLink(link), fetch(new URL('/index.html', url))]);
+    const funcao = url.pathname.startsWith('/votacao/') ? 'votacao' : 'mesas';
+    const [nome, pagina] = await Promise.all([donoDoLink(funcao, link), fetch(new URL('/index.html', url))]);
     if (!nome || !pagina.ok) return seguir();
 
     const html = comPreviaDoFormando(await pagina.text(), nome, url);

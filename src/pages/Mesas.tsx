@@ -10,7 +10,7 @@ import { FORMANDOS } from '../lib/formandos';
 import { Minus, Plus, X } from 'lucide-react';
 import { buscarMesas, POSICOES_MESAS, urlDoFormando, type AcessoMesas, type AlteracaoMesas, type DadosMesas } from '../lib/mesas';
 import { lerCodigo, salvarCodigo } from '../lib/codigoComissao';
-import { AbasArea } from '../components/AbasArea';
+import { BotoesLink } from '../components/BotoesLink';
 import { useIsMobile } from '../lib/useViewport';
 
 const POLL_MS = 20000;
@@ -305,7 +305,6 @@ export function Mesas() {
       }}
     >
       <PageHeader eyebrow="Área dos formandos" title="Mapa das mesas." />
-      <AbasArea link={link} />
 
       {!dados && link ? (
         // A personal link: nothing to type, just loading or a dead link.
@@ -620,7 +619,6 @@ function PainelComissao({
 }) {
   const [rascunho, setRascunho] = useState<Record<string, string>>({});
   const [erro, setErro] = useState<string | null>(null);
-  const [copiado, setCopiado] = useState<string | null>(null);
   const marcadosPor = new Map<string, number>();
   for (const r of dados.reservas) marcadosPor.set(r.formando, (marcadosPor.get(r.formando) ?? 0) + r.lugares);
   const totalPessoas = dados.convidados.reduce((s, c) => s + c.total, 0);
@@ -649,23 +647,6 @@ function PainelComissao({
     setErro(falha);
     // On failure keep what was typed, so the committee sees what was refused.
     if (!falha) descartar();
-  }
-
-  async function copiarLink(formando: string, link: string) {
-    try {
-      await navigator.clipboard.writeText(urlDoFormando(link));
-      setCopiado(formando);
-      setTimeout(() => setCopiado((atual) => (atual === formando ? null : atual)), 2000);
-    } catch {
-      // Clipboard can be blocked (old browser, no permission): show the URL
-      // so it can be copied by hand.
-      window.prompt('Copie o link:', urlDoFormando(link));
-    }
-  }
-
-  async function trocarLink(formando: string) {
-    if (!window.confirm(`Gerar um link novo para ${formando}? O link antigo para de funcionar na hora.`)) return;
-    setErro(await alterar({ novoLink: formando }));
   }
 
   async function alternarMapa() {
@@ -747,26 +728,13 @@ function PainelComissao({
               </span>
             </div>
             {c.link ? (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)', marginLeft: -12 }}>
-                <Button variant="ghost" size="sm" onClick={() => copiarLink(c.formando, c.link!)}>
-                  {copiado === c.formando ? 'Copiado' : 'Copiar link'}
-                </Button>
-                <Button
-                  as="a"
-                  variant="ghost"
-                  size="sm"
-                  target="_blank"
-                  rel="noreferrer"
-                  href={`https://wa.me/?text=${encodeURIComponent(
-                    `Oi ${c.formando.split(' ')[0]}! Esse é o seu link pessoal da formatura: nele você marca a mesa da sua família e vota nas votações da turma. Não passe pra ninguém: ${urlDoFormando(c.link)}`,
-                  )}`}
-                >
-                  Mandar no WhatsApp
-                </Button>
-                <Button variant="ghost" size="sm" disabled={salvando} onClick={() => trocarLink(c.formando)}>
-                  Novo link
-                </Button>
-              </div>
+              <BotoesLink
+                formando={c.formando}
+                url={urlDoFormando(c.link)}
+                mensagem={`Oi ${c.formando.split(' ')[0]}! Esse é o seu link para marcar a mesa da sua família na formatura. Não passe pra ninguém:`}
+                salvando={salvando}
+                onNovoLink={async () => setErro(await alterar({ novoLink: c.formando }))}
+              />
             ) : null}
           </div>
         );
