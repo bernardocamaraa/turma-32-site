@@ -15,6 +15,33 @@ if (!url || !anonKey) {
 // calls will fail with a network error instead of crashing the whole page.
 export const supabase = createClient(url || 'https://placeholder.supabase.co', anonKey || 'placeholder-anon-key');
 
+/**
+ * Calls one of the site's Edge Functions (mesas, votacao) and returns its
+ * JSON, turning every failure into an Error whose message can be shown as is:
+ * the function's own `error` text when it sent one, otherwise a hint at what
+ * to check (env vars, whether the function was deployed under that name).
+ */
+export async function chamarFuncao<T>(nome: string, body: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase.functions.invoke<T>(nome, { body });
+  if (error) {
+    const context = (error as { context?: unknown }).context;
+    // Only FunctionsHttpError carries a real Response; a network/CORS/
+    // undeployed-function failure doesn't (see buscarDadosComissao below).
+    if (!(context instanceof Response)) {
+      throw new Error(
+        `Não foi possível falar com o servidor. Confira se VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY estão certos e se a função "${nome}" foi publicada no Supabase.`,
+      );
+    }
+    if (context.status === 404) {
+      throw new Error(`A função "${nome}" não foi encontrada no Supabase. Confira se ela foi publicada com esse nome exato.`);
+    }
+    const resposta = await context.clone().json().catch(() => null);
+    throw new Error(resposta?.error || `Erro do servidor (HTTP ${context.status}).`);
+  }
+  if (!data) throw new Error('Sem resposta do servidor.');
+  return data;
+}
+
 export type MensagemRecord = {
   nome: string;
   mensagem: string;

@@ -9,30 +9,11 @@ import { PageHeader } from '../components/SectionHeading';
 import { FORMANDOS } from '../lib/formandos';
 import { Minus, Plus, X } from 'lucide-react';
 import { buscarMesas, POSICOES_MESAS, urlDoFormando, type AcessoMesas, type AlteracaoMesas, type DadosMesas } from '../lib/mesas';
+import { lerCodigo, salvarCodigo } from '../lib/codigoComissao';
+import { AbasArea } from '../components/AbasArea';
 import { useIsMobile } from '../lib/useViewport';
 
 const POLL_MS = 20000;
-const CHAVE_CODIGO = 'turma32-mesas-comissao';
-
-// Remembers the committee code on this device so it isn't retyped on every
-// visit. Formandos don't need this: their personal link is the login.
-// Storage can be blocked (private mode, previews) — then the page just asks.
-function lerCodigo(): string {
-  try {
-    return localStorage.getItem(CHAVE_CODIGO) ?? '';
-  } catch {
-    return '';
-  }
-}
-
-function salvarCodigo(valor: string | null) {
-  try {
-    if (valor) localStorage.setItem(CHAVE_CODIGO, valor);
-    else localStorage.removeItem(CHAVE_CODIGO);
-  } catch {
-    // ignore — see lerCodigo
-  }
-}
 
 const rotuloCampo = {
   fontSize: 'var(--fs-body-sm)',
@@ -324,6 +305,7 @@ export function Mesas() {
       }}
     >
       <PageHeader eyebrow="Área dos formandos" title="Mapa das mesas." />
+      <AbasArea link={link} />
 
       {!dados && link ? (
         // A personal link: nothing to type, just loading or a dead link.
@@ -776,7 +758,7 @@ function PainelComissao({
                   target="_blank"
                   rel="noreferrer"
                   href={`https://wa.me/?text=${encodeURIComponent(
-                    `Oi ${c.formando.split(' ')[0]}! Esse é o seu link para marcar a mesa da sua família na formatura. Não passe pra ninguém: ${urlDoFormando(c.link)}`,
+                    `Oi ${c.formando.split(' ')[0]}! Esse é o seu link pessoal da formatura: nele você marca a mesa da sua família e vota nas votações da turma. Não passe pra ninguém: ${urlDoFormando(c.link)}`,
                   )}`}
                 >
                   Mandar no WhatsApp
