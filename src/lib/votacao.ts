@@ -48,16 +48,30 @@ export function urlDaVotacao(): string {
   return `${window.location.origin}/votacao`;
 }
 
+/** The area code assumed when a number is typed without one — the whole class is from Rio. */
+const DDD_PADRAO = '21';
+
 /**
- * A WhatsApp number as typed ("(21) 99999-9999", "21999999999",
- * "+55 21 …") as digits with Brazil's country code, or null if it doesn't
- * look like a number with area code.
+ * A WhatsApp number however it's typed — "(21) 99999-9999", "99999-9999"
+ * (no area code: 21), "+55 21 …", "021 …", or a mobile still written the
+ * old way, without the leading 9 — as one canonical form: digits with
+ * Brazil's country code and the 9 on mobiles (5521999999999). The same
+ * phone always comes out the same, so it matches the number on the list.
+ * Null if it doesn't look like a phone number.
  */
 export function normalizarWhatsapp(texto: string): string | null {
-  const digitos = texto.replace(/\D/g, '');
-  if (digitos.length === 10 || digitos.length === 11) return `55${digitos}`;
-  if ((digitos.length === 12 || digitos.length === 13) && digitos.startsWith('55')) return digitos;
-  return null;
+  let digitos = texto.replace(/\D/g, '');
+  if ((digitos.length === 12 || digitos.length === 13) && digitos.startsWith('55')) digitos = digitos.slice(2);
+  else if (digitos.startsWith('0')) digitos = digitos.slice(1);
+  if (digitos.length === 8 || digitos.length === 9) digitos = DDD_PADRAO + digitos;
+  if (digitos.length !== 10 && digitos.length !== 11) return null;
+  const ddd = digitos.slice(0, 2);
+  let numero = digitos.slice(2);
+  if (ddd.startsWith('0')) return null;
+  // Mobiles start with 6–9 and gained a 9 in front; landlines (2–5) didn't.
+  if (numero.length === 8 && /^[6-9]/.test(numero)) numero = `9${numero}`;
+  if (numero.length === 9 && !numero.startsWith('9')) return null;
+  return `55${ddd}${numero}`;
 }
 
 /** "5521999999999" → "(21) 99999-9999", for showing a stored number. */
