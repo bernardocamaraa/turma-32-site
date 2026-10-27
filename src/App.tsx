@@ -9,6 +9,7 @@ import { Album } from './pages/Album';
 import { Turma } from './pages/Turma';
 import { Comissao } from './pages/Comissao';
 import { Mesas } from './pages/Mesas';
+import { Votacao } from './pages/Votacao';
 
 function ScrollToTop() {
   const { pathname, hash } = useLocation();
@@ -42,6 +43,8 @@ function AppRoutes() {
         <Route path="/comissao" element={<Comissao />} />
         <Route path="/mesas" element={<Mesas />} />
         <Route path="/mesas/:link" element={<Mesas />} />
+        <Route path="/votacao" element={<Votacao />} />
+        <Route path="/votacao/:link" element={<Votacao />} />
         {/* Any old link (a shared /rsvp URL, a typo) lands on the home page
             instead of a blank screen. */}
         <Route path="*" element={<Navigate to="/" replace />} />

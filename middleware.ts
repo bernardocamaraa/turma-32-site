@@ -1,19 +1,19 @@
 /**
- * Vercel Routing Middleware: link previews for personal table links.
+ * Vercel Routing Middleware: link previews for personal links.
  *
- * When someone pastes a /mesas/<link> URL into WhatsApp (or iMessage,
- * Telegram…), the app fetches the page and reads its <meta> tags to build
- * the preview card — without running the site's JavaScript. So for those
- * preview bots, this looks up whose link it is and serves index.html with
- * that formando's name and their image (public/previas/mesas/<slug>.jpg,
- * made by scripts/gerar-previas.mjs).
+ * When someone pastes a /mesas/<link> or /votacao/<link> URL into WhatsApp
+ * (or iMessage, Telegram…), the app fetches the page and reads its <meta>
+ * tags to build the preview card — without running the site's JavaScript.
+ * So for those preview bots, this looks up whose link it is and serves
+ * index.html with that formando's name — and, for the table map, their
+ * image (public/previas/mesas/<slug>.jpg, made by scripts/gerar-previas.mjs).
  *
  * People opening the link get the normal page untouched — no extra lookup,
  * no delay. Anything that goes wrong (unknown link, Supabase slow or down)
  * also falls through to the normal page, with the site's generic preview.
  */
 
-export const config = { matcher: '/mesas/:link' };
+export const config = { matcher: ['/mesas/:link', '/votacao/:link'] };
 
 // Vercel provides the project's environment variables here at runtime; the
 // project has no @types/node, so declare just what this file reads.
@@ -68,9 +68,15 @@ async function donoDoLink(link: string): Promise<string | null> {
 
 /** index.html's preview block (between the `previa` comments), rewritten for one formando. */
 export function comPreviaDoFormando(html: string, nome: string, url: URL): string {
-  const titulo = escapar(`${nome} · Mapa das mesas`);
-  const descricao = escapar('Escolha onde a sua família vai sentar no baile de formatura da Turma 32, em 10 de dezembro.');
-  const imagem = escapar(`${url.origin}/previas/mesas/${slug(nome)}.jpg`);
+  const votacao = url.pathname.startsWith('/votacao/');
+  const titulo = escapar(votacao ? `${nome} · Votação da turma` : `${nome} · Mapa das mesas`);
+  const descricao = escapar(
+    votacao
+      ? 'Vote nas votações da Turma 32. O voto é secreto: ninguém vê em quem você votou.'
+      : 'Escolha onde a sua família vai sentar no baile de formatura da Turma 32, em 10 de dezembro.',
+  );
+  // The personal images say "Mapa das mesas", so the vote uses the site's own.
+  const imagem = escapar(votacao ? `${url.origin}/previas/turma-32.jpg` : `${url.origin}/previas/mesas/${slug(nome)}.jpg`);
   const bloco = `<!-- previa -->
     <title>${titulo}</title>
     <meta name="description" content="${descricao}" />

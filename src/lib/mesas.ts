@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { chamarFuncao } from './supabase';
 
 /**
  * The venue's table map, traced from the floor plan the venue sent (602×336
@@ -119,25 +119,6 @@ export function urlDoFormando(link: string): string {
  * something first; the response is always the whole map after that change,
  * so the screen never shows a stale count after a save.
  */
-export async function buscarMesas(acesso: AcessoMesas, alteracao?: AlteracaoMesas): Promise<DadosMesas> {
-  const { data, error } = await supabase.functions.invoke<DadosMesas>('mesas', {
-    body: { ...acesso, ...alteracao },
-  });
-  if (error) {
-    const context = (error as { context?: unknown }).context;
-    // Same handling as buscarDadosComissao: only FunctionsHttpError carries a
-    // real Response; a network/CORS/undeployed-function failure doesn't.
-    if (!(context instanceof Response)) {
-      throw new Error(
-        'Não foi possível falar com o servidor. Confira se VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY estão certos e se a função "mesas" foi publicada no Supabase.',
-      );
-    }
-    if (context.status === 404) {
-      throw new Error('A função "mesas" não foi encontrada no Supabase. Confira se ela foi publicada com esse nome exato.');
-    }
-    const body = await context.clone().json().catch(() => null);
-    throw new Error(body?.error || `Erro do servidor (HTTP ${context.status}).`);
-  }
-  if (!data) throw new Error('Sem resposta do servidor.');
-  return data;
+export function buscarMesas(acesso: AcessoMesas, alteracao?: AlteracaoMesas): Promise<DadosMesas> {
+  return chamarFuncao<DadosMesas>('mesas', { ...acesso, ...alteracao });
 }

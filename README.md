@@ -116,6 +116,31 @@ Para colocar no ar:
    supabase functions deploy mesas
    ```
 
+## Votação (`/votacao`)
+
+Os formandos votam pelo mesmo link pessoal das mesas: a página tem as abas
+**Mesas** e **Votação**, e `/votacao/<link>` também funciona direto.
+
+- **Perguntas:** a comissão cria em `/votacao`, com o código dela. As opções
+  são os próprios formandos ("o mais engraçado"; ninguém vota em si mesmo)
+  ou uma lista escrita pela comissão ("qual música de entrada?").
+- **Um voto por formando em cada pergunta.** Como o voto é secreto, ele não
+  pode ser trocado depois.
+- **Voto secreto de verdade:** o banco guarda separado quem já votou
+  (`votacao_participacao`) e quantos votos cada opção tem
+  (`votacao_contagem`). Nenhum registro liga uma pessoa à escolha dela.
+- **Enquanto a pergunta está aberta,** a comissão vê só quantos votaram e
+  quem falta. A contagem aparece quando ela **encerra** a pergunta.
+  Encerrar não tem volta: ver a contagem ao vivo, ou reabrir depois de
+  espiar, permitiria descobrir votos comparando quem acabou de votar com
+  quem ganhou um voto.
+- **Resultado para a turma:** "Mostrar resultado para a turma" libera as
+  barras para todos (e encerra a pergunta, se ainda estiver aberta).
+  "Esconder resultado" volta atrás.
+
+Para colocar no ar: rode `supabase/votacao.sql` no SQL Editor (depois do
+`mesas.sql`) e publique a função com `supabase functions deploy votacao`.
+
 ## Prévia dos links (WhatsApp, iMessage, Telegram…)
 
 O cartão que aparece quando alguém cola um link do site vem das tags
