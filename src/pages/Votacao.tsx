@@ -1,15 +1,17 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { useParams } from 'react-router-dom';
 import { Check, Search } from 'lucide-react';
 import { Badge } from '../components/Badge';
 import { BotoesLink } from '../components/BotoesLink';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Input } from '../components/Input';
+import { Select } from '../components/Select';
 import { PageHeader } from '../components/SectionHeading';
 import { lerCodigo, salvarCodigo } from '../lib/codigoComissao';
 import {
   buscarVotacao,
+  formatarWhatsapp,
+  normalizarWhatsapp,
   urlDaVotacao,
   type AcaoVotacao,
   type AcessoVotacao,
@@ -26,55 +28,114 @@ const texto = { fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-normal)', colo
 const pequeno = { fontSize: 'var(--fs-body-sm)', color: 'var(--text-faint)' };
 const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
 
+const CHAVE_ELEITOR = 'turma32-votacao-eleitor';
+
+// Remembers who's voting on this phone, so the number isn't retyped on
+// every visit. Storage can be blocked (private mode) — then the page just
+// asks again.
+function lerEleitor(): { whatsapp: string } | null {
+  try {
+    const salvo = JSON.parse(localStorage.getItem(CHAVE_ELEITOR) ?? 'null');
+    return salvo && typeof salvo.whatsapp === 'string' ? { whatsapp: salvo.whatsapp } : null;
+  } catch {
+    return null;
+  }
+}
+
+function salvarEleitor(valor: { whatsapp: string } | null) {
+  try {
+    if (valor) localStorage.setItem(CHAVE_ELEITOR, JSON.stringify(valor));
+    else localStorage.removeItem(CHAVE_ELEITOR);
+  } catch {
+    // ignore — see lerEleitor
+  }
+}
+
 /**
- * The class vote — its own page, apart from the table map. Two ways in:
- * - /votacao/<link>: a formando's personal voting link (not the table
- *   map's). Votes once per question; sees a result once the committee
- *   releases it.
- * - /votacao: the committee, with its code. Sends out the voting links,
- *   creates questions, follows who still has to vote, closes them and
- *   releases the results.
+ * The class vote — its own page, apart from the table map, with one link
+ * for everyone:
+ * - /votacao: a formando types their WhatsApp and the site knows who they
+ *   are (the committee fills the numbers in). A number not on the list
+ *   picks a name that has none yet. Votes once per question; sees a result
+ *   once the committee releases it.
+ * - /votacao/comissao: the committee, with its code. Shares the link,
+ *   fills in each formando's number, creates questions, follows who still
+ *   has to vote, closes them and releases the results.
  */
-export function Votacao() {
-  const { link } = useParams<{ link?: string }>();
-  const [codigo, setCodigo] = useState(() => (link ? '' : lerCodigo()));
+export function Votacao({ paraComissao = false }: { paraComissao?: boolean }) {
+  const [codigo, setCodigo] = useState(() => (paraComissao ? lerCodigo() : ''));
+  const [eleitor, setEleitor] = useState(() => (paraComissao ? null : lerEleitor()));
   const [dados, setDados] = useState<DadosVotacao | null>(null);
   const [entrando, setEntrando] = useState(false);
   const [erroAcesso, setErroAcesso] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
-  const acesso: AcessoVotacao = link ? { link } : { codigo: codigo.trim() };
+  const acesso: AcessoVotacao = paraComissao ? { codigo: codigo.trim() } : eleitor ?? {};
 
-  async function entrar() {
+  /** Loads with `com` and returns what came back, or null if it failed (the error is shown). */
+  async function carregar(com: AcessoVotacao): Promise<DadosVotacao | null> {
     setEntrando(true);
     setErroAcesso(null);
     try {
-      setDados(await buscarVotacao(acesso));
-      if (!link) salvarCodigo(codigo.trim());
+      const novo = await buscarVotacao(com);
+      setDados(novo);
+      if (paraComissao) salvarCodigo(codigo.trim());
+      return novo;
     } catch (e) {
       setErroAcesso(e instanceof Error ? e.message : 'Não foi possível entrar agora.');
-      if (!link) salvarCodigo(null);
+      if (paraComissao) salvarCodigo(null);
+      return null;
     } finally {
       setEntrando(false);
     }
   }
 
-  // A personal link logs in by itself; the committee too, with a saved code.
+  // A remembered number that's no longer on the list (the committee changed
+  // it): forget it, so the page asks again.
+  function conferirEleitor(novo: DadosVotacao) {
+    if (!paraComissao && !novo.voce) {
+      salvarEleitor(null);
+      setEleitor(null);
+    }
+  }
+
+  // Formandos: load right away (with the remembered number, if any).
+  // Committee: only with a saved code.
   useEffect(() => {
-    if (link || codigo) entrar();
-  }, [link]);
+    if (!paraComissao || codigo) {
+      carregar(acesso).then((novo) => {
+        if (novo && eleitor) conferirEleitor(novo);
+      });
+    }
+  }, [paraComissao]);
+
+  /**
+   * Enters with a number — and the name picked, when the number isn't on
+   * the list. Returns whether it worked, or 'semNome' if the number isn't
+   * on the list and a name is needed.
+   */
+  async function identificar(whatsapp: string, nome?: string): Promise<boolean | 'semNome'> {
+    const novo = await carregar(nome ? { whatsapp, nome } : { whatsapp });
+    if (!novo) return false;
+    if (!novo.voce) return 'semNome';
+    salvarEleitor({ whatsapp });
+    setEleitor({ whatsapp });
+    return true;
+  }
 
   // Results get released and classmates vote from their own phones —
   // refresh now and then so this screen catches up.
-  const logado = dados !== null;
+  const pronto = dados !== null && (paraComissao || eleitor !== null);
   useEffect(() => {
-    if (!logado) return;
+    if (!pronto) return;
     let ativo = true;
     const id = setInterval(async () => {
       if (document.hidden) return;
       try {
         const novo = await buscarVotacao(acesso);
-        if (ativo) setDados(novo);
+        if (!ativo) return;
+        setDados(novo);
+        conferirEleitor(novo);
       } catch (e) {
         console.error(e);
       }
@@ -83,7 +144,7 @@ export function Votacao() {
       ativo = false;
       clearInterval(id);
     };
-  }, [logado, link, codigo]);
+  }, [pronto, codigo, eleitor]);
 
   /** Runs an action and returns the error message to show, or null if it worked. */
   async function agir(acao: AcaoVotacao): Promise<string | null> {
@@ -99,9 +160,15 @@ export function Votacao() {
   }
 
   function sair() {
-    salvarCodigo(null);
-    setDados(null);
-    setCodigo('');
+    if (paraComissao) {
+      salvarCodigo(null);
+      setCodigo('');
+      setDados(null);
+    } else {
+      salvarEleitor(null);
+      setEleitor(null);
+      carregar({});
+    }
   }
 
   return (
@@ -115,28 +182,12 @@ export function Votacao() {
         gap: 'var(--space-7)',
       }}
     >
-      <PageHeader eyebrow={dados?.comissao ? 'Comissão · Turma 32' : 'Turma 32'} title="Votação da turma." />
+      <PageHeader eyebrow={paraComissao ? 'Comissão · Turma 32' : 'Turma 32'} title="Votação da turma." />
 
-      {!dados && link ? (
-        <Card padding="var(--space-7)">
-          <p style={{ ...texto, fontSize: 'var(--fs-body-lg)', color: erroAcesso ? 'var(--state-error)' : 'var(--text-muted)' }}>
-            {erroAcesso ?? 'Abrindo a votação…'}
-          </p>
-          {erroAcesso && !entrando ? (
-            <div style={{ display: 'flex', marginTop: 'var(--space-5)' }}>
-              <Button variant="secondary" onClick={entrar}>
-                Tentar de novo
-              </Button>
-            </div>
-          ) : null}
-        </Card>
-      ) : !dados ? (
+      {paraComissao && !dados ? (
         <Card padding="var(--space-7)">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxWidth: 420 }}>
-            <p style={texto}>
-              Cada formando vota pelo link de votação que recebeu da comissão (é diferente do link das mesas). Se você é
-              formando, abra o seu link. Esta entrada é só da comissão.
-            </p>
+            <p style={texto}>Esta entrada é só da comissão. Os formandos votam pelo link da votação.</p>
             <Input
               label="Código da comissão"
               placeholder="••••••"
@@ -147,20 +198,21 @@ export function Votacao() {
                 setErroAcesso(null);
               }}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && codigo.trim() && !entrando) entrar();
+                if (e.key === 'Enter' && codigo.trim() && !entrando) carregar({ codigo: codigo.trim() });
               }}
             />
             {erroAcesso ? <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--state-error)' }}>{erroAcesso}</span> : null}
             <div style={{ display: 'flex' }}>
-              <Button size="lg" disabled={!codigo.trim() || entrando} onClick={entrar}>
+              <Button size="lg" disabled={!codigo.trim() || entrando} onClick={() => carregar({ codigo: codigo.trim() })}>
                 {entrando ? 'Entrando…' : 'Entrar'}
               </Button>
             </div>
           </div>
         </Card>
-      ) : dados.comissao ? (
+      ) : paraComissao && dados ? (
         <>
-          <LinksDaVotacao links={dados.links ?? []} salvando={salvando} agir={agir} />
+          <LinkDaVotacao />
+          <EleitoresDaVotacao eleitores={dados.eleitores ?? []} salvando={salvando} agir={agir} />
           <NovaPergunta salvando={salvando} agir={agir} />
           {dados.perguntas.length === 0 ? (
             <p style={texto}>Nenhuma votação criada ainda.</p>
@@ -176,17 +228,24 @@ export function Votacao() {
             </Button>
           </div>
         </>
+      ) : !eleitor || !dados?.voce ? (
+        <Identificacao livres={dados?.livres ?? []} entrando={entrando} erro={erroAcesso} onEntrar={identificar} />
       ) : (
         <>
           <Card padding="var(--space-7)">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', maxWidth: '40rem' }}>
               <span style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-h2)', fontWeight: 700, letterSpacing: '-.025em', lineHeight: 1.1 }}>
-                Olá, {dados.voce?.split(' ')[0]}.
+                Olá, {dados.voce.split(' ')[0]}.
               </span>
               <p style={texto}>
                 Seu voto é secreto: ninguém vê em quem você votou, nem a comissão. O site só guarda que você já votou e a
                 contagem de cada opção. Por isso, depois de confirmado, o voto não dá para trocar.
               </p>
+              <div style={{ display: 'flex' }}>
+                <Button variant="ghost" onClick={sair} style={{ paddingLeft: 0 }}>
+                  Não é você? Trocar
+                </Button>
+              </div>
             </div>
           </Card>
           {dados.perguntas.length === 0 ? (
@@ -199,6 +258,96 @@ export function Votacao() {
         </>
       )}
     </main>
+  );
+}
+
+/**
+ * The way in for a formando: their WhatsApp. When the committee already
+ * has the number, that's all; otherwise they pick their name among the
+ * ones with no number yet, and the number gets tied to it.
+ */
+function Identificacao({
+  livres,
+  entrando,
+  erro,
+  onEntrar,
+}: {
+  livres: string[];
+  entrando: boolean;
+  erro: string | null;
+  onEntrar: (whatsapp: string, nome?: string) => Promise<boolean | 'semNome'>;
+}) {
+  const [numero, setNumero] = useState('');
+  const [erroNumero, setErroNumero] = useState<string | null>(null);
+  // Set once the number turned out not to be on the list.
+  const [pedirNome, setPedirNome] = useState(false);
+  const [nome, setNome] = useState('');
+  const whatsapp = normalizarWhatsapp(numero);
+
+  async function enviar() {
+    if (!whatsapp) {
+      setErroNumero('Digite o seu WhatsApp com DDD, por exemplo (21) 99999-9999.');
+      return;
+    }
+    if (pedirNome && !nome) return;
+    const resultado = await onEntrar(whatsapp, pedirNome ? nome : undefined);
+    if (resultado === 'semNome') setPedirNome(true);
+  }
+
+  function corrigir() {
+    setPedirNome(false);
+    setNome('');
+  }
+
+  return (
+    <Card padding="var(--space-7)">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxWidth: 420 }}>
+        <p style={texto}>
+          Digite o seu WhatsApp para entrar. É por ele que o site sabe quem você é e garante um voto por pessoa;
+          ninguém vê em quem você votou.
+        </p>
+        <Input
+          label="Seu WhatsApp"
+          placeholder="(21) 99999-9999"
+          type="tel"
+          inputMode="tel"
+          autoComplete="tel"
+          value={numero}
+          disabled={pedirNome}
+          error={erroNumero ?? undefined}
+          onChange={(e) => {
+            setNumero(e.target.value);
+            setErroNumero(null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && numero.trim() && !entrando) enviar();
+          }}
+        />
+        {pedirNome ? (
+          livres.length > 0 ? (
+            <>
+              <p style={texto}>Esse número não está na lista da turma. Se ele estiver certo, escolha o seu nome:</p>
+              <Select label="Seu nome" placeholder="Escolha o seu nome" options={livres} value={nome} onChange={(e) => setNome(e.target.value)} />
+            </>
+          ) : (
+            <p style={texto}>Esse número não está na lista da turma. Confira se digitou certo ou fale com a comissão.</p>
+          )
+        ) : null}
+        {erro ? <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--state-error)' }}>{erro}</span> : null}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+          {!pedirNome || livres.length > 0 ? (
+            <Button size="lg" disabled={!numero.trim() || (pedirNome && !nome) || entrando} onClick={enviar}>
+              {entrando ? 'Entrando…' : 'Entrar para votar'}
+            </Button>
+          ) : null}
+          {pedirNome ? (
+            <Button size="lg" variant="ghost" onClick={corrigir}>
+              Corrigir o número
+            </Button>
+          ) : null}
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -630,20 +779,56 @@ function PerguntaComissao({
   );
 }
 
+/** The one link the whole class votes through, for the committee to share in the group. */
+function LinkDaVotacao() {
+  return (
+    <Card padding="var(--space-6) var(--space-7)">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+        <span style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-h4)', fontWeight: 600, letterSpacing: '-.015em' }}>Link da votação</span>
+        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--accent)', wordBreak: 'break-all' }}>{urlDaVotacao()}</span>
+        <span style={pequeno}>É o mesmo para a turma toda: cada formando entra com o próprio WhatsApp.</span>
+        <BotoesLink url={urlDaVotacao()} mensagem="A votação da turma está aberta! Entre com o seu WhatsApp. O voto é secreto:" />
+      </div>
+    </Card>
+  );
+}
+
 /**
- * Each formando's voting link, for the committee to send — the same three
- * buttons as on the table map. Folded by default: it's 31 rows.
+ * Each formando's WhatsApp. With it, the formando enters the vote without
+ * picking a name, and the table map's "Mandar no WhatsApp" opens their
+ * chat. The committee fills the numbers in and fixes a wrong one; clearing
+ * a number frees the name. Votes already cast stay as they are, since
+ * nothing records them.
  */
-function LinksDaVotacao({
-  links,
+function EleitoresDaVotacao({
+  eleitores,
   salvando,
   agir,
 }: {
-  links: { formando: string; link: string }[];
+  eleitores: { formando: string; whatsapp: string | null }[];
   salvando: boolean;
   agir: (a: AcaoVotacao) => Promise<string | null>;
 }) {
   const [erro, setErro] = useState<string | null>(null);
+  const comNumero = eleitores.filter((e) => e.whatsapp).length;
+
+  async function editar(formando: string, atual: string | null) {
+    const digitado = window.prompt(
+      `WhatsApp de ${formando}, com DDD. Deixe vazio para tirar o número.`,
+      atual ? formatarWhatsapp(atual) : '',
+    );
+    if (digitado === null) return;
+    if (!digitado.trim()) {
+      setErro(await agir({ acao: 'definirWhatsapp', formando, whatsapp: null }));
+      return;
+    }
+    const whatsapp = normalizarWhatsapp(digitado);
+    if (!whatsapp) {
+      setErro(`"${digitado}" não parece um WhatsApp com DDD.`);
+      return;
+    }
+    setErro(await agir({ acao: 'definirWhatsapp', formando, whatsapp }));
+  }
 
   return (
     <Card padding={0} style={{ overflow: 'hidden' }}>
@@ -658,31 +843,35 @@ function LinksDaVotacao({
             letterSpacing: '-.015em',
           }}
         >
-          Links de votação dos formandos ({links.length})
+          WhatsApp dos formandos ({comNumero} de {eleitores.length})
           <span style={{ display: 'block', marginTop: 'var(--space-2)', fontFamily: 'var(--font-core)', fontSize: 'var(--fs-body-sm)', fontWeight: 400, color: 'var(--text-faint)' }}>
-            Cada formando tem o seu, diferente do link das mesas. Toque para abrir a lista.
+            Com o número aqui, o formando entra na votação só digitando o WhatsApp, e o botão "Mandar no WhatsApp" das
+            mesas abre a conversa dele direto.
           </span>
         </summary>
         {erro ? <p style={{ ...texto, color: 'var(--state-error)', padding: '0 var(--space-7) var(--space-4)' }}>{erro}</p> : null}
-        {links.map((l) => (
+        {eleitores.map((e) => (
           <div
-            key={l.formando}
+            key={e.formando}
             style={{
               display: 'flex',
-              flexDirection: 'column',
-              gap: 'var(--space-2)',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 'var(--space-3)',
               padding: 'var(--space-3) var(--space-7)',
               borderTop: '1px solid var(--stroke-hair)',
             }}
           >
-            <span style={{ fontSize: 'var(--fs-body)' }}>{l.formando}</span>
-            <BotoesLink
-              formando={l.formando}
-              url={urlDaVotacao(l.link)}
-              mensagem={`Oi ${l.formando.split(' ')[0]}! Esse é o seu link para votar nas votações da turma. O voto é secreto. Não passe pra ninguém:`}
-              salvando={salvando}
-              onNovoLink={async () => setErro(await agir({ acao: 'novoLink', formando: l.formando }))}
-            />
+            <span style={{ fontSize: 'var(--fs-body)' }}>{e.formando}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+              <span style={{ fontSize: 'var(--fs-body-sm)', color: e.whatsapp ? 'var(--text-muted)' : 'var(--text-faint)' }}>
+                {e.whatsapp ? formatarWhatsapp(e.whatsapp) : 'Sem número'}
+              </span>
+              <Button variant="ghost" size="sm" disabled={salvando} onClick={() => editar(e.formando, e.whatsapp)}>
+                {e.whatsapp ? 'Editar' : 'Adicionar'}
+              </Button>
+            </span>
           </div>
         ))}
       </details>

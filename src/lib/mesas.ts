@@ -84,6 +84,8 @@ export type ConvidadosFormando = {
   total: number;
   /** Secret part of the formando's personal URL — only sent to the committee. */
   link?: string;
+  /** Their WhatsApp (digits with country code), once they've entered the vote — only sent to the committee. */
+  whatsapp?: string | null;
 };
 
 export type DadosMesas = {

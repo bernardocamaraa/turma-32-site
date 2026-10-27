@@ -2,9 +2,18 @@
 -- Run once in the SQL Editor, after mesas.sql (it uses convidados_formando,
 -- the list of formandos).
 --
--- The vote is its own thing, apart from the table map: each formando votes
--- with a personal link of its own (link_votacao below), so a voting link
--- can't move anyone's seats and a table link can't vote.
+-- The vote is its own thing, apart from the table map, with a single link
+-- for the whole class (/votacao). A formando enters by typing their
+-- WhatsApp number, and the number says who they are
+-- (convidados_formando.whatsapp): the committee fills the numbers in. A
+-- number that isn't on the list picks a name that has no number yet, and
+-- gets tied to it (identificar_eleitor below). The number isn't verified
+-- (that would take a paid SMS service), so it works like a Google Form
+-- without login: it stops double votes and one person voting as two, and
+-- with the numbers filled in nobody can vote as a classmate without knowing
+-- the classmate's number. The committee sees and edits every number in the
+-- vote's committee page. The number also lets the committee message each
+-- formando directly from the table map.
 --
 -- The committee creates questions. A question's options are either the
 -- formandos themselves ("o mais engraçado") or a list written by the
@@ -19,11 +28,13 @@
 -- Nothing here is readable or writable with the anon key: every read and
 -- write goes through the `votacao` Edge Function, like the table map.
 
--- The secret part of each formando's voting URL (/votacao/<link>): 122
--- random bits, like the table map's `link`, and unrelated to it. Adding the
--- column with a volatile default gives every existing formando their own.
-alter table public.convidados_formando
-  add column if not exists link_votacao text not null unique default replace(gen_random_uuid()::text, '-', '');
+-- The formando's WhatsApp number, digits only with the country code
+-- (5521999999999). Filled in by the committee, or by the formando the first
+-- time they enter the vote. One number per formando. (An earlier version gave each formando a personal voting link
+-- in a `link_votacao` column; projects that ran it still have that column,
+-- unused — it can be dropped whenever convenient.)
+alter table public.convidados_formando add column if not exists whatsapp text unique
+  check (whatsapp ~ '^[0-9]{12,13}$');
 
 create table if not exists public.votacao_perguntas (
   id uuid primary key default gen_random_uuid(),
@@ -112,3 +123,40 @@ $$;
 -- Only the Edge Function (service role) may call it.
 revoke all on function public.votar(text, uuid, text) from public, anon, authenticated;
 grant execute on function public.votar(text, uuid, text) to service_role;
+
+-- For a number that isn't on the list yet: ties `p_whatsapp` to
+-- `p_formando`, if that name has no number. (The Edge Function looks the
+-- number up first, so a number already on the list never gets here.)
+-- Locking the formando's row makes two people claiming the same name at the
+-- same moment take turns; the unique constraint stops one number from
+-- claiming two names.
+create or replace function public.identificar_eleitor(p_formando text, p_whatsapp text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_atual text;
+begin
+  if p_whatsapp is null or p_whatsapp !~ '^[0-9]{12,13}$' then
+    raise exception 'Digite o seu WhatsApp com DDD.';
+  end if;
+  select whatsapp into v_atual from convidados_formando where formando = p_formando for update;
+  if not found then
+    raise exception 'Escolha o seu nome na lista.';
+  end if;
+  if v_atual is null then
+    begin
+      update convidados_formando set whatsapp = p_whatsapp where formando = p_formando;
+    exception when unique_violation then
+      raise exception 'Esse número já foi usado com outro nome. Confira o nome que você escolheu.';
+    end;
+  elsif v_atual <> p_whatsapp then
+    raise exception 'Esse nome já entrou com outro número. Se é você, fale com a comissão.';
+  end if;
+end;
+$$;
+
+revoke all on function public.identificar_eleitor(text, text) from public, anon, authenticated;
+grant execute on function public.identificar_eleitor(text, text) to service_role;

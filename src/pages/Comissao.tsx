@@ -109,7 +109,7 @@ export function Comissao() {
           <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
             Votação: criar perguntas, ver quem falta votar e liberar os resultados.
           </span>
-          <Link to="/votacao" style={{ fontFamily: 'var(--font-core)', fontSize: 15, color: 'var(--accent)', textDecoration: 'none' }}>
+          <Link to="/votacao/comissao" style={{ fontFamily: 'var(--font-core)', fontSize: 15, color: 'var(--accent)', textDecoration: 'none' }}>
             Abrir a votação
           </Link>
         </div>

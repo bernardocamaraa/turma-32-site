@@ -1,19 +1,20 @@
 /**
- * Vercel Routing Middleware: link previews for personal links.
+ * Vercel Routing Middleware: link previews.
  *
- * When someone pastes a /mesas/<link> or /votacao/<link> URL into WhatsApp
- * (or iMessage, Telegram…), the app fetches the page and reads its <meta>
- * tags to build the preview card — without running the site's JavaScript.
- * So for those preview bots, this looks up whose link it is and serves
- * index.html with that formando's name — and, for the table map, their
- * image (public/previas/mesas/<slug>.jpg, made by scripts/gerar-previas.mjs).
+ * When someone pastes a link into WhatsApp (or iMessage, Telegram…), the
+ * app fetches the page and reads its <meta> tags to build the preview card
+ * — without running the site's JavaScript. So for those preview bots:
+ * - /mesas/<link>: looks up whose personal link it is and serves index.html
+ *   with that formando's name and image (public/previas/mesas/<slug>.jpg,
+ *   made by scripts/gerar-previas.mjs).
+ * - /votacao: the vote's single link gets its own title and description.
  *
  * People opening the link get the normal page untouched — no extra lookup,
  * no delay. Anything that goes wrong (unknown link, Supabase slow or down)
  * also falls through to the normal page, with the site's generic preview.
  */
 
-export const config = { matcher: ['/mesas/:link', '/votacao/:link'] };
+export const config = { matcher: ['/mesas/:link', '/votacao'] };
 
 // Vercel provides the project's environment variables here at runtime; the
 // project has no @types/node, so declare just what this file reads.
@@ -49,13 +50,9 @@ export function slug(nome: string): string {
 
 const escapar = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-/**
- * Whose personal link this is, or null. Table-map links and voting links
- * are different secrets, so each is asked of its own Edge Function, which
- * only answers the name.
- */
-async function donoDoLink(funcao: 'mesas' | 'votacao', link: string): Promise<string | null> {
-  const resposta = await fetch(`${SUPABASE_URL}/functions/v1/${funcao}`, {
+/** Whose personal link this is, or null — asks the `mesas` Edge Function, which only answers the name. */
+async function donoDoLink(link: string): Promise<string | null> {
+  const resposta = await fetch(`${SUPABASE_URL}/functions/v1/mesas`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -70,33 +67,50 @@ async function donoDoLink(funcao: 'mesas' | 'votacao', link: string): Promise<st
   return typeof dados.voce === 'string' ? dados.voce : null;
 }
 
-/** index.html's preview block (between the `previa` comments), rewritten for one formando. */
-export function comPreviaDoFormando(html: string, nome: string, url: URL): string {
-  const votacao = url.pathname.startsWith('/votacao/');
-  const titulo = escapar(votacao ? `${nome} · Votação da turma` : `${nome} · Mapa das mesas`);
-  const descricao = escapar(
-    votacao
-      ? 'Vote nas votações da Turma 32. O voto é secreto: ninguém vê em quem você votou.'
-      : 'Escolha onde a sua família vai sentar no baile de formatura da Turma 32, em 10 de dezembro.',
-  );
-  // The personal images say "Mapa das mesas", so the vote uses the site's own.
-  const imagem = escapar(votacao ? `${url.origin}/previas/turma-32.jpg` : `${url.origin}/previas/mesas/${slug(nome)}.jpg`);
+/** index.html with its preview block (between the `previa` comments) replaced. */
+function comPrevia(html: string, p: { titulo: string; descricao: string; imagem: string; alt: string; url: URL }): string {
   const bloco = `<!-- previa -->
-    <title>${titulo}</title>
-    <meta name="description" content="${descricao}" />
+    <title>${escapar(p.titulo)}</title>
+    <meta name="description" content="${escapar(p.descricao)}" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Turma 32" />
     <meta property="og:locale" content="pt_BR" />
-    <meta property="og:url" content="${escapar(url.href)}" />
-    <meta property="og:title" content="${titulo}" />
-    <meta property="og:description" content="${descricao}" />
-    <meta property="og:image" content="${imagem}" />
+    <meta property="og:url" content="${escapar(p.url.href)}" />
+    <meta property="og:title" content="${escapar(p.titulo)}" />
+    <meta property="og:description" content="${escapar(p.descricao)}" />
+    <meta property="og:image" content="${escapar(p.imagem)}" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="${escapar(`Logo da Turma 32 e o nome ${nome}`)}" />
+    <meta property="og:image:alt" content="${escapar(p.alt)}" />
     <meta name="twitter:card" content="summary_large_image" />
     <!-- /previa -->`;
   return html.replace(/<!-- previa -->[\s\S]*?<!-- \/previa -->/, bloco);
+}
+
+/** The preview for one formando's table-map link. */
+export function comPreviaDoFormando(html: string, nome: string, url: URL): string {
+  return comPrevia(html, {
+    titulo: `${nome} · Mapa das mesas`,
+    descricao: 'Escolha onde a sua família vai sentar no baile de formatura da Turma 32, em 10 de dezembro.',
+    imagem: `${url.origin}/previas/mesas/${slug(nome)}.jpg`,
+    alt: `Logo da Turma 32 e o nome ${nome}`,
+    url,
+  });
+}
+
+/** The preview for the vote's single link. */
+export function comPreviaDaVotacao(html: string, url: URL): string {
+  return comPrevia(html, {
+    titulo: 'Votação da Turma 32',
+    descricao: 'Entre com o seu nome e o seu WhatsApp e vote. O voto é secreto: ninguém vê em quem você votou.',
+    imagem: `${url.origin}/previas/turma-32.jpg`,
+    alt: 'Logo da Turma 32 sobre as assinaturas dos formandos',
+    url,
+  });
+}
+
+function respostaHtml(html: string, cache: string): Response {
+  return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': cache } });
 }
 
 export default async function middleware(request: Request): Promise<Response> {
@@ -104,21 +118,21 @@ export default async function middleware(request: Request): Promise<Response> {
 
   try {
     const url = new URL(request.url);
+
+    if (url.pathname === '/votacao') {
+      const pagina = await fetch(new URL('/index.html', url));
+      if (!pagina.ok) return seguir();
+      return respostaHtml(comPreviaDaVotacao(await pagina.text(), url), 'public, max-age=300');
+    }
+
     const link = decodeURIComponent(url.pathname.split('/')[2] ?? '');
     if (!/^[a-z0-9]{16,64}$/i.test(link)) return seguir();
 
-    const funcao = url.pathname.startsWith('/votacao/') ? 'votacao' : 'mesas';
-    const [nome, pagina] = await Promise.all([donoDoLink(funcao, link), fetch(new URL('/index.html', url))]);
+    const [nome, pagina] = await Promise.all([donoDoLink(link), fetch(new URL('/index.html', url))]);
     if (!nome || !pagina.ok) return seguir();
 
-    const html = comPreviaDoFormando(await pagina.text(), nome, url);
-    return new Response(html, {
-      headers: {
-        'Content-Type': 'text/html; charset=utf-8',
-        // Personal to this link: never cached where another link could get it.
-        'Cache-Control': 'private, max-age=0',
-      },
-    });
+    // Personal to this link: never cached where another link could get it.
+    return respostaHtml(comPreviaDoFormando(await pagina.text(), nome, url), 'private, max-age=0');
   } catch {
     return seguir();
   }

@@ -2,23 +2,24 @@ import { useState } from 'react';
 import { Button } from './Button';
 
 /**
- * What the committee does with a formando's personal link — on the table
- * map and on the vote alike: copy it, send it on WhatsApp with a ready
- * message, or replace it if it leaked (the old one stops working at once).
+ * What the committee does with a link: copy it, send it on WhatsApp with a
+ * ready message — straight to the formando's chat when their number is
+ * known — and, for a personal link, replace it if it leaked (the old one
+ * stops working at once).
  */
 export function BotoesLink({
-  formando,
   url,
   mensagem,
-  salvando,
-  onNovoLink,
+  telefone,
+  novoLink,
 }: {
-  formando: string;
   url: string;
   /** The WhatsApp message; the URL is appended to it. */
   mensagem: string;
-  salvando: boolean;
-  onNovoLink: () => void;
+  /** Digits with country code: opens that person's chat instead of asking whom to send to. */
+  telefone?: string | null;
+  /** Only for personal links: whose link it is, and how to replace it. */
+  novoLink?: { formando: string; salvando: boolean; onNovoLink: () => void };
 }) {
   const [copiado, setCopiado] = useState(false);
 
@@ -35,8 +36,9 @@ export function BotoesLink({
   }
 
   function trocar() {
-    if (!window.confirm(`Gerar um link novo para ${formando}? O link antigo para de funcionar na hora.`)) return;
-    onNovoLink();
+    if (!novoLink) return;
+    if (!window.confirm(`Gerar um link novo para ${novoLink.formando}? O link antigo para de funcionar na hora.`)) return;
+    novoLink.onNovoLink();
   }
 
   return (
@@ -50,13 +52,15 @@ export function BotoesLink({
         size="sm"
         target="_blank"
         rel="noreferrer"
-        href={`https://wa.me/?text=${encodeURIComponent(`${mensagem} ${url}`)}`}
+        href={`https://wa.me/${telefone ?? ''}?text=${encodeURIComponent(`${mensagem} ${url}`)}`}
       >
         Mandar no WhatsApp
       </Button>
-      <Button variant="ghost" size="sm" disabled={salvando} onClick={trocar}>
-        Novo link
-      </Button>
+      {novoLink ? (
+        <Button variant="ghost" size="sm" disabled={novoLink.salvando} onClick={trocar}>
+          Novo link
+        </Button>
+      ) : null}
     </div>
   );
 }

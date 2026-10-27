@@ -1,14 +1,17 @@
 // Supabase Edge Function: votacao
 //
-// Backs the class vote (/votacao), which is separate from the table map:
-//   - `link`: a formando's personal *voting* link (convidados_formando.
-//     link_votacao — not the table map's link). Sees the questions and
-//     votes, once per question, as that formando — never as anyone else.
-//     Sees a question's result only once the committee releases it. With
-//     `soNome: true` it only answers whose link it is, for link previews.
+// Backs the class vote (/votacao): one link for the whole class, apart from
+// the table map. Three kinds of caller:
+//   - nobody yet: gets the list of names and the questions.
+//   - `whatsapp`: a formando, recognised by their number — the committee
+//     fills the numbers in, so most formandos never pick a name. A number
+//     not on the list comes back with `voce: null` and the names that still
+//     have no number (`livres`); sent again with one of them as `nome`, the
+//     number gets tied to that name (identificar_eleitor in votacao.sql).
+//     Votes once per question, as that formando; sees a result once the
+//     committee releases it.
 //   - `codigo`: COMMITTEE_CODE. Creates and deletes questions, closes them,
-//     shows/hides the results to the class, and sees (and can replace)
-//     every formando's voting link.
+//     shows/hides the results, and sees and edits each formando's number.
 //
 // The ballot is secret (see votacao.sql): who voted and what was voted are
 // stored apart. To keep it that way the committee doesn't see the tally
@@ -49,38 +52,51 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { codigo, link, acao, id, opcao, texto, tipo, opcoes, formando, soNome } = await req.json();
+    const { codigo, nome, whatsapp, acao, id, opcao, texto, tipo, opcoes, formando } = await req.json();
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
-    // Who is calling: the committee, or the one formando the link belongs to.
+    const recusar = (mensagem: string) => json({ error: mensagem }, 400);
+
+    // Who is calling: the committee, a formando (by number), or nobody yet.
     let comissao = false;
     let voce: string | null = null;
-    if (typeof link === 'string' && link.trim()) {
-      const { data, error } = await supabase
-        .from('convidados_formando')
-        .select('formando')
-        .eq('link_votacao', link.trim())
-        .maybeSingle();
-      if (error) throw error;
-      if (!data) return json({ error: 'Esse link não vale mais. Peça o seu para a comissão.' }, 401);
-      voce = data.formando;
-      // The link preview (middleware.ts) only needs the name.
-      if (soNome === true) return json({ voce });
-    } else {
+    if (typeof codigo === 'string') {
       const codigoComissao = Deno.env.get('COMMITTEE_CODE') ?? '';
-      if (!codigoComissao || typeof codigo !== 'string' || codigo.trim() !== codigoComissao) {
+      if (!codigoComissao || codigo.trim() !== codigoComissao) {
         return json({ error: 'Código incorreto.' }, 401);
       }
       comissao = true;
+    } else if (typeof whatsapp === 'string') {
+      // The number says who it is: filled in by the committee, or tied to
+      // the name on an earlier visit.
+      const { data: dono, error } = await supabase.from('convidados_formando').select('formando').eq('whatsapp', whatsapp).maybeSingle();
+      if (error) throw error;
+      if (dono) {
+        voce = dono.formando as string;
+      } else if (typeof nome === 'string') {
+        // A number not on the list: tie it to the name picked, if that name
+        // has no number yet.
+        const { error } = await supabase.rpc('identificar_eleitor', { p_formando: nome, p_whatsapp: whatsapp });
+        if (error) {
+          // Messages raised on purpose in identificar_eleitor() are for the formando.
+          if (error.code === 'P0001') return json({ error: error.message }, 401);
+          throw error;
+        }
+        voce = nome;
+      }
     }
 
-    const recusar = (mensagem: string) => json({ error: mensagem }, 400);
+    // A vote from a number that's no longer on the list (the committee
+    // changed it) must not vanish silently.
+    if (!comissao && !voce && acao === 'votar') {
+      return json({ error: 'Entre de novo com o seu WhatsApp.' }, 401);
+    }
 
-    // A formando votes as themselves only: the name comes from the link.
+    // A formando votes as themselves only: the name the number belongs to.
     if (voce && acao === 'votar' && typeof id === 'string' && typeof opcao === 'string') {
       const { error } = await supabase.rpc('votar', { p_formando: voce, p_pergunta: id, p_opcao: opcao });
       if (error) {
@@ -116,13 +132,21 @@ Deno.serve(async (req) => {
       if (error) throw error;
     }
 
-    // Replacing a leaked voting link: the old one stops working at once.
-    if (comissao && acao === 'novoLink' && typeof formando === 'string') {
-      const { error } = await supabase
-        .from('convidados_formando')
-        .update({ link_votacao: crypto.randomUUID().replaceAll('-', '') })
-        .eq('formando', formando);
-      if (error) throw error;
+    // The committee fills in, fixes or clears a formando's number (`whatsapp`
+    // here is the new number, or null). Clearing frees the name: the next
+    // number not on the list can pick it. Votes already cast stay as they
+    // are — nothing records what they were.
+    if (comissao && acao === 'definirWhatsapp' && typeof formando === 'string') {
+      const numero = whatsapp === null ? null : typeof whatsapp === 'string' && /^[0-9]{12,13}$/.test(whatsapp) ? whatsapp : undefined;
+      if (numero === undefined) return recusar('Digite o WhatsApp com DDD.');
+      const { error } = await supabase.from('convidados_formando').update({ whatsapp: numero }).eq('formando', formando);
+      if (error) {
+        if (error.code === '23505') {
+          const { data: dono } = await supabase.from('convidados_formando').select('formando').eq('whatsapp', numero).maybeSingle();
+          return recusar(dono ? `Esse número já está com ${dono.formando}.` : 'Esse número já está com outro formando.');
+        }
+        throw error;
+      }
     }
 
     if (comissao && acao === 'excluir' && typeof id === 'string') {
@@ -134,23 +158,25 @@ Deno.serve(async (req) => {
       supabase.from('votacao_perguntas').select('id, pergunta, tipo, opcoes, aberta, resultado_liberado').order('criado_em'),
       supabase.from('votacao_contagem').select('pergunta_id, opcao, votos'),
       supabase.from('votacao_participacao').select('pergunta_id, formando'),
-      // Voting links go only to the committee, to send out.
-      supabase.from('convidados_formando').select(comissao ? 'formando, link_votacao' : 'formando').order('formando'),
+      // Numbers go only to the committee (see the response below).
+      supabase.from('convidados_formando').select('formando, whatsapp').order('formando'),
     ]);
     if (perguntas.error) throw perguntas.error;
     if (contagem.error) throw contagem.error;
     if (participacao.error) throw participacao.error;
     if (formandos.error) throw formandos.error;
 
-    const nomes = formandos.data.map((f) => f.formando as string);
+    const lista = formandos.data as { formando: string; whatsapp: string | null }[];
+    const nomes = lista.map((f) => f.formando);
 
     return json({
       comissao,
       voce,
       formandos: nomes,
-      links: comissao
-        ? (formandos.data as { formando: string; link_votacao: string }[]).map((f) => ({ formando: f.formando, link: f.link_votacao }))
-        : null,
+      eleitores: comissao ? lista : null,
+      // For a formando whose number isn't on the list: the names they can
+      // still pick (the ones with no number yet).
+      livres: !comissao && !voce ? lista.filter((f) => !f.whatsapp).map((f) => f.formando) : null,
       perguntas: (perguntas.data as Pergunta[]).map((p) => {
         const votaram = participacao.data.filter((v) => v.pergunta_id === p.id).map((v) => v.formando as string);
         // The tally: for the class once released; for the committee once
