@@ -44,7 +44,10 @@ function AppRoutes() {
         <Route path="/mesas" element={<Mesas />} />
         <Route path="/mesas/:link" element={<Mesas />} />
         <Route path="/votacao" element={<Votacao />} />
-        <Route path="/votacao/:link" element={<Votacao />} />
+        <Route path="/votacao/comissao" element={<Votacao paraComissao />} />
+        {/* Personal voting links existed briefly; anyone opening one lands
+            on the single voting link. */}
+        <Route path="/votacao/:link" element={<Navigate to="/votacao" replace />} />
         {/* Any old link (a shared /rsvp URL, a typo) lands on the home page
             instead of a blank screen. */}
         <Route path="*" element={<Navigate to="/" replace />} />

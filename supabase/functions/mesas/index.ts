@@ -122,7 +122,9 @@ Deno.serve(async (req) => {
       supabase.from('reservas_mesa').select('formando, mesa, lugares'),
       // Links go only to the committee — a formando must never see a
       // classmate's, or the whole point of personal links is gone.
-      supabase.from('convidados_formando').select(comissao ? 'formando, total, link' : 'formando, total').order('formando'),
+      // The WhatsApp number (filled in on the vote's committee page) also
+      // goes only to the committee: the "send" button opens that chat.
+      supabase.from('convidados_formando').select(comissao ? 'formando, total, link, whatsapp' : 'formando, total').order('formando'),
       supabase.from('configuracoes').select('valor').eq('chave', 'mesas_abertas').maybeSingle(),
     ]);
     if (mesas.error) throw mesas.error;

@@ -729,11 +729,12 @@ function PainelComissao({
             </div>
             {c.link ? (
               <BotoesLink
-                formando={c.formando}
                 url={urlDoFormando(c.link)}
                 mensagem={`Oi ${c.formando.split(' ')[0]}! Esse é o seu link para marcar a mesa da sua família na formatura. Não passe pra ninguém:`}
-                salvando={salvando}
-                onNovoLink={async () => setErro(await alterar({ novoLink: c.formando }))}
+                // Known once the formando has entered the vote: the message
+                // then opens straight in their chat.
+                telefone={c.whatsapp}
+                novoLink={{ formando: c.formando, salvando, onNovoLink: async () => setErro(await alterar({ novoLink: c.formando })) }}
               />
             ) : null}
           </div>

@@ -118,13 +118,23 @@ Para colocar no ar:
 
 ## Votação (`/votacao`)
 
-A votação é uma página à parte do mapa das mesas. Cada formando vota pelo
-seu **link de votação** (`/votacao/<link>`), que é diferente do link das
-mesas: quem tem um não mexe no outro. A comissão pega os links em
-`/votacao`, com o código dela, em "Links de votação dos formandos", com
-os mesmos botões das mesas: copiar, mandar no WhatsApp e gerar um novo.
+A votação é uma página à parte do mapa das mesas, com **um link só para a
+turma toda**: `/votacao`. O formando entra digitando o WhatsApp dele, e o
+site reconhece quem ele é pelo número, sem precisar escolher o nome.
 
-- **Perguntas:** a comissão cria em `/votacao`, com o código dela. As opções
+- **Números dos formandos:** a comissão cadastra em `/votacao/comissao`,
+  com o código dela, na lista "WhatsApp dos formandos" (botões "Adicionar"
+  e "Editar"; apagar o número libera o nome). Os números só aparecem para a
+  comissão.
+- **Número fora da lista:** o formando escolhe o nome dele entre os que
+  ainda não têm número, e o número fica preso a esse nome.
+- **Limite:** o número não é confirmado por SMS, como num Google Forms sem
+  login. Com os números cadastrados, só dá para votar como um colega
+  sabendo o WhatsApp dele.
+- **Mapa das mesas:** com o número cadastrado, o botão "Mandar no WhatsApp"
+  do painel das mesas abre direto a conversa daquele formando.
+
+- **Perguntas:** a comissão cria em `/votacao/comissao`. As opções
   são os próprios formandos ("o mais engraçado"; ninguém vota em si mesmo)
   ou uma lista escrita pela comissão ("qual música de entrada?").
 - **Um voto por formando em cada pergunta.** Como o voto é secreto, ele não
