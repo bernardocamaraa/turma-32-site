@@ -1,5 +1,4 @@
 import { chamarFuncao } from './supabase';
-import type { AcessoMesas } from './mesas';
 
 export type TipoPergunta = 'formandos' | 'opcoes';
 
@@ -27,23 +26,36 @@ export type Pergunta = {
 
 export type DadosVotacao = {
   comissao: boolean;
-  /** The formando a personal link belongs to (null for the committee). */
+  /** The formando a voting link belongs to (null for the committee). */
   voce: string | null;
   formandos: string[];
+  /** Each formando's voting link, to send out — committee only. */
+  links: { formando: string; link: string }[] | null;
   perguntas: Pergunta[];
 };
+
+/**
+ * Who's asking: a formando by their personal *voting* link — its own, not
+ * the table map's — or the committee by its code.
+ */
+export type AcessoVotacao = { link: string } | { codigo: string };
+
+/** The personal voting URL the committee sends each formando. */
+export function urlDaVotacao(link: string): string {
+  return `${window.location.origin}/votacao/${link}`;
+}
 
 export type AcaoVotacao =
   | { acao: 'votar'; id: string; opcao: string }
   | { acao: 'criar'; texto: string; tipo: TipoPergunta; opcoes: string[] }
-  | { acao: 'encerrar' | 'liberar' | 'esconder' | 'excluir'; id: string };
+  | { acao: 'encerrar' | 'liberar' | 'esconder' | 'excluir'; id: string }
+  | { acao: 'novoLink'; formando: string };
 
 /**
- * Every read and write goes through the `votacao` Edge Function, with the
- * same personal link (or committee code) as the table map. Pass an `acao` to
- * vote or change something first; the response is always the whole state
- * after it.
+ * Every read and write goes through the `votacao` Edge Function, which
+ * checks the voting link (or committee code). Pass an `acao` to vote or
+ * change something first; the response is always the whole state after it.
  */
-export function buscarVotacao(acesso: AcessoMesas, acao?: AcaoVotacao): Promise<DadosVotacao> {
+export function buscarVotacao(acesso: AcessoVotacao, acao?: AcaoVotacao): Promise<DadosVotacao> {
   return chamarFuncao<DadosVotacao>('votacao', { ...acesso, ...acao });
 }

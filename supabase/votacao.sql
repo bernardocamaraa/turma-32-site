@@ -1,6 +1,10 @@
 -- Turma 32 site — votação
--- Run once in the SQL Editor, after mesas.sql (it uses convidados_formando:
--- formandos vote with the same personal link they use for the table map).
+-- Run once in the SQL Editor, after mesas.sql (it uses convidados_formando,
+-- the list of formandos).
+--
+-- The vote is its own thing, apart from the table map: each formando votes
+-- with a personal link of its own (link_votacao below), so a voting link
+-- can't move anyone's seats and a table link can't vote.
 --
 -- The committee creates questions. A question's options are either the
 -- formandos themselves ("o mais engraçado") or a list written by the
@@ -14,6 +18,12 @@
 --
 -- Nothing here is readable or writable with the anon key: every read and
 -- write goes through the `votacao` Edge Function, like the table map.
+
+-- The secret part of each formando's voting URL (/votacao/<link>): 122
+-- random bits, like the table map's `link`, and unrelated to it. Adding the
+-- column with a volatile default gives every existing formando their own.
+alter table public.convidados_formando
+  add column if not exists link_votacao text not null unique default replace(gen_random_uuid()::text, '-', '');
 
 create table if not exists public.votacao_perguntas (
   id uuid primary key default gen_random_uuid(),
