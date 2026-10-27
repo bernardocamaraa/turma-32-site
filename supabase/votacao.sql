@@ -1,6 +1,17 @@
 -- Turma 32 site — votação
--- Run once in the SQL Editor, after mesas.sql (it uses convidados_formando:
--- formandos vote with the same personal link they use for the table map).
+-- Run once in the SQL Editor, after mesas.sql (it uses convidados_formando,
+-- the list of formandos).
+--
+-- The vote is its own thing, apart from the table map, with a single link
+-- for the whole class (/votacao). A formando picks their name and types
+-- their WhatsApp number; the first time, that number gets tied to the name
+-- (convidados_formando.whatsapp), and from then on the name only votes
+-- with that number. The number isn't verified (that would take a paid SMS
+-- service), so it works like a Google Form without login: it stops
+-- accidental double votes and one person voting as two, not someone who
+-- grabs a classmate's name before they do. The committee sees each name's
+-- number and can free a name taken by mistake. The number also lets the
+-- committee message each formando directly from the table map.
 --
 -- The committee creates questions. A question's options are either the
 -- formandos themselves ("o mais engraçado") or a list written by the
@@ -14,6 +25,15 @@
 --
 -- Nothing here is readable or writable with the anon key: every read and
 -- write goes through the `votacao` Edge Function, like the table map.
+
+-- Personal voting links were tried briefly and replaced by the name +
+-- WhatsApp flow; drop the column if a project still has it.
+alter table public.convidados_formando drop column if exists link_votacao;
+
+-- The formando's WhatsApp number, digits only with the country code
+-- (5521999999999). Empty until they first vote. One number per formando.
+alter table public.convidados_formando add column if not exists whatsapp text unique
+  check (whatsapp ~ '^[0-9]{12,13}$');
 
 create table if not exists public.votacao_perguntas (
   id uuid primary key default gen_random_uuid(),
@@ -102,3 +122,38 @@ $$;
 -- Only the Edge Function (service role) may call it.
 revoke all on function public.votar(text, uuid, text) from public, anon, authenticated;
 grant execute on function public.votar(text, uuid, text) to service_role;
+
+-- Checks that `p_whatsapp` is the number tied to `p_formando`, tying it the
+-- first time. Locking the formando's row makes two people claiming the same
+-- name at the same moment take turns; the unique constraint stops one
+-- number from claiming two names.
+create or replace function public.identificar_eleitor(p_formando text, p_whatsapp text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_atual text;
+begin
+  if p_whatsapp is null or p_whatsapp !~ '^[0-9]{12,13}$' then
+    raise exception 'Digite o seu WhatsApp com DDD.';
+  end if;
+  select whatsapp into v_atual from convidados_formando where formando = p_formando for update;
+  if not found then
+    raise exception 'Escolha o seu nome na lista.';
+  end if;
+  if v_atual is null then
+    begin
+      update convidados_formando set whatsapp = p_whatsapp where formando = p_formando;
+    exception when unique_violation then
+      raise exception 'Esse número já foi usado com outro nome. Confira o nome que você escolheu.';
+    end;
+  elsif v_atual <> p_whatsapp then
+    raise exception 'Esse nome já entrou com outro número. Se é você, fale com a comissão.';
+  end if;
+end;
+$$;
+
+revoke all on function public.identificar_eleitor(text, text) from public, anon, authenticated;
+grant execute on function public.identificar_eleitor(text, text) to service_role;

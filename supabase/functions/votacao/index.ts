@@ -1,12 +1,14 @@
 // Supabase Edge Function: votacao
 //
-// Backs the class vote (/votacao). Same two credentials as the `mesas`
-// function:
-//   - `link`: a formando's personal link. Sees the questions and votes,
-//     once per question, as that formando — never as anyone else. Sees a
-//     question's result only once the committee releases it.
+// Backs the class vote (/votacao), which is separate from the table map:
+//   - `link`: a formando's personal *voting* link (convidados_formando.
+//     link_votacao — not the table map's link). Sees the questions and
+//     votes, once per question, as that formando — never as anyone else.
+//     Sees a question's result only once the committee releases it. With
+//     `soNome: true` it only answers whose link it is, for link previews.
 //   - `codigo`: COMMITTEE_CODE. Creates and deletes questions, closes them,
-//     and shows/hides the results to the class.
+//     shows/hides the results to the class, and sees (and can replace)
+//     every formando's voting link.
 //
 // The ballot is secret (see votacao.sql): who voted and what was voted are
 // stored apart. To keep it that way the committee doesn't see the tally
@@ -47,7 +49,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { codigo, link, acao, id, opcao, texto, tipo, opcoes } = await req.json();
+    const { codigo, link, acao, id, opcao, texto, tipo, opcoes, formando, soNome } = await req.json();
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -61,11 +63,13 @@ Deno.serve(async (req) => {
       const { data, error } = await supabase
         .from('convidados_formando')
         .select('formando')
-        .eq('link', link.trim())
+        .eq('link_votacao', link.trim())
         .maybeSingle();
       if (error) throw error;
       if (!data) return json({ error: 'Esse link não vale mais. Peça o seu para a comissão.' }, 401);
       voce = data.formando;
+      // The link preview (middleware.ts) only needs the name.
+      if (soNome === true) return json({ voce });
     } else {
       const codigoComissao = Deno.env.get('COMMITTEE_CODE') ?? '';
       if (!codigoComissao || typeof codigo !== 'string' || codigo.trim() !== codigoComissao) {
@@ -112,6 +116,15 @@ Deno.serve(async (req) => {
       if (error) throw error;
     }
 
+    // Replacing a leaked voting link: the old one stops working at once.
+    if (comissao && acao === 'novoLink' && typeof formando === 'string') {
+      const { error } = await supabase
+        .from('convidados_formando')
+        .update({ link_votacao: crypto.randomUUID().replaceAll('-', '') })
+        .eq('formando', formando);
+      if (error) throw error;
+    }
+
     if (comissao && acao === 'excluir' && typeof id === 'string') {
       const { error } = await supabase.from('votacao_perguntas').delete().eq('id', id);
       if (error) throw error;
@@ -121,7 +134,8 @@ Deno.serve(async (req) => {
       supabase.from('votacao_perguntas').select('id, pergunta, tipo, opcoes, aberta, resultado_liberado').order('criado_em'),
       supabase.from('votacao_contagem').select('pergunta_id, opcao, votos'),
       supabase.from('votacao_participacao').select('pergunta_id, formando'),
-      supabase.from('convidados_formando').select('formando').order('formando'),
+      // Voting links go only to the committee, to send out.
+      supabase.from('convidados_formando').select(comissao ? 'formando, link_votacao' : 'formando').order('formando'),
     ]);
     if (perguntas.error) throw perguntas.error;
     if (contagem.error) throw contagem.error;
@@ -134,6 +148,9 @@ Deno.serve(async (req) => {
       comissao,
       voce,
       formandos: nomes,
+      links: comissao
+        ? (formandos.data as { formando: string; link_votacao: string }[]).map((f) => ({ formando: f.formando, link: f.link_votacao }))
+        : null,
       perguntas: (perguntas.data as Pergunta[]).map((p) => {
         const votaram = participacao.data.filter((v) => v.pergunta_id === p.id).map((v) => v.formando as string);
         // The tally: for the class once released; for the committee once
