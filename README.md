@@ -120,7 +120,10 @@ Para colocar no ar:
 
 A votação é uma página à parte do mapa das mesas, com **um link só para a
 turma toda**: `/votacao`. O formando entra digitando o WhatsApp dele, e o
-site reconhece quem ele é pelo número, sem precisar escolher o nome.
+site reconhece quem ele é pelo número, sem precisar escolher o nome. O número
+pode ser digitado de qualquer jeito: com ou sem DDD (sem DDD, vale o 21),
+com ou sem +55, e até sem o 9 da frente. O site acerta o formato sozinho
+(`normalizarWhatsapp` em `src/lib/votacao.ts`).
 
 - **Números dos formandos:** a comissão cadastra em `/votacao/comissao`,
   com o código dela, na lista "WhatsApp dos formandos" (botões "Adicionar"

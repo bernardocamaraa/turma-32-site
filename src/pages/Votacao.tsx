@@ -286,7 +286,7 @@ function Identificacao({
 
   async function enviar() {
     if (!whatsapp) {
-      setErroNumero('Digite o seu WhatsApp com DDD, por exemplo (21) 99999-9999.');
+      setErroNumero('Esse número não parece um WhatsApp. Confira, por exemplo (21) 99999-9999.');
       return;
     }
     if (pedirNome && !nome) return;
@@ -814,7 +814,7 @@ function EleitoresDaVotacao({
 
   async function editar(formando: string, atual: string | null) {
     const digitado = window.prompt(
-      `WhatsApp de ${formando}, com DDD. Deixe vazio para tirar o número.`,
+      `WhatsApp de ${formando} (sem DDD, vale o 21). Deixe vazio para tirar o número.`,
       atual ? formatarWhatsapp(atual) : '',
     );
     if (digitado === null) return;
@@ -824,7 +824,7 @@ function EleitoresDaVotacao({
     }
     const whatsapp = normalizarWhatsapp(digitado);
     if (!whatsapp) {
-      setErro(`"${digitado}" não parece um WhatsApp com DDD.`);
+      setErro(`"${digitado}" não parece um número de WhatsApp.`);
       return;
     }
     setErro(await agir({ acao: 'definirWhatsapp', formando, whatsapp }));
