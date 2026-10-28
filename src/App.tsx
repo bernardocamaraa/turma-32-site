@@ -1,5 +1,5 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { NavBar } from './components/NavBar';
 import { Footer } from './components/Footer';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -10,6 +10,10 @@ import { Turma } from './pages/Turma';
 import { Comissao } from './pages/Comissao';
 import { Mesas } from './pages/Mesas';
 import { Votacao } from './pages/Votacao';
+
+// Committee only: loaded when opened, so it doesn't weigh on every visitor's
+// first load.
+const Infancia = lazy(() => import('./pages/Infancia').then((m) => ({ default: m.Infancia })));
 
 function ScrollToTop() {
   const { pathname, hash } = useLocation();
@@ -48,6 +52,14 @@ function AppRoutes() {
         {/* Personal voting links existed briefly; anyone opening one lands
             on the single voting link. */}
         <Route path="/votacao/:link" element={<Navigate to="/votacao" replace />} />
+        <Route
+          path="/infancia"
+          element={
+            <Suspense fallback={null}>
+              <Infancia />
+            </Suspense>
+          }
+        />
         {/* Any old link (a shared /rsvp URL, a typo) lands on the home page
             instead of a blank screen. */}
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -115,6 +115,17 @@ export function Comissao() {
         </div>
       </Card>
 
+      <Card padding="var(--space-6)">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-5)', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+            Fotos de criança: a foto de cada formando, para baixar todas juntas no fim.
+          </span>
+          <Link to="/infancia" style={{ fontFamily: 'var(--font-core)', fontSize: 15, color: 'var(--accent)', textDecoration: 'none' }}>
+            Abrir as fotos de criança
+          </Link>
+        </div>
+      </Card>
+
       {!dados ? (
         <Card padding="var(--space-7)">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxWidth: 420 }}>
