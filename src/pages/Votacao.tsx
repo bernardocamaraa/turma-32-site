@@ -9,6 +9,7 @@ import { Select } from '../components/Select';
 import { PageHeader } from '../components/SectionHeading';
 import { desligarAvisos, inscricaoAtual, ligarAvisos, situacaoAvisos } from '../lib/avisos';
 import { CarregandoSecao } from '../components/CarregandoSecao';
+import { precarregarUrna, UrnaVoto } from '../components/UrnaVoto';
 import {
   buscarVotacao,
   formatarWhatsapp,
@@ -391,6 +392,12 @@ function Cedula({
   // The options picked on each question; null means a blank vote.
   const [escolhas, setEscolhas] = useState<Record<string, string[] | null>>({});
   const [erro, setErro] = useState<string | null>(null);
+  // Set once the server took the ballot in: plays it dropping into the box.
+  const [naUrna, setNaUrna] = useState<{ quantos: number; emBranco: boolean } | null>(null);
+
+  useEffect(() => {
+    precarregarUrna();
+  }, []);
 
   const de = (id: string) => escolhas[id] ?? [];
   const emBranco = (id: string) => escolhas[id] === null;
@@ -417,13 +424,18 @@ function Cedula({
     const resumo = pendentes.map((p) => `• ${p.pergunta}\n   ${emBranco(p.id) ? 'Em branco' : de(p.id).join(', ')}`).join('\n');
     if (!window.confirm(`Confirmar os seus votos?\n\n${resumo}\n\nDepois de enviados, não dá para trocar.`)) return;
     const votos = Object.fromEntries(pendentes.map((p) => [p.id, emBranco(p.id) ? null : de(p.id)]));
+    const cedula = { quantos: pendentes.length, emBranco: pendentes.every((p) => emBranco(p.id)) };
     const falha = await agir({ acao: 'votarTudo', votos });
     setErro(falha);
-    if (!falha) setEscolhas({});
+    if (!falha) {
+      setEscolhas({});
+      setNaUrna(cedula);
+    }
   }
 
   return (
     <>
+      {naUrna ? <UrnaVoto quantos={naUrna.quantos} emBranco={naUrna.emBranco} onFim={() => setNaUrna(null)} /> : null}
       {perguntas.map((p) => (
         <PerguntaFormando
           key={p.id}
