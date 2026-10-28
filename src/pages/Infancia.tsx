@@ -3,9 +3,7 @@ import { ClipboardPaste, Download, ImageOff, Plus, Trash2 } from 'lucide-react';
 import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
-import { Input } from '../components/Input';
-import { PageHeader } from '../components/SectionHeading';
-import { lerCodigo, salvarCodigo } from '../lib/codigoComissao';
+import { CarregandoSecao } from '../components/CarregandoSecao';
 import {
   arquivosArrastados,
   arquivosColados,
@@ -33,15 +31,14 @@ const mensagemDe = (e: unknown, padrao: string) => (e instanceof Error ? e.messa
 const GUARDAR_LINK_MS = 12 * 60 * 60 * 1000;
 
 /**
- * The childhood photos (/infancia), committee only: every formando with a
- * space for their photo. The formandos send theirs to the committee on
- * WhatsApp, the committee puts each one under the right name, and in the end
- * everything comes down in one .zip, each photo named after its formando.
+ * The childhood photos, the "Fotos de criança" tab of the committee area
+ * (/comissao/fotos-de-crianca): every formando with a space for their photo.
+ * The formandos send theirs to the committee on WhatsApp, the committee puts
+ * each one under the right name, and in the end everything comes down in one
+ * .zip, each photo named after its formando.
  */
-export function Infancia() {
-  const [codigo, setCodigo] = useState(lerCodigo);
+export function Infancia({ codigo }: { codigo: string }) {
   const [dados, setDados] = useState<DadosInfancia | null>(null);
-  const [entrando, setEntrando] = useState(false);
   const [erroAcesso, setErroAcesso] = useState<string | null>(null);
   const [soFaltam, setSoFaltam] = useState(false);
   const [baixando, setBaixando] = useState<{ feitas: number; total: number } | null>(null);
@@ -63,28 +60,22 @@ export function Infancia() {
     };
   }
 
-  async function entrar() {
-    setEntrando(true);
+  async function carregar() {
     setErroAcesso(null);
     try {
-      setDados(guardar(await buscarInfancia(codigo.trim())));
-      salvarCodigo(codigo.trim());
+      setDados(guardar(await buscarInfancia(codigo)));
     } catch (e) {
-      setErroAcesso(mensagemDe(e, 'Não foi possível entrar agora.'));
-      salvarCodigo(null);
-    } finally {
-      setEntrando(false);
+      setErroAcesso(mensagemDe(e, 'Não foi possível abrir as fotos agora.'));
     }
   }
 
   /** Loads the list again — after an upload, a delete, or with `excluir`, deleting that photo first. Throws on failure. */
   async function recarregar(excluir?: string) {
-    setDados(guardar(await buscarInfancia(codigo.trim(), excluir)));
+    setDados(guardar(await buscarInfancia(codigo, excluir)));
   }
 
-  // With a saved code, straight in.
   useEffect(() => {
-    if (codigo) entrar();
+    carregar();
   }, []);
 
   // Other people in the committee add photos from their own phones: catch up
@@ -137,58 +128,16 @@ export function Infancia() {
     }
   }
 
-  function sair() {
-    salvarCodigo(null);
-    setCodigo('');
-    setDados(null);
-  }
-
   const total = dados?.formandos.length ?? 0;
   const comFoto = dados?.formandos.filter((f) => f.fotos.length > 0).length ?? 0;
   const totalFotos = dados?.formandos.reduce((soma, f) => soma + f.fotos.length, 0) ?? 0;
   const visiveis = dados?.formandos.filter((f) => !soFaltam || f.fotos.length === 0) ?? [];
 
+  // The page title, the way in and the way out belong to the committee area.
   return (
-    <main
-      style={{
-        maxWidth: 'var(--maxw-page)',
-        margin: '0 auto',
-        padding: 'var(--space-9) var(--gutter-page) var(--space-10)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 'var(--space-7)',
-      }}
-    >
-      <PageHeader eyebrow="Comissão · Turma 32" title="Fotos de criança." />
-
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' }}>
       {!dados ? (
-        <Card padding="var(--space-7)">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxWidth: 420 }}>
-            <p style={texto}>
-              Esta área é só da comissão: aqui fica a foto de criança de cada formando, para baixar todas juntas
-              depois. Digite o código da comissão.
-            </p>
-            <Input
-              label="Código da comissão"
-              placeholder="••••••"
-              type="password"
-              value={codigo}
-              onChange={(e) => {
-                setCodigo(e.target.value);
-                setErroAcesso(null);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && codigo.trim() && !entrando) entrar();
-              }}
-            />
-            {erroAcesso ? <span style={erroStyle}>{erroAcesso}</span> : null}
-            <div style={{ display: 'flex' }}>
-              <Button size="lg" disabled={!codigo.trim() || entrando} onClick={entrar}>
-                {entrando ? 'Entrando…' : 'Entrar'}
-              </Button>
-            </div>
-          </div>
-        </Card>
+        <CarregandoSecao erro={erroAcesso} onTentar={carregar} />
       ) : (
         <>
           <Card padding="var(--space-7)">
@@ -260,19 +209,13 @@ export function Infancia() {
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))', gap: 'var(--space-5)' }}>
               {visiveis.map((f) => (
-                <CartaoFormando key={f.formando} f={f} codigo={codigo.trim()} recarregar={recarregar} />
+                <CartaoFormando key={f.formando} f={f} codigo={codigo} recarregar={recarregar} />
               ))}
             </div>
           )}
-
-          <div style={{ display: 'flex' }}>
-            <Button variant="ghost" onClick={sair}>
-              Sair
-            </Button>
-          </div>
         </>
       )}
-    </main>
+    </div>
   );
 }
 

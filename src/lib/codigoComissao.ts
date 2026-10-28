@@ -1,7 +1,8 @@
-// Remembers the committee code on this device so it isn't retyped on every
-// visit, and is shared by the table map and the vote. Formandos don't need
-// this: their personal link is the login. Storage can be blocked (private
-// mode, previews) — then the page just asks.
+// Remembers the committee code on this device so the committee area
+// (/comissao, every tab) doesn't ask for it on every visit. Formandos don't
+// need this: their own pages have their own way in. Storage can be blocked
+// (private mode, previews) — then the area just asks. The key keeps its old
+// name so codes saved before the area existed still work.
 
 const CHAVE_CODIGO = 'turma32-mesas-comissao';
 

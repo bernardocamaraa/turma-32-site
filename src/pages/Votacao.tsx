@@ -8,7 +8,7 @@ import { Input } from '../components/Input';
 import { Select } from '../components/Select';
 import { PageHeader } from '../components/SectionHeading';
 import { desligarAvisos, inscricaoAtual, ligarAvisos, situacaoAvisos } from '../lib/avisos';
-import { lerCodigo, salvarCodigo } from '../lib/codigoComissao';
+import { CarregandoSecao } from '../components/CarregandoSecao';
 import {
   buscarVotacao,
   formatarWhatsapp,
@@ -59,19 +59,20 @@ function salvarEleitor(valor: { whatsapp: string } | null) {
  *   are (the committee fills the numbers in). A number not on the list
  *   picks a name that has none yet. Votes once per question; sees a result
  *   once the committee releases it.
- * - /votacao/comissao: the committee, with its code. Shares the link,
- *   fills in each formando's number, creates questions, follows who still
- *   has to vote, closes them and releases the results.
+ * - The "Votação" tab of the committee area (/comissao/votacao), with
+ *   `codigoComissao`: shares the link, fills in each formando's number,
+ *   creates questions, follows who still has to vote, closes them and
+ *   releases the results.
  */
-export function Votacao({ paraComissao = false }: { paraComissao?: boolean }) {
-  const [codigo, setCodigo] = useState(() => (paraComissao ? lerCodigo() : ''));
+export function Votacao({ codigoComissao }: { codigoComissao?: string }) {
+  const paraComissao = codigoComissao !== undefined;
   const [eleitor, setEleitor] = useState(() => (paraComissao ? null : lerEleitor()));
   const [dados, setDados] = useState<DadosVotacao | null>(null);
   const [entrando, setEntrando] = useState(false);
   const [erroAcesso, setErroAcesso] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
-  const acesso: AcessoVotacao = paraComissao ? { codigo: codigo.trim() } : eleitor ?? {};
+  const acesso: AcessoVotacao = paraComissao ? { codigo: codigoComissao } : eleitor ?? {};
 
   /** Loads with `com` and returns what came back, or null if it failed (the error is shown). */
   async function carregar(com: AcessoVotacao): Promise<DadosVotacao | null> {
@@ -80,11 +81,9 @@ export function Votacao({ paraComissao = false }: { paraComissao?: boolean }) {
     try {
       const novo = await buscarVotacao(com);
       setDados(novo);
-      if (paraComissao) salvarCodigo(codigo.trim());
       return novo;
     } catch (e) {
       setErroAcesso(e instanceof Error ? e.message : 'Não foi possível entrar agora.');
-      if (paraComissao) salvarCodigo(null);
       return null;
     } finally {
       setEntrando(false);
@@ -100,14 +99,11 @@ export function Votacao({ paraComissao = false }: { paraComissao?: boolean }) {
     }
   }
 
-  // Formandos: load right away (with the remembered number, if any).
-  // Committee: only with a saved code.
+  // Load right away: formandos with the remembered number, if any.
   useEffect(() => {
-    if (!paraComissao || codigo) {
-      carregar(acesso).then((novo) => {
-        if (novo && eleitor) conferirEleitor(novo);
-      });
-    }
+    carregar(acesso).then((novo) => {
+      if (novo && eleitor) conferirEleitor(novo);
+    });
   }, [paraComissao]);
 
   /**
@@ -145,7 +141,7 @@ export function Votacao({ paraComissao = false }: { paraComissao?: boolean }) {
       ativo = false;
       clearInterval(id);
     };
-  }, [pronto, codigo, eleitor]);
+  }, [pronto, codigoComissao, eleitor]);
 
   /** Runs an action and returns the error message to show, or null if it worked. */
   async function agir(acao: AcaoVotacao): Promise<string | null> {
@@ -161,15 +157,38 @@ export function Votacao({ paraComissao = false }: { paraComissao?: boolean }) {
   }
 
   function sair() {
-    if (paraComissao) {
-      salvarCodigo(null);
-      setCodigo('');
-      setDados(null);
-    } else {
-      salvarEleitor(null);
-      setEleitor(null);
-      carregar({});
-    }
+    salvarEleitor(null);
+    setEleitor(null);
+    carregar({});
+  }
+
+  // The committee's tab sits inside the committee area, which has the page
+  // title, the way in and the way out.
+  if (paraComissao) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' }}>
+        {!dados ? (
+          <CarregandoSecao erro={erroAcesso} onTentar={() => carregar(acesso)} />
+        ) : (
+          <>
+            <LinkDaVotacao />
+            <AvisoDaVotacao chavePush={dados.chavePush ?? null} aparelhos={dados.aparelhosAvisados ?? null} agir={agir} />
+            <EleitoresDaVotacao eleitores={dados.eleitores ?? []} salvando={salvando} agir={agir} />
+            <NovaPergunta salvando={salvando} agir={agir} />
+            {dados.perguntas.length === 0 ? (
+              <p style={texto}>Nenhuma votação criada ainda.</p>
+            ) : (
+              dados.perguntas
+                .slice()
+                .reverse()
+                .map((p) => (
+                  <PerguntaComissao key={p.id} p={p} total={dados.formandos.length} salvando={salvando} agir={agir} />
+                ))
+            )}
+          </>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -183,56 +202,9 @@ export function Votacao({ paraComissao = false }: { paraComissao?: boolean }) {
         gap: 'var(--space-7)',
       }}
     >
-      <PageHeader eyebrow={paraComissao ? 'Comissão · Turma 32' : 'Turma 32'} title="Votação da turma." />
+      <PageHeader eyebrow="Turma 32" title="Votação da turma." />
 
-      {paraComissao && !dados ? (
-        <Card padding="var(--space-7)">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxWidth: 420 }}>
-            <p style={texto}>Esta entrada é só da comissão. Os formandos votam pelo link da votação.</p>
-            <Input
-              label="Código da comissão"
-              placeholder="••••••"
-              type="password"
-              value={codigo}
-              onChange={(e) => {
-                setCodigo(e.target.value);
-                setErroAcesso(null);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && codigo.trim() && !entrando) carregar({ codigo: codigo.trim() });
-              }}
-            />
-            {erroAcesso ? <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--state-error)' }}>{erroAcesso}</span> : null}
-            <div style={{ display: 'flex' }}>
-              <Button size="lg" disabled={!codigo.trim() || entrando} onClick={() => carregar({ codigo: codigo.trim() })}>
-                {entrando ? 'Entrando…' : 'Entrar'}
-              </Button>
-            </div>
-          </div>
-        </Card>
-      ) : paraComissao && dados ? (
-        <>
-          <LinkDaVotacao />
-          <AvisoDaVotacao chavePush={dados.chavePush ?? null} aparelhos={dados.aparelhosAvisados ?? null} agir={agir} />
-          <EleitoresDaVotacao eleitores={dados.eleitores ?? []} salvando={salvando} agir={agir} />
-          <NovaPergunta salvando={salvando} agir={agir} />
-          {dados.perguntas.length === 0 ? (
-            <p style={texto}>Nenhuma votação criada ainda.</p>
-          ) : (
-            dados.perguntas
-              .slice()
-              .reverse()
-              .map((p) => (
-                <PerguntaComissao key={p.id} p={p} total={dados.formandos.length} salvando={salvando} agir={agir} />
-              ))
-          )}
-          <div style={{ display: 'flex' }}>
-            <Button variant="ghost" onClick={sair}>
-              Sair
-            </Button>
-          </div>
-        </>
-      ) : !eleitor || !dados?.voce ? (
+      {!eleitor || !dados?.voce ? (
         <Identificacao livres={dados?.livres ?? []} entrando={entrando} erro={erroAcesso} onEntrar={identificar} />
       ) : (
         <>
