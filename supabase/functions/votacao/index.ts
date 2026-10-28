@@ -8,10 +8,10 @@
 //     not on the list comes back with `voce: null` and the names that still
 //     have no number (`livres`); sent again with one of them as `nome`, the
 //     number gets tied to that name (identificar_eleitor in votacao.sql).
-//     Votes as that formando, the whole ballot at once (`votarTudo`): one
-//     choice for every open question, never the same option in two of them
-//     (votar_cedula in votacao.sql). Sees a result once the committee
-//     releases it.
+//     Votes as that formando, the whole ballot at once (`votarTudo`): for
+//     every open question one option, or up to its `maximo`, never the same
+//     option in two questions (votar_cedula in votacao.sql). Sees a result
+//     once the committee releases it.
 //   - `codigo`: COMMITTEE_CODE. Creates, deletes and closes questions,
 //     shows/hides the results, and sees and edits each formando's number.
 //
@@ -46,6 +46,7 @@ type Pergunta = {
   opcoes: string[];
   aberta: boolean;
   resultado_liberado: boolean;
+  maximo: number;
 };
 
 Deno.serve(async (req) => {
@@ -54,7 +55,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { codigo, nome, whatsapp, acao, id, votos, texto, tipo, opcoes, formando } = await req.json();
+    const { codigo, nome, whatsapp, acao, id, votos, texto, tipo, opcoes, maximo, formando } = await req.json();
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -105,9 +106,13 @@ Deno.serve(async (req) => {
     // A formando votes as themselves only: the name the number belongs to.
     // The whole ballot goes in at once — see votar_cedula in votacao.sql.
     if (voce && acao === 'votarTudo') {
+      // { question id: [options] } — or one option as a plain string.
       const valida =
         votos !== null && typeof votos === 'object' && !Array.isArray(votos) &&
-        Object.keys(votos).length > 0 && Object.values(votos).every((v) => typeof v === 'string');
+        Object.keys(votos).length > 0 &&
+        Object.values(votos).every(
+          (v) => typeof v === 'string' || (Array.isArray(v) && v.length > 0 && v.every((o) => typeof o === 'string')),
+        );
       if (!valida) return recusar('Escolha uma opção em cada pergunta.');
       const { error } = await supabase.rpc('votar_cedula', { p_formando: voce, p_votos: votos });
       if (error) {
@@ -127,7 +132,13 @@ Deno.serve(async (req) => {
         if (lista.length < 2 || lista.length > 20) return recusar('Escreva de 2 a 20 opções, uma por linha.');
         if (lista.some((o) => o.length > 80)) return recusar('Cada opção pode ter no máximo 80 letras.');
       }
-      const { error } = await supabase.from('votacao_perguntas').insert({ pergunta, tipo, opcoes: lista });
+      // How many options each formando picks: one, or up to this many.
+      const escolhas = maximo === undefined ? 1 : maximo;
+      if (!Number.isInteger(escolhas) || escolhas < 1 || escolhas > 10) return recusar('Cada formando pode fazer de 1 a 10 escolhas.');
+      if (tipo === 'opcoes' && escolhas >= lista.length) {
+        return recusar(`Com ${lista.length} opções, dá para deixar escolher no máximo ${lista.length - 1}.`);
+      }
+      const { error } = await supabase.from('votacao_perguntas').insert({ pergunta, tipo, opcoes: lista, maximo: escolhas });
       if (error) throw error;
     }
 
@@ -166,7 +177,7 @@ Deno.serve(async (req) => {
     }
 
     const [perguntas, contagem, participacao, formandos] = await Promise.all([
-      supabase.from('votacao_perguntas').select('id, pergunta, tipo, opcoes, aberta, resultado_liberado').order('criado_em'),
+      supabase.from('votacao_perguntas').select('id, pergunta, tipo, opcoes, aberta, resultado_liberado, maximo').order('criado_em'),
       supabase.from('votacao_contagem').select('pergunta_id, opcao, votos'),
       supabase.from('votacao_participacao').select('pergunta_id, formando'),
       // Numbers go only to the committee (see the response below).
@@ -209,6 +220,7 @@ Deno.serve(async (req) => {
           opcoes: p.opcoes,
           aberta: p.aberta,
           resultadoLiberado: p.resultado_liberado,
+          maximo: p.maximo,
           jaVotou: voce ? votaram.includes(voce) : false,
           // How many voted is fine to show alongside a result, and always to
           // the committee; who is still missing, only to the committee.

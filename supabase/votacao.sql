@@ -66,17 +66,23 @@ create table if not exists public.votacao_contagem (
   primary key (pergunta_id, opcao)
 );
 
+-- How many options a formando picks on the question: just one (the
+-- default), or any number from one up to this ("escolha até 3 nomes").
+alter table public.votacao_perguntas add column if not exists maximo int not null default 1
+  check (maximo between 1 and 20);
+
 alter table public.votacao_perguntas enable row level security;
 alter table public.votacao_participacao enable row level security;
 alter table public.votacao_contagem enable row level security;
 -- Deliberately no policies on these three: anon can't read or write them.
 
--- Casts one formando's vote on one question. Marking them as having voted
--- and adding one to the option happen in the same transaction, so a vote
--- can't be counted without being marked (or the other way round), and the
--- primary key on votacao_participacao is what stops a second vote — even
--- from two tabs at the same moment.
-create or replace function public.votar(p_formando text, p_pergunta uuid, p_opcao text)
+-- Casts one formando's vote on one question: one option, or up to the
+-- question's `maximo` different ones. Marking them as having voted and
+-- adding one to each option happen in the same transaction, so a vote can't
+-- be counted without being marked (or the other way round), and the primary
+-- key on votacao_participacao is what stops a second vote — even from two
+-- tabs at the same moment.
+create or replace function public.votar_opcoes(p_formando text, p_pergunta uuid, p_opcoes text[])
 returns void
 language plpgsql
 security definer
@@ -86,10 +92,13 @@ declare
   v_tipo text;
   v_opcoes text[];
   v_aberta boolean;
+  v_maximo int;
+  v_opcao text;
 begin
   -- `for share` makes a committee closing the question at this very moment
   -- wait for this vote to finish (or this vote see it closed).
-  select tipo, opcoes, aberta into v_tipo, v_opcoes, v_aberta from votacao_perguntas where id = p_pergunta for share;
+  select tipo, opcoes, aberta, maximo into v_tipo, v_opcoes, v_aberta, v_maximo
+  from votacao_perguntas where id = p_pergunta for share;
   if not found then
     raise exception 'Essa votação não existe mais.';
   end if;
@@ -100,16 +109,31 @@ begin
     raise exception 'Formando não encontrado.';
   end if;
 
-  if v_tipo = 'formandos' then
-    if not exists (select 1 from convidados_formando where formando = p_opcao) then
-      raise exception 'Escolha um formando da lista.';
-    end if;
-    if p_opcao = p_formando then
-      raise exception 'Não dá para votar em você mesmo.';
-    end if;
-  elsif p_opcao is null or not (p_opcao = any (v_opcoes)) then
+  if p_opcoes is null or cardinality(p_opcoes) = 0 then
+    raise exception 'Escolha uma opção em cada pergunta.';
+  end if;
+  if cardinality(p_opcoes) > v_maximo then
+    raise exception 'Nessa pergunta dá para escolher no máximo %.', v_maximo;
+  end if;
+  if array_position(p_opcoes, null) is not null then
     raise exception 'Escolha uma das opções da lista.';
   end if;
+  if (select count(distinct o) from unnest(p_opcoes) o) <> cardinality(p_opcoes) then
+    raise exception 'Escolha opções diferentes na mesma pergunta.';
+  end if;
+
+  foreach v_opcao in array p_opcoes loop
+    if v_tipo = 'formandos' then
+      if not exists (select 1 from convidados_formando where formando = v_opcao) then
+        raise exception 'Escolha um formando da lista.';
+      end if;
+      if v_opcao = p_formando then
+        raise exception 'Não dá para votar em você mesmo.';
+      end if;
+    elsif not (v_opcao = any (v_opcoes)) then
+      raise exception 'Escolha uma das opções da lista.';
+    end if;
+  end loop;
 
   insert into votacao_participacao (pergunta_id, formando) values (p_pergunta, p_formando)
   on conflict do nothing;
@@ -117,12 +141,27 @@ begin
     raise exception 'Você já votou nessa pergunta.';
   end if;
 
-  insert into votacao_contagem (pergunta_id, opcao, votos) values (p_pergunta, p_opcao, 1)
+  insert into votacao_contagem (pergunta_id, opcao, votos)
+  select p_pergunta, o, 1 from unnest(p_opcoes) o
   on conflict (pergunta_id, opcao) do update set votos = votacao_contagem.votos + 1;
 end;
 $$;
 
--- Only the Edge Function (service role) may call it.
+-- The single-option form, kept for anything that still calls it.
+create or replace function public.votar(p_formando text, p_pergunta uuid, p_opcao text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform votar_opcoes(p_formando, p_pergunta, array[p_opcao]);
+end;
+$$;
+
+-- Only the Edge Function (service role) may call them.
+revoke all on function public.votar_opcoes(text, uuid, text[]) from public, anon, authenticated;
+grant execute on function public.votar_opcoes(text, uuid, text[]) to service_role;
 revoke all on function public.votar(text, uuid, text) from public, anon, authenticated;
 grant execute on function public.votar(text, uuid, text) to service_role;
 
@@ -169,7 +208,8 @@ grant execute on function public.identificar_eleitor(text, text) to service_role
 -- question.)
 
 -- Casts a formando's whole ballot at once: `p_votos` is {question id:
--- option} with a choice for every open question they haven't voted on yet.
+-- [options]} (or a single option as a string) with a choice for every open
+-- question they haven't voted on yet.
 -- All or nothing, in one transaction, so no question can be skipped. It's
 -- also the only moment the choices can be compared with each other —
 -- nothing stores them afterwards — so the same option twice is refused
@@ -186,7 +226,13 @@ declare
   v_repetida record;
   v_voto record;
 begin
-  if p_votos is null or jsonb_typeof(p_votos) <> 'object' then
+  if p_votos is null or jsonb_typeof(p_votos) <> 'object'
+     or exists (select 1 from jsonb_each(p_votos) e where jsonb_typeof(e.value) not in ('string', 'array'))
+     or exists (
+       select 1 from jsonb_each(p_votos) e,
+         jsonb_array_elements(case when jsonb_typeof(e.value) = 'array' then e.value else '[]' end) x
+       where jsonb_typeof(x) <> 'string'
+     ) then
     raise exception 'Escolha uma opção em cada pergunta.';
   end if;
   if exists (select 1 from jsonb_object_keys(p_votos) k where not exists (select 1 from votacao_perguntas p where p.id::text = k)) then
@@ -203,9 +249,14 @@ begin
   end if;
 
   with escolhas as (
-    select p.id, p.pergunta, p.criado_em, e.value as opcao
-    from jsonb_each_text(p_votos) e
+    select p.id, p.pergunta, p.criado_em, o.opcao
+    from jsonb_each(p_votos) e
     join votacao_perguntas p on p.id::text = e.key
+    cross join lateral (
+      select e.value #>> '{}' as opcao where jsonb_typeof(e.value) = 'string'
+      union all
+      select x from jsonb_array_elements_text(case when jsonb_typeof(e.value) = 'array' then e.value else '[]' end) x
+    ) o
   )
   select a.opcao, a.pergunta as primeira, b.pergunta as segunda into v_repetida
   from escolhas a
@@ -217,8 +268,15 @@ begin
       v_repetida.opcao, v_repetida.primeira, v_repetida.segunda;
   end if;
 
-  for v_voto in select key, value from jsonb_each_text(p_votos) loop
-    perform votar(p_formando, v_voto.key::uuid, v_voto.value);
+  for v_voto in select key, value from jsonb_each(p_votos) loop
+    perform votar_opcoes(
+      p_formando,
+      v_voto.key::uuid,
+      case
+        when jsonb_typeof(v_voto.value) = 'string' then array[v_voto.value #>> '{}']
+        else array(select jsonb_array_elements_text(v_voto.value))
+      end
+    );
   end loop;
 end;
 $$;

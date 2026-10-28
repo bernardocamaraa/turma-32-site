@@ -244,8 +244,11 @@ export function Votacao({ paraComissao = false }: { paraComissao?: boolean }) {
                 contagem de cada opção. Por isso, depois de confirmado, o voto não dá para trocar.
               </p>
               {dados.perguntas.some((p) => p.aberta && !p.jaVotou) ? (
+                <p style={texto}>Escolha uma opção em cada pergunta e, no fim da página, envie todos os votos de uma vez.</p>
+              ) : null}
+              {/* The no-repeat rule only matters with more than one question to answer. */}
+              {dados.perguntas.filter((p) => p.aberta && !p.jaVotou).length > 1 ? (
                 <>
-                  <p style={texto}>Escolha uma opção em cada pergunta e, no fim da página, envie todos os votos de uma vez.</p>
                   <p role="note" style={{ ...texto, display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start', color: 'var(--state-warn)' }}>
                     <TriangleAlert size={18} strokeWidth={2} aria-hidden style={{ flex: '0 0 auto', marginTop: 3 }} />
                     <span>Atenção: o voto não pode se repetir. Você não pode escolher a mesma pessoa em duas perguntas.</span>
@@ -411,25 +414,22 @@ function Cedula({
   salvando: boolean;
   agir: (a: AcaoVotacao) => Promise<string | null>;
 }) {
-  const [escolhas, setEscolhas] = useState<Record<string, string>>({});
+  const [escolhas, setEscolhas] = useState<Record<string, string[]>>({});
   const [erro, setErro] = useState<string | null>(null);
 
+  const de = (id: string) => escolhas[id] ?? [];
   const pendentes = perguntas.filter((p) => p.aberta && !p.jaVotou);
-  const faltam = pendentes.filter((p) => !escolhas[p.id]);
+  const faltam = pendentes.filter((p) => de(p.id).length === 0);
   const outras = (p: Pergunta) => pendentes.filter((q) => q.id !== p.id);
-  // The other questions where the same option was picked as in `p`.
-  const repetidasCom = (p: Pergunta) => (escolhas[p.id] ? outras(p).filter((q) => escolhas[q.id] === escolhas[p.id]) : []);
-  const comRepeticao = pendentes.filter((p) => repetidasCom(p).length > 0);
+  // Options picked in `p` that are also picked in another question, and where.
+  const repetidas = (p: Pergunta) =>
+    de(p.id).flatMap((opcao) => outras(p).filter((q) => de(q.id).includes(opcao)).map((q) => ({ opcao, em: q })));
+  const comRepeticao = pendentes.filter((p) => repetidas(p).length > 0);
   const pronta = pendentes.length > 0 && faltam.length === 0 && comRepeticao.length === 0;
 
-  function escolher(id: string, opcao: string | null) {
+  function escolher(id: string, opcoes: string[]) {
     setErro(null);
-    setEscolhas((atual) => {
-      const novo = { ...atual };
-      if (opcao) novo[id] = opcao;
-      else delete novo[id];
-      return novo;
-    });
+    setEscolhas((atual) => ({ ...atual, [id]: opcoes }));
   }
 
   function irPara(id: string) {
@@ -438,9 +438,9 @@ function Cedula({
 
   async function enviar() {
     if (!pronta) return;
-    const resumo = pendentes.map((p) => `• ${p.pergunta}\n   ${escolhas[p.id]}`).join('\n');
+    const resumo = pendentes.map((p) => `• ${p.pergunta}\n   ${de(p.id).join(', ')}`).join('\n');
     if (!window.confirm(`Confirmar os seus votos?\n\n${resumo}\n\nDepois de enviados, não dá para trocar.`)) return;
-    const falha = await agir({ acao: 'votarTudo', votos: Object.fromEntries(pendentes.map((p) => [p.id, escolhas[p.id]])) });
+    const falha = await agir({ acao: 'votarTudo', votos: Object.fromEntries(pendentes.map((p) => [p.id, de(p.id)])) });
     setErro(falha);
     if (!falha) setEscolhas({});
   }
@@ -453,10 +453,10 @@ function Cedula({
           p={p}
           voce={voce}
           formandos={formandos}
-          escolha={escolhas[p.id] ?? null}
-          usadasEmOutras={outras(p).map((q) => escolhas[q.id]).filter(Boolean)}
-          repetidaCom={repetidasCom(p)}
-          onEscolher={(opcao) => escolher(p.id, opcao)}
+          escolhidas={de(p.id)}
+          usadasEmOutras={outras(p).flatMap((q) => de(q.id))}
+          repetidas={repetidas(p)}
+          onEscolher={(opcoes) => escolher(p.id, opcoes)}
         />
       ))}
 
@@ -532,27 +532,40 @@ function ListaDePerguntas({
   );
 }
 
-/** One question of the ballot: the options to pick from, or that you voted, or the result. */
+/**
+ * One question of the ballot: the options to pick from (one, or up to the
+ * question's `maximo`), or that you voted, or the result.
+ */
 function PerguntaFormando({
   p,
   voce,
   formandos,
-  escolha,
+  escolhidas,
   usadasEmOutras,
-  repetidaCom,
+  repetidas,
   onEscolher,
 }: {
   p: Pergunta;
   voce: string;
   formandos: string[];
-  escolha: string | null;
+  escolhidas: string[];
   /** What's picked in the other questions right now. */
   usadasEmOutras: string[];
-  /** Other questions where the same option is picked as here — an error to fix before sending. */
-  repetidaCom: Pergunta[];
-  onEscolher: (opcao: string | null) => void;
+  /** Options picked here that are also picked in another question — an error to fix before sending. */
+  repetidas: { opcao: string; em: Pergunta }[];
+  onEscolher: (opcoes: string[]) => void;
 }) {
   const [busca, setBusca] = useState('');
+  const varias = p.maximo > 1;
+  const cheia = varias && escolhidas.length >= p.maximo;
+
+  // One choice: picking another replaces it. Several: each tap adds or
+  // removes one, until the limit — then a name has to be unpicked first.
+  function alternar(o: string) {
+    if (escolhidas.includes(o)) onEscolher(escolhidas.filter((x) => x !== o));
+    else if (!varias) onEscolher([o]);
+    else if (!cheia) onEscolher([...escolhidas, o]);
+  }
 
   // Nobody votes for themselves on the "formandos" questions.
   const opcoes = p.tipo === 'formandos' ? formandos.filter((f) => f !== voce) : p.opcoes;
@@ -597,19 +610,29 @@ function PerguntaFormando({
               </label>
             ) : null}
 
-            <div role="radiogroup" aria-label={p.pergunta} style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+            {varias ? (
+              <span aria-live="polite" style={{ ...pequeno, color: cheia ? 'var(--text-muted)' : 'var(--text-faint)' }}>
+                {cheia
+                  ? `${p.maximo} escolhidos, o máximo. Para trocar, desmarque um.`
+                  : `Escolha até ${p.maximo} · ${escolhidas.length === 1 ? '1 escolhido' : `${escolhidas.length} escolhidos`}`}
+              </span>
+            ) : null}
+
+            <div role={varias ? 'group' : 'radiogroup'} aria-label={p.pergunta} style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
               {visiveis.map((o) => {
-                const ativa = escolha === o;
+                const ativa = escolhidas.includes(o);
                 // Picked in another question: still clickable (the error below
                 // explains why it can't stay), but marked so it's seen first.
                 const usada = !ativa && usadasEmOutras.includes(o);
+                const bloqueada = cheia && !ativa;
                 return (
                   <button
                     key={o}
                     type="button"
-                    role="radio"
+                    role={varias ? 'checkbox' : 'radio'}
                     aria-checked={ativa}
-                    onClick={() => onEscolher(ativa ? null : o)}
+                    aria-disabled={bloqueada || undefined}
+                    onClick={() => alternar(o)}
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
@@ -622,8 +645,9 @@ function PerguntaFormando({
                       color: ativa ? '#000' : usada ? 'var(--text-faint)' : 'var(--text-primary)',
                       fontSize: 'var(--fs-body)',
                       fontWeight: 500,
-                      cursor: 'pointer',
-                      transition: 'background var(--dur) var(--ease-out), color var(--dur) var(--ease-out), transform var(--dur-fast) var(--ease-out)',
+                      cursor: bloqueada ? 'not-allowed' : 'pointer',
+                      opacity: bloqueada ? 0.4 : 1,
+                      transition: 'background var(--dur) var(--ease-out), color var(--dur) var(--ease-out), transform var(--dur-fast) var(--ease-out), opacity var(--dur) var(--ease-out)',
                       transform: ativa ? 'scale(1.03)' : 'none',
                     }}
                   >
@@ -636,11 +660,11 @@ function PerguntaFormando({
               {visiveis.length === 0 ? <span style={pequeno}>Nenhum nome encontrado.</span> : null}
             </div>
 
-            {repetidaCom.length > 0 ? (
+            {repetidas.length > 0 ? (
               <p role="alert" style={{ ...texto, display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start', color: 'var(--state-error)' }}>
                 <CircleX size={18} strokeWidth={2} aria-hidden style={{ flex: '0 0 auto', marginTop: 3 }} />
                 <span>
-                  Você já escolheu {escolha} em {repetidaCom.map((q) => `"${q.pergunta}"`).join(' e ')}. O voto não pode se
+                  Você já escolheu {repetidas.map((r) => `${r.opcao} em "${r.em.pergunta}"`).join(' e ')}. O voto não pode se
                   repetir: escolha outra opção aqui ou lá.
                 </span>
               </p>
@@ -725,24 +749,31 @@ function Barras({ resultado, votaram }: { resultado: Resultado[]; votaram: numbe
   );
 }
 
+/** "How many can each formando pick", as the committee reads it; position + 1 is the number. */
+const QUANTAS_ESCOLHAS = ['Só uma', 'Até 2', 'Até 3', 'Até 4', 'Até 5'];
+
 /** The committee's form for a new question. */
 function NovaPergunta({ salvando, agir }: { salvando: boolean; agir: (a: AcaoVotacao) => Promise<string | null> }) {
   const mobile = useIsMobile();
   const [pergunta, setPergunta] = useState('');
   const [tipo, setTipo] = useState<TipoPergunta>('formandos');
   const [opcoes, setOpcoes] = useState('');
+  const [maximo, setMaximo] = useState(1);
   const [erro, setErro] = useState<string | null>(null);
 
   const lista = opcoes.split('\n').map((o) => o.trim()).filter(Boolean);
-  const pronta = pergunta.trim().length >= 3 && (tipo === 'formandos' || lista.length >= 2);
+  // Picking every option would count for nobody in particular.
+  const opcoesDemais = tipo === 'opcoes' && lista.length >= 2 && maximo >= lista.length;
+  const pronta = pergunta.trim().length >= 3 && (tipo === 'formandos' || lista.length >= 2) && !opcoesDemais;
 
   async function criar() {
     setErro(null);
-    const falha = await agir({ acao: 'criar', texto: pergunta, tipo, opcoes: lista });
+    const falha = await agir({ acao: 'criar', texto: pergunta, tipo, opcoes: lista, maximo });
     setErro(falha);
     if (!falha) {
       setPergunta('');
       setOpcoes('');
+      setMaximo(1);
     }
   }
 
@@ -815,6 +846,22 @@ function NovaPergunta({ salvando, agir }: { salvando: boolean; agir: (a: AcaoVot
           )}
         </div>
 
+        <div style={{ maxWidth: 240 }}>
+          <Select
+            label="Quantas escolhas cada formando faz"
+            options={QUANTAS_ESCOLHAS}
+            value={QUANTAS_ESCOLHAS[maximo - 1]}
+            onChange={(e) => setMaximo(QUANTAS_ESCOLHAS.indexOf(e.target.value) + 1)}
+          />
+        </div>
+        {opcoesDemais ? (
+          <span style={{ ...pequeno, color: 'var(--state-warn)' }}>
+            Com {lista.length} opções, dá para deixar escolher no máximo {lista.length - 1}.
+          </span>
+        ) : maximo > 1 ? (
+          <span style={pequeno}>Cada formando escolhe de 1 a {maximo} opções nessa pergunta.</span>
+        ) : null}
+
         <span style={pequeno}>
           O formando não pode escolher a mesma opção em duas perguntas, e envia todas de uma vez. Crie todas antes de
           mandar o link: quem já votou não tem como ser conferido numa pergunta criada depois.
@@ -858,7 +905,12 @@ function PerguntaComissao({
         <CabecalhoPergunta
           p={p}
           paraComissao
-          extra={<span style={pequeno}>{p.tipo === 'formandos' ? 'Entre os formandos' : plural(p.opcoes.length, 'opção', 'opções')}</span>}
+          extra={
+            <span style={pequeno}>
+              {p.tipo === 'formandos' ? 'Entre os formandos' : plural(p.opcoes.length, 'opção', 'opções')}
+              {p.maximo > 1 ? ` · até ${p.maximo} escolhas por formando` : ''}
+            </span>
+          }
         />
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>

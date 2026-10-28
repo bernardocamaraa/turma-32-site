@@ -142,6 +142,10 @@ com ou sem +55, e até sem o 9 da frente. O site acerta o formato sozinho
   ou uma lista escrita pela comissão ("qual música de entrada?").
 - **Um voto por formando em cada pergunta.** Como o voto é secreto, ele não
   pode ser trocado depois.
+- **Várias escolhas:** ao criar a pergunta, a comissão diz quantas escolhas
+  cada formando faz ("Só uma", "Até 2"… "Até 5"). Numa pergunta "até 3", o
+  formando marca de 1 a 3 opções, e cada uma ganha um voto. Precisa sobrar
+  pelo menos uma opção sem marcar (com 4 opções, no máximo 3 escolhas).
 - **Tudo de uma vez:** o formando escolhe em todas as perguntas abertas e
   envia tudo junto no fim da página. O botão "Enviar meus votos" só libera
   quando todas têm uma escolha, e o servidor confere de novo
