@@ -198,37 +198,116 @@ g[role="button"]:focus-visible .mesa-alvo {
   }
 }
 
-/* Vote confirmation (components/UrnaVoto.tsx): the ballot shows up, folds
-   in half, drops through the box's slot, the box takes it in and a check
-   pops. Each element's own style is where it ends, so with reduced motion
+/* Vote confirmation (components/UrnaVoto.tsx). The box bounces in; the
+   paper flies up from below to beside the box, folds in the air (with its
+   shading), arcs over the box in a spin and dives into the slot; the box
+   squashes and its lid hops, confetti bursts out, a green glow, and the
+   check rises from the slot as its tick draws. Every element's own style is
+   where it ends (or hidden, for the effects), so with reduced motion
    (animations off, below) the box and the check simply show. */
 @keyframes urna-entra {
-  from { opacity: 0; transform: translateY(18px); }
+  0% { opacity: 0; transform: translateY(70px) scale(.9); }
+  60% { opacity: 1; transform: translateY(-8px) scale(1.02); }
+  82% { transform: translateY(3px) scale(.995); }
+  100% { transform: none; }
 }
 
 @keyframes urna-engole {
-  0%, 100% { transform: none; }
-  45% { transform: scale(1.03, .94); }
+  0% { transform: none; }
+  22% { transform: scale(1.08, .88); }
+  50% { transform: scale(.96, 1.06); }
+  75% { transform: scale(1.015, .985); }
+  100% { transform: none; }
 }
 
-@keyframes cedula-aparece {
-  from { opacity: 0; transform: translateY(-22px) scale(.9) rotate(-4deg); }
+@keyframes urna-tampa {
+  0% { transform: none; }
+  30% { transform: translateY(-9px) rotate(-5deg); }
+  62% { transform: translateY(1px) rotate(1.5deg); }
+  100% { transform: none; }
+}
+
+/* The paper's trip: x and y animate on two nested elements with their own
+   timing, which makes the arc. 0–22% up from below to beside the box,
+   22–45% folding in the air, 45–64% across (x) while 45–56% up to the top
+   of the arc (y), then the dive into the slot, faster and faster, without
+   hanging over it first. */
+@keyframes cedula-voo-x {
+  0%, 45% { transform: translateX(-150px); animation-timing-function: cubic-bezier(.45, 0, .35, 1); }
+  64%, 100% { transform: none; }
+}
+
+@keyframes cedula-voo-y {
+  0% { opacity: 0; transform: translateY(300px); animation-timing-function: cubic-bezier(.2, .8, .3, 1); }
+  8% { opacity: 1; }
+  22% { transform: translateY(112px); animation-timing-function: ease-in-out; }
+  45% { transform: translateY(122px); animation-timing-function: cubic-bezier(.25, .6, .4, 1); }
+  56% { transform: translateY(-60px); animation-timing-function: cubic-bezier(.3, 0, .7, .6); }
+  96% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(120px); }
+}
+
+/* Tilted on the way up, steadying while it folds, a full spin (a little
+   closer to the eye at its middle) across the arc, upright to go in. */
+@keyframes cedula-giro {
+  0% { transform: rotate(-22deg) scale(.9); animation-timing-function: cubic-bezier(.2, .8, .3, 1); }
+  22% { transform: rotate(-6deg) scale(1); }
+  45% { transform: rotate(-4deg) scale(1); animation-timing-function: cubic-bezier(.4, 0, .6, 1); }
+  53% { transform: rotate(180deg) scale(1.12); animation-timing-function: cubic-bezier(.4, 0, .6, 1); }
+  64%, 100% { transform: rotate(360deg) scale(1); }
 }
 
 @keyframes cedula-dobra {
   to { transform: rotateX(-180deg); }
 }
 
-@keyframes cedula-cai {
-  to { transform: translateY(80px); }
+@keyframes cedula-sombra {
+  to { opacity: 1; }
+}
+
+@keyframes cedula-luz {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes cedula-sombra-baixo {
+  0%, 100% { opacity: 0; }
+  50% { opacity: .55; }
+}
+
+@keyframes urna-confete {
+  0% { opacity: 0; transform: translate(0, 0) rotate(0deg) scale(.4); animation-timing-function: cubic-bezier(.12, .8, .3, 1); }
+  6% { opacity: 1; }
+  52% { transform: translate(var(--dx), var(--dy)) rotate(var(--giro)) scale(1); animation-timing-function: cubic-bezier(.45, 0, .9, .55); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translate(calc(var(--dx) * 1.25), calc(var(--dy) + 130px)) rotate(calc(var(--giro) * 1.8)) scale(.85); }
+}
+
+@keyframes urna-brilho {
+  0% { opacity: 0; transform: scale(.5); }
+  35% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.25); }
 }
 
 @keyframes urna-check {
-  from { opacity: 0; transform: scale(.3); }
+  0% { opacity: 0; transform: translateY(66px) scale(.25); animation-timing-function: cubic-bezier(.2, .8, .3, 1.15); }
+  58% { opacity: 1; transform: translateY(-8px) scale(1.12); animation-timing-function: cubic-bezier(.4, 0, .3, 1); }
+  80% { transform: translateY(2px) scale(.97); }
+  100% { opacity: 1; transform: none; }
+}
+
+@keyframes urna-onda {
+  0% { opacity: .7; transform: scale(1); }
+  100% { opacity: 0; transform: scale(2.1); }
+}
+
+@keyframes urna-risco {
+  from { stroke-dashoffset: 22; }
+  to { stroke-dashoffset: 0; }
 }
 
 @keyframes urna-texto {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(16px); }
 }
 
 @keyframes urna-sai {
