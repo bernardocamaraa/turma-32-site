@@ -213,7 +213,7 @@ export function Votacao({ paraComissao = false }: { paraComissao?: boolean }) {
         <>
           <LinkDaVotacao />
           <EleitoresDaVotacao eleitores={dados.eleitores ?? []} salvando={salvando} agir={agir} />
-          <NovaPergunta perguntas={dados.perguntas} salvando={salvando} agir={agir} />
+          <NovaPergunta salvando={salvando} agir={agir} />
           {dados.perguntas.length === 0 ? (
             <p style={texto}>Nenhuma votação criada ainda.</p>
           ) : (
@@ -221,14 +221,7 @@ export function Votacao({ paraComissao = false }: { paraComissao?: boolean }) {
               .slice()
               .reverse()
               .map((p) => (
-                <PerguntaComissao
-                  key={p.id}
-                  p={p}
-                  ligadas={p.grupo ? dados.perguntas.filter((q) => q.id !== p.id && q.grupo === p.grupo) : []}
-                  total={dados.formandos.length}
-                  salvando={salvando}
-                  agir={agir}
-                />
+                <PerguntaComissao key={p.id} p={p} total={dados.formandos.length} salvando={salvando} agir={agir} />
               ))
           )}
           <div style={{ display: 'flex' }}>
@@ -251,7 +244,13 @@ export function Votacao({ paraComissao = false }: { paraComissao?: boolean }) {
                 contagem de cada opção. Por isso, depois de confirmado, o voto não dá para trocar.
               </p>
               {dados.perguntas.some((p) => p.aberta && !p.jaVotou) ? (
-                <p style={texto}>Escolha uma opção em cada pergunta e, no fim da página, envie todos os votos de uma vez.</p>
+                <>
+                  <p style={texto}>Escolha uma opção em cada pergunta e, no fim da página, envie todos os votos de uma vez.</p>
+                  <p role="note" style={{ ...texto, display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start', color: 'var(--state-warn)' }}>
+                    <TriangleAlert size={18} strokeWidth={2} aria-hidden style={{ flex: '0 0 auto', marginTop: 3 }} />
+                    <span>Atenção: o voto não pode se repetir. Você não pode escolher a mesma pessoa em duas perguntas.</span>
+                  </p>
+                </>
               ) : null}
               <div style={{ display: 'flex' }}>
                 <Button variant="ghost" onClick={sair} style={{ paddingLeft: 0 }}>
@@ -396,9 +395,8 @@ function CabecalhoPergunta({ p, paraComissao, extra }: { p: Pergunta; paraComiss
 /**
  * The formando's ballot: every question, a choice to make on each open one
  * they haven't voted on, and all of it sent together at the end. Sending is
- * blocked until each of those has a choice and no two linked questions
- * ("orador, 1º e 2º voto") share the same one; the server checks both again
- * (votar_cedula in votacao.sql).
+ * blocked until each of those has a choice and no option is picked in two
+ * of them; the server checks both again (votar_cedula in votacao.sql).
  */
 function Cedula({
   perguntas,
@@ -418,10 +416,9 @@ function Cedula({
 
   const pendentes = perguntas.filter((p) => p.aberta && !p.jaVotou);
   const faltam = pendentes.filter((p) => !escolhas[p.id]);
-  const ligadasA = (p: Pergunta) => (p.grupo ? perguntas.filter((q) => q.id !== p.id && q.grupo === p.grupo) : []);
-  // The linked questions where the same option was picked as in `p`.
-  const repetidasCom = (p: Pergunta) =>
-    escolhas[p.id] ? ligadasA(p).filter((q) => escolhas[q.id] === escolhas[p.id] && pendentes.includes(q)) : [];
+  const outras = (p: Pergunta) => pendentes.filter((q) => q.id !== p.id);
+  // The other questions where the same option was picked as in `p`.
+  const repetidasCom = (p: Pergunta) => (escolhas[p.id] ? outras(p).filter((q) => escolhas[q.id] === escolhas[p.id]) : []);
   const comRepeticao = pendentes.filter((p) => repetidasCom(p).length > 0);
   const pronta = pendentes.length > 0 && faltam.length === 0 && comRepeticao.length === 0;
 
@@ -456,9 +453,8 @@ function Cedula({
           p={p}
           voce={voce}
           formandos={formandos}
-          ligadas={ligadasA(p)}
           escolha={escolhas[p.id] ?? null}
-          usadasNasLigadas={ligadasA(p).map((q) => escolhas[q.id]).filter(Boolean)}
+          usadasEmOutras={outras(p).map((q) => escolhas[q.id]).filter(Boolean)}
           repetidaCom={repetidasCom(p)}
           onEscolher={(opcao) => escolher(p.id, opcao)}
         />
@@ -481,7 +477,7 @@ function Cedula({
             ) : null}
             {comRepeticao.length > 0 ? (
               <ListaDePerguntas
-                titulo="Essas perguntas estão ligadas e não podem ter a mesma escolha:"
+                titulo="Essas perguntas estão com a mesma escolha, e o voto não pode se repetir:"
                 perguntas={comRepeticao}
                 cor="var(--state-error)"
                 onIr={irPara}
@@ -541,26 +537,22 @@ function PerguntaFormando({
   p,
   voce,
   formandos,
-  ligadas,
   escolha,
-  usadasNasLigadas,
+  usadasEmOutras,
   repetidaCom,
   onEscolher,
 }: {
   p: Pergunta;
   voce: string;
   formandos: string[];
-  /** The other questions in its group: the choice here must differ from theirs. */
-  ligadas: Pergunta[];
   escolha: string | null;
-  /** What's picked in the linked questions right now. */
-  usadasNasLigadas: string[];
-  /** Linked questions where the same option is picked as here — an error to fix before sending. */
+  /** What's picked in the other questions right now. */
+  usadasEmOutras: string[];
+  /** Other questions where the same option is picked as here — an error to fix before sending. */
   repetidaCom: Pergunta[];
   onEscolher: (opcao: string | null) => void;
 }) {
   const [busca, setBusca] = useState('');
-  const pendente = p.aberta && !p.jaVotou;
 
   // Nobody votes for themselves on the "formandos" questions.
   const opcoes = p.tipo === 'formandos' ? formandos.filter((f) => f !== voce) : p.opcoes;
@@ -571,15 +563,6 @@ function PerguntaFormando({
     <Card id={`pergunta-${p.id}`} padding="clamp(24px, 4vw, 40px)" style={{ scrollMarginTop: 80 }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
         <CabecalhoPergunta p={p} />
-
-        {pendente && ligadas.length > 0 ? (
-          <p role="note" style={{ ...texto, display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start', color: 'var(--state-warn)' }}>
-            <TriangleAlert size={18} strokeWidth={2} aria-hidden style={{ flex: '0 0 auto', marginTop: 3 }} />
-            <span>
-              Atenção: o voto aqui precisa ser diferente do seu voto em {ligadas.map((q) => `"${q.pergunta}"`).join(' e ')}.
-            </span>
-          </p>
-        ) : null}
 
         {p.resultado ? (
           <Barras resultado={p.resultado} votaram={p.votaram} />
@@ -617,9 +600,9 @@ function PerguntaFormando({
             <div role="radiogroup" aria-label={p.pergunta} style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
               {visiveis.map((o) => {
                 const ativa = escolha === o;
-                // Picked in a linked question: still clickable (the error below
+                // Picked in another question: still clickable (the error below
                 // explains why it can't stay), but marked so it's seen first.
-                const usada = !ativa && usadasNasLigadas.includes(o);
+                const usada = !ativa && usadasEmOutras.includes(o);
                 return (
                   <button
                     key={o}
@@ -657,8 +640,8 @@ function PerguntaFormando({
               <p role="alert" style={{ ...texto, display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start', color: 'var(--state-error)' }}>
                 <CircleX size={18} strokeWidth={2} aria-hidden style={{ flex: '0 0 auto', marginTop: 3 }} />
                 <span>
-                  Você já escolheu {escolha} em {repetidaCom.map((q) => `"${q.pergunta}"`).join(' e ')}. Escolha outra opção aqui ou
-                  lá: o voto precisa ser diferente.
+                  Você já escolheu {escolha} em {repetidaCom.map((q) => `"${q.pergunta}"`).join(' e ')}. O voto não pode se
+                  repetir: escolha outra opção aqui ou lá.
                 </span>
               </p>
             ) : null}
@@ -742,37 +725,24 @@ function Barras({ resultado, votaram }: { resultado: Resultado[]; votaram: numbe
   );
 }
 
-const SEM_LIGACAO = 'nenhuma';
-
 /** The committee's form for a new question. */
-function NovaPergunta({
-  perguntas,
-  salvando,
-  agir,
-}: {
-  perguntas: Pergunta[];
-  salvando: boolean;
-  agir: (a: AcaoVotacao) => Promise<string | null>;
-}) {
+function NovaPergunta({ salvando, agir }: { salvando: boolean; agir: (a: AcaoVotacao) => Promise<string | null> }) {
   const mobile = useIsMobile();
   const [pergunta, setPergunta] = useState('');
   const [tipo, setTipo] = useState<TipoPergunta>('formandos');
   const [opcoes, setOpcoes] = useState('');
-  const [ligadaA, setLigadaA] = useState(SEM_LIGACAO);
   const [erro, setErro] = useState<string | null>(null);
-  const abertas = perguntas.filter((p) => p.aberta);
 
   const lista = opcoes.split('\n').map((o) => o.trim()).filter(Boolean);
   const pronta = pergunta.trim().length >= 3 && (tipo === 'formandos' || lista.length >= 2);
 
   async function criar() {
     setErro(null);
-    const falha = await agir({ acao: 'criar', texto: pergunta, tipo, opcoes: lista, ligadaA: ligadaA === SEM_LIGACAO ? null : ligadaA });
+    const falha = await agir({ acao: 'criar', texto: pergunta, tipo, opcoes: lista });
     setErro(falha);
     if (!falha) {
       setPergunta('');
       setOpcoes('');
-      setLigadaA(SEM_LIGACAO);
     }
   }
 
@@ -845,18 +815,10 @@ function NovaPergunta({
           )}
         </div>
 
-        {abertas.length > 0 ? (
-          <Select
-            label="Ligar a outra pergunta"
-            hint="Ligadas, o formando não pode dar o mesmo voto nas duas (ex.: orador, 1º e 2º voto). Ligue antes de mandar o link para a turma."
-            options={[
-              { value: SEM_LIGACAO, label: 'Não ligar' },
-              ...abertas.map((p) => ({ value: p.id, label: p.pergunta })),
-            ]}
-            value={ligadaA}
-            onChange={(e) => setLigadaA(e.target.value)}
-          />
-        ) : null}
+        <span style={pequeno}>
+          O formando não pode escolher a mesma opção em duas perguntas, e envia todas de uma vez. Crie todas antes de
+          mandar o link: quem já votou não tem como ser conferido numa pergunta criada depois.
+        </span>
 
         {erro ? <p style={{ ...texto, color: 'var(--state-error)' }}>{erro}</p> : null}
         <div style={{ display: 'flex' }}>
@@ -872,14 +834,11 @@ function NovaPergunta({
 /** One question, as the committee sees it: who voted, the result once closed, and what to do next. */
 function PerguntaComissao({
   p,
-  ligadas,
   total,
   salvando,
   agir,
 }: {
   p: Pergunta;
-  /** The other questions in its group. */
-  ligadas: Pergunta[];
   total: number;
   salvando: boolean;
   agir: (a: AcaoVotacao) => Promise<string | null>;
@@ -901,11 +860,6 @@ function PerguntaComissao({
           paraComissao
           extra={<span style={pequeno}>{p.tipo === 'formandos' ? 'Entre os formandos' : plural(p.opcoes.length, 'opção', 'opções')}</span>}
         />
-        {ligadas.length > 0 ? (
-          <p style={{ ...pequeno, margin: 0 }}>
-            Ligada a {ligadas.map((q) => `"${q.pergunta}"`).join(' e ')}: ninguém consegue dar o mesmo voto nas duas.
-          </p>
-        ) : null}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-4)', fontSize: 'var(--fs-body)' }}>

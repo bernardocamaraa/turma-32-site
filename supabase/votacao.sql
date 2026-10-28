@@ -17,9 +17,9 @@
 --
 -- The committee creates questions. A question's options are either the
 -- formandos themselves ("o mais engraçado") or a list written by the
--- committee ("qual música de entrada?"). Questions can be linked (`grupo`),
--- and a formando sends all open questions in one ballot (votar_cedula at
--- the end of this file).
+-- committee ("qual música de entrada?"). A formando sends all open
+-- questions in one ballot, and can't pick the same option (the same person)
+-- in two of them (votar_cedula at the end of this file).
 --
 -- The ballot is secret by construction, not by policy: who voted on a
 -- question (votacao_participacao) and how many votes each option got
@@ -163,17 +163,18 @@ $$;
 revoke all on function public.identificar_eleitor(text, text) from public, anon, authenticated;
 grant execute on function public.identificar_eleitor(text, text) to service_role;
 
--- Linked questions ("orador, 1º voto" and "orador, 2º voto"): a formando
--- can't give the same answer in two questions of the same `grupo`. It holds
--- the id of the group's first question; null for a question on its own.
-alter table public.votacao_perguntas add column if not exists grupo uuid;
+-- (An earlier version let the committee link questions in a `grupo`
+-- column, with the no-repeat rule below only inside a group; projects that
+-- ran it still have that column, unused — the rule now covers every
+-- question.)
 
 -- Casts a formando's whole ballot at once: `p_votos` is {question id:
 -- option} with a choice for every open question they haven't voted on yet.
 -- All or nothing, in one transaction, so no question can be skipped. It's
--- also the only moment the choices on linked questions can be compared —
--- nothing stores them afterwards. (So linked questions should be open at
--- the same time: one voted on before the other existed can't be checked.)
+-- also the only moment the choices can be compared with each other —
+-- nothing stores them afterwards — so the same option twice is refused
+-- here. (A question opened after someone already sent their ballot can't
+-- be compared with what they chose then.)
 create or replace function public.votar_cedula(p_formando text, p_votos jsonb)
 returns void
 language plpgsql
@@ -202,18 +203,17 @@ begin
   end if;
 
   with escolhas as (
-    select p.id, p.grupo, p.pergunta, p.criado_em, e.value as opcao
+    select p.id, p.pergunta, p.criado_em, e.value as opcao
     from jsonb_each_text(p_votos) e
     join votacao_perguntas p on p.id::text = e.key
-    where p.grupo is not null
   )
   select a.opcao, a.pergunta as primeira, b.pergunta as segunda into v_repetida
   from escolhas a
-  join escolhas b on a.grupo = b.grupo and a.opcao = b.opcao and (a.criado_em, a.id) < (b.criado_em, b.id)
+  join escolhas b on a.opcao = b.opcao and (a.criado_em, a.id) < (b.criado_em, b.id)
   order by a.criado_em, b.criado_em
   limit 1;
   if found then
-    raise exception 'Você escolheu % em "%" e em "%". Nessas perguntas o voto precisa ser diferente.',
+    raise exception 'Você escolheu % em "%" e em "%". O voto não pode se repetir entre as perguntas.',
       v_repetida.opcao, v_repetida.primeira, v_repetida.segunda;
   end if;
 
