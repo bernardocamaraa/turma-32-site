@@ -60,6 +60,10 @@ function AppRoutes() {
             </Suspense>
           }
         />
+        {/* The way people type it by hand: with the accent, or by what it is. */}
+        {['/infância', '/fotos-de-crianca', '/fotos-de-criança', '/fotos-infancia', '/fotos-infância'].map((p) => (
+          <Route key={p} path={p} element={<Navigate to="/infancia" replace />} />
+        ))}
         {/* Any old link (a shared /rsvp URL, a typo) lands on the home page
             instead of a blank screen. */}
         <Route path="*" element={<Navigate to="/" replace />} />
