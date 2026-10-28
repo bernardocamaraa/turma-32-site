@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Check, Search } from 'lucide-react';
+import { Check, CircleX, Search, TriangleAlert } from 'lucide-react';
 import { Badge } from '../components/Badge';
 import { BotoesLink } from '../components/BotoesLink';
 import { Button } from '../components/Button';
@@ -213,14 +213,23 @@ export function Votacao({ paraComissao = false }: { paraComissao?: boolean }) {
         <>
           <LinkDaVotacao />
           <EleitoresDaVotacao eleitores={dados.eleitores ?? []} salvando={salvando} agir={agir} />
-          <NovaPergunta salvando={salvando} agir={agir} />
+          <NovaPergunta perguntas={dados.perguntas} salvando={salvando} agir={agir} />
           {dados.perguntas.length === 0 ? (
             <p style={texto}>Nenhuma votação criada ainda.</p>
           ) : (
             dados.perguntas
               .slice()
               .reverse()
-              .map((p) => <PerguntaComissao key={p.id} p={p} total={dados.formandos.length} salvando={salvando} agir={agir} />)
+              .map((p) => (
+                <PerguntaComissao
+                  key={p.id}
+                  p={p}
+                  ligadas={p.grupo ? dados.perguntas.filter((q) => q.id !== p.id && q.grupo === p.grupo) : []}
+                  total={dados.formandos.length}
+                  salvando={salvando}
+                  agir={agir}
+                />
+              ))
           )}
           <div style={{ display: 'flex' }}>
             <Button variant="ghost" onClick={sair}>
@@ -241,6 +250,9 @@ export function Votacao({ paraComissao = false }: { paraComissao?: boolean }) {
                 Seu voto é secreto: ninguém vê em quem você votou, nem a comissão. O site só guarda que você já votou e a
                 contagem de cada opção. Por isso, depois de confirmado, o voto não dá para trocar.
               </p>
+              {dados.perguntas.some((p) => p.aberta && !p.jaVotou) ? (
+                <p style={texto}>Escolha uma opção em cada pergunta e, no fim da página, envie todos os votos de uma vez.</p>
+              ) : null}
               <div style={{ display: 'flex' }}>
                 <Button variant="ghost" onClick={sair} style={{ paddingLeft: 0 }}>
                   Não é você? Trocar
@@ -251,9 +263,7 @@ export function Votacao({ paraComissao = false }: { paraComissao?: boolean }) {
           {dados.perguntas.length === 0 ? (
             <p style={texto}>A comissão ainda não abriu nenhuma votação. Volte por aqui mais tarde.</p>
           ) : (
-            dados.perguntas.map((p) => (
-              <PerguntaFormando key={p.id} p={p} voce={dados.voce ?? ''} formandos={dados.formandos} salvando={salvando} agir={agir} />
-            ))
+            <Cedula perguntas={dados.perguntas} voce={dados.voce} formandos={dados.formandos} salvando={salvando} agir={agir} />
           )}
         </>
       )}
@@ -383,39 +393,193 @@ function CabecalhoPergunta({ p, paraComissao, extra }: { p: Pergunta; paraComiss
   );
 }
 
-/** One question, as a formando sees it: choose and confirm, or see that you voted, or the result. */
-function PerguntaFormando({
-  p,
+/**
+ * The formando's ballot: every question, a choice to make on each open one
+ * they haven't voted on, and all of it sent together at the end. Sending is
+ * blocked until each of those has a choice and no two linked questions
+ * ("orador, 1º e 2º voto") share the same one; the server checks both again
+ * (votar_cedula in votacao.sql).
+ */
+function Cedula({
+  perguntas,
   voce,
   formandos,
   salvando,
   agir,
 }: {
-  p: Pergunta;
+  perguntas: Pergunta[];
   voce: string;
   formandos: string[];
   salvando: boolean;
   agir: (a: AcaoVotacao) => Promise<string | null>;
 }) {
-  const [escolha, setEscolha] = useState<string | null>(null);
-  const [busca, setBusca] = useState('');
+  const [escolhas, setEscolhas] = useState<Record<string, string>>({});
   const [erro, setErro] = useState<string | null>(null);
+
+  const pendentes = perguntas.filter((p) => p.aberta && !p.jaVotou);
+  const faltam = pendentes.filter((p) => !escolhas[p.id]);
+  const ligadasA = (p: Pergunta) => (p.grupo ? perguntas.filter((q) => q.id !== p.id && q.grupo === p.grupo) : []);
+  // The linked questions where the same option was picked as in `p`.
+  const repetidasCom = (p: Pergunta) =>
+    escolhas[p.id] ? ligadasA(p).filter((q) => escolhas[q.id] === escolhas[p.id] && pendentes.includes(q)) : [];
+  const comRepeticao = pendentes.filter((p) => repetidasCom(p).length > 0);
+  const pronta = pendentes.length > 0 && faltam.length === 0 && comRepeticao.length === 0;
+
+  function escolher(id: string, opcao: string | null) {
+    setErro(null);
+    setEscolhas((atual) => {
+      const novo = { ...atual };
+      if (opcao) novo[id] = opcao;
+      else delete novo[id];
+      return novo;
+    });
+  }
+
+  function irPara(id: string) {
+    document.getElementById(`pergunta-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  async function enviar() {
+    if (!pronta) return;
+    const resumo = pendentes.map((p) => `• ${p.pergunta}\n   ${escolhas[p.id]}`).join('\n');
+    if (!window.confirm(`Confirmar os seus votos?\n\n${resumo}\n\nDepois de enviados, não dá para trocar.`)) return;
+    const falha = await agir({ acao: 'votarTudo', votos: Object.fromEntries(pendentes.map((p) => [p.id, escolhas[p.id]])) });
+    setErro(falha);
+    if (!falha) setEscolhas({});
+  }
+
+  return (
+    <>
+      {perguntas.map((p) => (
+        <PerguntaFormando
+          key={p.id}
+          p={p}
+          voce={voce}
+          formandos={formandos}
+          ligadas={ligadasA(p)}
+          escolha={escolhas[p.id] ?? null}
+          usadasNasLigadas={ligadasA(p).map((q) => escolhas[q.id]).filter(Boolean)}
+          repetidaCom={repetidasCom(p)}
+          onEscolher={(opcao) => escolher(p.id, opcao)}
+        />
+      ))}
+
+      {pendentes.length > 0 ? (
+        <Card padding="clamp(24px, 4vw, 40px)">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-h3)', fontWeight: 700, letterSpacing: '-.02em' }}>
+                Enviar os seus votos
+              </span>
+              <span style={{ ...texto, color: 'var(--text-muted)' }}>
+                Você escolheu em {pendentes.length - faltam.length} de {plural(pendentes.length, 'pergunta', 'perguntas')}.
+              </span>
+            </div>
+
+            {faltam.length > 0 ? (
+              <ListaDePerguntas titulo="Falta escolher em:" perguntas={faltam} cor="var(--state-warn)" onIr={irPara} />
+            ) : null}
+            {comRepeticao.length > 0 ? (
+              <ListaDePerguntas
+                titulo="Essas perguntas estão ligadas e não podem ter a mesma escolha:"
+                perguntas={comRepeticao}
+                cor="var(--state-error)"
+                onIr={irPara}
+              />
+            ) : null}
+            {erro ? <p style={{ ...texto, color: 'var(--state-error)' }}>{erro}</p> : null}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-5)', flexWrap: 'wrap' }}>
+              <Button size="lg" disabled={!pronta || salvando} onClick={enviar}>
+                {salvando ? 'Enviando…' : 'Enviar meus votos'}
+              </Button>
+              <span style={pequeno}>
+                {pronta ? 'O voto é secreto e não dá para trocar depois.' : 'O botão libera quando todas as perguntas tiverem uma escolha.'}
+              </span>
+            </div>
+          </div>
+        </Card>
+      ) : null}
+    </>
+  );
+}
+
+/** Questions named in the ballot's footer, each one a link that scrolls to it. */
+function ListaDePerguntas({
+  titulo,
+  perguntas,
+  cor,
+  onIr,
+}: {
+  titulo: string;
+  perguntas: Pergunta[];
+  cor: string;
+  onIr: (id: string) => void;
+}) {
+  return (
+    <div role="alert" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+      <span style={{ fontSize: 'var(--fs-body-sm)', fontWeight: 600, color: cor }}>{titulo}</span>
+      <ul style={{ margin: 0, paddingLeft: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {perguntas.map((p) => (
+          <li key={p.id} style={{ color: cor }}>
+            <button
+              type="button"
+              onClick={() => onIr(p.id)}
+              style={{ padding: 0, border: 'none', background: 'none', color: 'var(--text-primary)', fontSize: 'var(--fs-body-sm)', textAlign: 'left', textDecoration: 'underline', textUnderlineOffset: 3, cursor: 'pointer' }}
+            >
+              {p.pergunta}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** One question of the ballot: the options to pick from, or that you voted, or the result. */
+function PerguntaFormando({
+  p,
+  voce,
+  formandos,
+  ligadas,
+  escolha,
+  usadasNasLigadas,
+  repetidaCom,
+  onEscolher,
+}: {
+  p: Pergunta;
+  voce: string;
+  formandos: string[];
+  /** The other questions in its group: the choice here must differ from theirs. */
+  ligadas: Pergunta[];
+  escolha: string | null;
+  /** What's picked in the linked questions right now. */
+  usadasNasLigadas: string[];
+  /** Linked questions where the same option is picked as here — an error to fix before sending. */
+  repetidaCom: Pergunta[];
+  onEscolher: (opcao: string | null) => void;
+}) {
+  const [busca, setBusca] = useState('');
+  const pendente = p.aberta && !p.jaVotou;
 
   // Nobody votes for themselves on the "formandos" questions.
   const opcoes = p.tipo === 'formandos' ? formandos.filter((f) => f !== voce) : p.opcoes;
   const normalizar = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   const visiveis = busca ? opcoes.filter((o) => normalizar(o).includes(normalizar(busca))) : opcoes;
 
-  async function votar() {
-    if (!escolha) return;
-    setErro(null);
-    setErro(await agir({ acao: 'votar', id: p.id, opcao: escolha }));
-  }
-
   return (
-    <Card padding="clamp(24px, 4vw, 40px)">
+    <Card id={`pergunta-${p.id}`} padding="clamp(24px, 4vw, 40px)" style={{ scrollMarginTop: 80 }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
         <CabecalhoPergunta p={p} />
+
+        {pendente && ligadas.length > 0 ? (
+          <p role="note" style={{ ...texto, display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start', color: 'var(--state-warn)' }}>
+            <TriangleAlert size={18} strokeWidth={2} aria-hidden style={{ flex: '0 0 auto', marginTop: 3 }} />
+            <span>
+              Atenção: o voto aqui precisa ser diferente do seu voto em {ligadas.map((q) => `"${q.pergunta}"`).join(' e ')}.
+            </span>
+          </p>
+        ) : null}
 
         {p.resultado ? (
           <Barras resultado={p.resultado} votaram={p.votaram} />
@@ -453,13 +617,16 @@ function PerguntaFormando({
             <div role="radiogroup" aria-label={p.pergunta} style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
               {visiveis.map((o) => {
                 const ativa = escolha === o;
+                // Picked in a linked question: still clickable (the error below
+                // explains why it can't stay), but marked so it's seen first.
+                const usada = !ativa && usadasNasLigadas.includes(o);
                 return (
                   <button
                     key={o}
                     type="button"
                     role="radio"
                     aria-checked={ativa}
-                    onClick={() => setEscolha(ativa ? null : o)}
+                    onClick={() => onEscolher(ativa ? null : o)}
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
@@ -469,7 +636,7 @@ function PerguntaFormando({
                       borderRadius: 'var(--radius-pill)',
                       border: '1px solid ' + (ativa ? 'var(--chalk-050)' : 'var(--stroke-hair)'),
                       background: ativa ? 'var(--chalk-050)' : 'rgba(245,245,247,.06)',
-                      color: ativa ? '#000' : 'var(--text-primary)',
+                      color: ativa ? '#000' : usada ? 'var(--text-faint)' : 'var(--text-primary)',
                       fontSize: 'var(--fs-body)',
                       fontWeight: 500,
                       cursor: 'pointer',
@@ -479,21 +646,24 @@ function PerguntaFormando({
                   >
                     {ativa ? <Check size={16} strokeWidth={2.4} aria-hidden /> : null}
                     {o}
+                    {usada ? <span style={{ fontSize: 'var(--fs-caption)' }}>· já escolhido</span> : null}
                   </button>
                 );
               })}
               {visiveis.length === 0 ? <span style={pequeno}>Nenhum nome encontrado.</span> : null}
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-5)', flexWrap: 'wrap' }}>
-              <Button size="lg" disabled={!escolha || salvando} onClick={votar}>
-                {salvando && escolha ? 'Votando…' : escolha ? `Votar em ${escolha}` : 'Escolha uma opção'}
-              </Button>
-              <span style={pequeno}>O voto é secreto e não dá para trocar depois.</span>
-            </div>
+            {repetidaCom.length > 0 ? (
+              <p role="alert" style={{ ...texto, display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start', color: 'var(--state-error)' }}>
+                <CircleX size={18} strokeWidth={2} aria-hidden style={{ flex: '0 0 auto', marginTop: 3 }} />
+                <span>
+                  Você já escolheu {escolha} em {repetidaCom.map((q) => `"${q.pergunta}"`).join(' e ')}. Escolha outra opção aqui ou
+                  lá: o voto precisa ser diferente.
+                </span>
+              </p>
+            ) : null}
           </>
         )}
-        {erro ? <p style={{ ...texto, color: 'var(--state-error)' }}>{erro}</p> : null}
       </div>
     </Card>
   );
@@ -572,24 +742,37 @@ function Barras({ resultado, votaram }: { resultado: Resultado[]; votaram: numbe
   );
 }
 
+const SEM_LIGACAO = 'nenhuma';
+
 /** The committee's form for a new question. */
-function NovaPergunta({ salvando, agir }: { salvando: boolean; agir: (a: AcaoVotacao) => Promise<string | null> }) {
+function NovaPergunta({
+  perguntas,
+  salvando,
+  agir,
+}: {
+  perguntas: Pergunta[];
+  salvando: boolean;
+  agir: (a: AcaoVotacao) => Promise<string | null>;
+}) {
   const mobile = useIsMobile();
   const [pergunta, setPergunta] = useState('');
   const [tipo, setTipo] = useState<TipoPergunta>('formandos');
   const [opcoes, setOpcoes] = useState('');
+  const [ligadaA, setLigadaA] = useState(SEM_LIGACAO);
   const [erro, setErro] = useState<string | null>(null);
+  const abertas = perguntas.filter((p) => p.aberta);
 
   const lista = opcoes.split('\n').map((o) => o.trim()).filter(Boolean);
   const pronta = pergunta.trim().length >= 3 && (tipo === 'formandos' || lista.length >= 2);
 
   async function criar() {
     setErro(null);
-    const falha = await agir({ acao: 'criar', texto: pergunta, tipo, opcoes: lista });
+    const falha = await agir({ acao: 'criar', texto: pergunta, tipo, opcoes: lista, ligadaA: ligadaA === SEM_LIGACAO ? null : ligadaA });
     setErro(falha);
     if (!falha) {
       setPergunta('');
       setOpcoes('');
+      setLigadaA(SEM_LIGACAO);
     }
   }
 
@@ -662,6 +845,19 @@ function NovaPergunta({ salvando, agir }: { salvando: boolean; agir: (a: AcaoVot
           )}
         </div>
 
+        {abertas.length > 0 ? (
+          <Select
+            label="Ligar a outra pergunta"
+            hint="Ligadas, o formando não pode dar o mesmo voto nas duas (ex.: orador, 1º e 2º voto). Ligue antes de mandar o link para a turma."
+            options={[
+              { value: SEM_LIGACAO, label: 'Não ligar' },
+              ...abertas.map((p) => ({ value: p.id, label: p.pergunta })),
+            ]}
+            value={ligadaA}
+            onChange={(e) => setLigadaA(e.target.value)}
+          />
+        ) : null}
+
         {erro ? <p style={{ ...texto, color: 'var(--state-error)' }}>{erro}</p> : null}
         <div style={{ display: 'flex' }}>
           <Button size="lg" disabled={!pronta || salvando} onClick={criar}>
@@ -676,11 +872,14 @@ function NovaPergunta({ salvando, agir }: { salvando: boolean; agir: (a: AcaoVot
 /** One question, as the committee sees it: who voted, the result once closed, and what to do next. */
 function PerguntaComissao({
   p,
+  ligadas,
   total,
   salvando,
   agir,
 }: {
   p: Pergunta;
+  /** The other questions in its group. */
+  ligadas: Pergunta[];
   total: number;
   salvando: boolean;
   agir: (a: AcaoVotacao) => Promise<string | null>;
@@ -702,6 +901,11 @@ function PerguntaComissao({
           paraComissao
           extra={<span style={pequeno}>{p.tipo === 'formandos' ? 'Entre os formandos' : plural(p.opcoes.length, 'opção', 'opções')}</span>}
         />
+        {ligadas.length > 0 ? (
+          <p style={{ ...pequeno, margin: 0 }}>
+            Ligada a {ligadas.map((q) => `"${q.pergunta}"`).join(' e ')}: ninguém consegue dar o mesmo voto nas duas.
+          </p>
+        ) : null}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-4)', fontSize: 'var(--fs-body)' }}>
