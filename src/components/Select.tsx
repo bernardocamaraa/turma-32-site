@@ -11,7 +11,8 @@ export function Select({
 }: {
   label?: string;
   hint?: string;
-  options: string[];
+  /** Plain strings, or a value/label pair when what's shown isn't what's stored. */
+  options: (string | { value: string; label: string })[];
   placeholder?: string;
 } & SelectHTMLAttributes<HTMLSelectElement>) {
   const [focus, setFocus] = useState(false);
@@ -69,11 +70,14 @@ export function Select({
           <option value="" disabled>
             {placeholder}
           </option>
-          {options.map((o) => (
-            <option key={o} value={o} style={{ background: 'var(--ink-850)' }}>
-              {o}
-            </option>
-          ))}
+          {options.map((o) => {
+            const { value, label } = typeof o === 'string' ? { value: o, label: o } : o;
+            return (
+              <option key={value} value={value} style={{ background: 'var(--ink-850)' }}>
+                {label}
+              </option>
+            );
+          })}
         </select>
         <Icon
           name="chevron-down"

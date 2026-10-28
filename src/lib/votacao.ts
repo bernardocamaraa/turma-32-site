@@ -14,6 +14,12 @@ export type Pergunta = {
   aberta: boolean;
   /** The class can see the result. */
   resultadoLiberado: boolean;
+  /**
+   * Questions with the same `grupo` are linked ("orador, 1º voto" and "2º
+   * voto"): nobody can give the same answer in two of them. Null when the
+   * question stands alone.
+   */
+  grupo: string | null;
   /** Whether the formando asking already voted on it (always false for the committee). */
   jaVotou: boolean;
   /** How many voted — sent to the committee always, to formandos with the result. */
@@ -83,8 +89,10 @@ export function formatarWhatsapp(digitos: string): string {
 }
 
 export type AcaoVotacao =
-  | { acao: 'votar'; id: string; opcao: string }
-  | { acao: 'criar'; texto: string; tipo: TipoPergunta; opcoes: string[] }
+  /** A formando's whole ballot: one option per open question they haven't voted on, by question id. */
+  | { acao: 'votarTudo'; votos: Record<string, string> }
+  /** `ligadaA`: an existing question this one is linked to (no repeated answers across them). */
+  | { acao: 'criar'; texto: string; tipo: TipoPergunta; opcoes: string[]; ligadaA: string | null }
   | { acao: 'encerrar' | 'liberar' | 'esconder' | 'excluir'; id: string }
   /** Committee: fill in, fix or (null) clear a formando's number. */
   | { acao: 'definirWhatsapp'; formando: string; whatsapp: string | null };

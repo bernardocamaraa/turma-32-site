@@ -142,6 +142,16 @@ com ou sem +55, e até sem o 9 da frente. O site acerta o formato sozinho
   ou uma lista escrita pela comissão ("qual música de entrada?").
 - **Um voto por formando em cada pergunta.** Como o voto é secreto, ele não
   pode ser trocado depois.
+- **Tudo de uma vez:** o formando escolhe em todas as perguntas abertas e
+  envia tudo junto no fim da página. O botão "Enviar meus votos" só libera
+  quando todas têm uma escolha, e o servidor confere de novo
+  (`votar_cedula` em `votacao.sql`).
+- **Perguntas ligadas** (ex.: orador, 1º e 2º voto): ninguém pode dar o
+  mesmo voto nas duas. A página avisa nas perguntas ligadas, mostra um erro
+  se a escolha se repetir e não deixa enviar. A comissão liga uma pergunta
+  nova a outra no campo "Ligar a outra pergunta", ao criar. Como o voto não
+  fica guardado, a conferência só acontece quando as duas estão abertas
+  juntas: ligue antes de mandar o link para a turma.
 - **Voto secreto de verdade:** o banco guarda separado quem já votou
   (`votacao_participacao`) e quantos votos cada opção tem
   (`votacao_contagem`). Nenhum registro liga uma pessoa à escolha dela.

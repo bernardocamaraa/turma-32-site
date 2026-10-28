@@ -8,10 +8,13 @@
 //     not on the list comes back with `voce: null` and the names that still
 //     have no number (`livres`); sent again with one of them as `nome`, the
 //     number gets tied to that name (identificar_eleitor in votacao.sql).
-//     Votes once per question, as that formando; sees a result once the
-//     committee releases it.
-//   - `codigo`: COMMITTEE_CODE. Creates and deletes questions, closes them,
-//     shows/hides the results, and sees and edits each formando's number.
+//     Votes as that formando, the whole ballot at once (`votarTudo`): one
+//     choice for every open question, none repeated across linked ones
+//     (votar_cedula in votacao.sql). Sees a result once the committee
+//     releases it.
+//   - `codigo`: COMMITTEE_CODE. Creates questions (optionally linked to an
+//     existing one: `ligadaA`), deletes and closes them, shows/hides the
+//     results, and sees and edits each formando's number.
 //
 // The ballot is secret (see votacao.sql): who voted and what was voted are
 // stored apart. To keep it that way the committee doesn't see the tally
@@ -44,6 +47,7 @@ type Pergunta = {
   opcoes: string[];
   aberta: boolean;
   resultado_liberado: boolean;
+  grupo: string | null;
 };
 
 Deno.serve(async (req) => {
@@ -52,7 +56,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { codigo, nome, whatsapp, acao, id, opcao, texto, tipo, opcoes, formando } = await req.json();
+    const { codigo, nome, whatsapp, acao, id, votos, texto, tipo, opcoes, ligadaA, formando } = await req.json();
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -90,17 +94,26 @@ Deno.serve(async (req) => {
       }
     }
 
+    // One vote per question used to be its own call; a page still open from
+    // before would otherwise get an answer that looks fine and count nothing.
+    if (acao === 'votar') return recusar('A votação mudou. Recarregue a página para votar.');
+
     // A vote from a number that's no longer on the list (the committee
     // changed it) must not vanish silently.
-    if (!comissao && !voce && acao === 'votar') {
+    if (!comissao && !voce && acao === 'votarTudo') {
       return json({ error: 'Entre de novo com o seu WhatsApp.' }, 401);
     }
 
     // A formando votes as themselves only: the name the number belongs to.
-    if (voce && acao === 'votar' && typeof id === 'string' && typeof opcao === 'string') {
-      const { error } = await supabase.rpc('votar', { p_formando: voce, p_pergunta: id, p_opcao: opcao });
+    // The whole ballot goes in at once — see votar_cedula in votacao.sql.
+    if (voce && acao === 'votarTudo') {
+      const valida =
+        votos !== null && typeof votos === 'object' && !Array.isArray(votos) &&
+        Object.keys(votos).length > 0 && Object.values(votos).every((v) => typeof v === 'string');
+      if (!valida) return recusar('Escolha uma opção em cada pergunta.');
+      const { error } = await supabase.rpc('votar_cedula', { p_formando: voce, p_votos: votos });
       if (error) {
-        // Messages raised on purpose in votar() are written for the formando.
+        // Messages raised on purpose in votar_cedula()/votar() are written for the formando.
         if (error.code === 'P0001') return recusar(error.message);
         throw error;
       }
@@ -116,7 +129,20 @@ Deno.serve(async (req) => {
         if (lista.length < 2 || lista.length > 20) return recusar('Escreva de 2 a 20 opções, uma por linha.');
         if (lista.some((o) => o.length > 80)) return recusar('Cada opção pode ter no máximo 80 letras.');
       }
-      const { error } = await supabase.from('votacao_perguntas').insert({ pergunta, tipo, opcoes: lista });
+      // Linked to an existing question: same group, so nobody gives the same
+      // answer in both. The group is named after its first question.
+      let grupo: string | null = null;
+      if (typeof ligadaA === 'string') {
+        const { data: outra, error } = await supabase.from('votacao_perguntas').select('id, grupo').eq('id', ligadaA).maybeSingle();
+        if (error) throw error;
+        if (!outra) return recusar('A pergunta escolhida para ligar não existe mais.');
+        grupo = outra.grupo ?? outra.id;
+        if (!outra.grupo) {
+          const { error } = await supabase.from('votacao_perguntas').update({ grupo }).eq('id', outra.id);
+          if (error) throw error;
+        }
+      }
+      const { error } = await supabase.from('votacao_perguntas').insert({ pergunta, tipo, opcoes: lista, grupo });
       if (error) throw error;
     }
 
@@ -155,7 +181,7 @@ Deno.serve(async (req) => {
     }
 
     const [perguntas, contagem, participacao, formandos] = await Promise.all([
-      supabase.from('votacao_perguntas').select('id, pergunta, tipo, opcoes, aberta, resultado_liberado').order('criado_em'),
+      supabase.from('votacao_perguntas').select('id, pergunta, tipo, opcoes, aberta, resultado_liberado, grupo').order('criado_em'),
       supabase.from('votacao_contagem').select('pergunta_id, opcao, votos'),
       supabase.from('votacao_participacao').select('pergunta_id, formando'),
       // Numbers go only to the committee (see the response below).
@@ -198,6 +224,7 @@ Deno.serve(async (req) => {
           opcoes: p.opcoes,
           aberta: p.aberta,
           resultadoLiberado: p.resultado_liberado,
+          grupo: p.grupo,
           jaVotou: voce ? votaram.includes(voce) : false,
           // How many voted is fine to show alongside a result, and always to
           // the committee; who is still missing, only to the committee.
