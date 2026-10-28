@@ -14,6 +14,8 @@ export type Pergunta = {
   aberta: boolean;
   /** The class can see the result. */
   resultadoLiberado: boolean;
+  /** How many options a formando picks: 1, or anything from 1 up to this ("escolha até 3"). */
+  maximo: number;
   /** Whether the formando asking already voted on it (always false for the committee). */
   jaVotou: boolean;
   /** How many voted — sent to the committee always, to formandos with the result. */
@@ -83,9 +85,10 @@ export function formatarWhatsapp(digitos: string): string {
 }
 
 export type AcaoVotacao =
-  /** A formando's whole ballot: one option per open question they haven't voted on, by question id. */
-  | { acao: 'votarTudo'; votos: Record<string, string> }
-  | { acao: 'criar'; texto: string; tipo: TipoPergunta; opcoes: string[] }
+  /** A formando's whole ballot: the options picked on each open question they haven't voted on, by question id. */
+  | { acao: 'votarTudo'; votos: Record<string, string[]> }
+  /** `maximo`: how many options each formando picks (1 = just one). */
+  | { acao: 'criar'; texto: string; tipo: TipoPergunta; opcoes: string[]; maximo: number }
   | { acao: 'encerrar' | 'liberar' | 'esconder' | 'excluir'; id: string }
   /** Committee: fill in, fix or (null) clear a formando's number. */
   | { acao: 'definirWhatsapp'; formando: string; whatsapp: string | null };
