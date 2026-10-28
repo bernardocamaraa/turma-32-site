@@ -15,14 +15,15 @@ const PAPEL = { largura: 64, altura: 84, topo: 22 };
 
 // The paper's whole trip, one animation per axis (cedula-voo-x/-y and
 // cedula-giro in global.css, in % of VOO_MS): it flies up from below (where
-// "Enviar" was) to beside the box, folds in the air, arcs over the box in a
-// spin, and dives into the slot. The steps overlap so it never stops: the
-// box squashes as it goes in, its lid hops, confetti bursts out of the slot,
-// and the check rises from it.
-// engole: when the folded paper is all the way in (worked out from the dive's curve).
-const VOO_MS = 1700;
-const T = { aparece: 150, dobra: 150 + 0.22 * VOO_MS, engole: 1690, confete: 1700, check: 1790, texto: 2140 };
-const FECHA_SOZINHO_MS = 6000;
+// "Enviar" was) to beside the box, floats there while it folds, and glides
+// in one arc over the box and down into the slot. The steps overlap so it
+// never stops: the box squashes as it goes in, its lid hops, confetti bursts
+// out of the slot, and the check rises from it.
+// engole: when the folded paper is all the way in (worked out from the glide's curve).
+const VOO_MS = 2800;
+const DOBRA_MS = 620;
+const T = { aparece: 200, dobra: 200 + 0.2 * VOO_MS, engole: 2670, confete: 2690, check: 2800, texto: 3250 };
+const FECHA_SOZINHO_MS = 7500;
 const SAIDA_MS = 200;
 
 // A small copy of the class's 32 (the original is 1.4 MB), for the box's front.
@@ -50,7 +51,7 @@ const CONFETE = Array.from({ length: 18 }, (_, i) => {
     altura: redondo ? 7 : 11,
     redondo,
     cor: CORES_CONFETE[i % CORES_CONFETE.length],
-    duracao: 950 + ((i * 41) % 260),
+    duracao: 1250 + ((i * 41) % 320),
     atraso: (i * 13) % 90,
   };
 });
@@ -99,7 +100,7 @@ export function UrnaVoto({ quantos, emBranco, onFim }: { quantos: number; emBran
       ? 'Seus votos estão na urna.'
       : 'Seu voto está na urna.';
 
-  const entraTexto = (atraso: number) => `urna-texto 520ms cubic-bezier(.2,.8,.3,1) ${T.texto + atraso}ms both`;
+  const entraTexto = (atraso: number) => `urna-texto 640ms cubic-bezier(.2,.8,.3,1) ${T.texto + atraso}ms both`;
 
   return createPortal(
     <div
@@ -134,11 +135,11 @@ export function UrnaVoto({ quantos, emBranco, onFim }: { quantos: number; emBran
           >
             {titulo}
           </span>
-          <span style={{ fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)', animation: entraTexto(90) }}>
+          <span style={{ fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)', animation: entraTexto(120) }}>
             Obrigado por ajudar a fazer essa escolha!
           </span>
         </div>
-        <Button variant="ghost" onClick={fechar} style={{ animation: entraTexto(200) }}>
+        <Button variant="ghost" onClick={fechar} style={{ animation: entraTexto(260) }}>
           Fechar
         </Button>
       </div>
@@ -165,7 +166,7 @@ function Cena({ reduzido, emBranco }: { reduzido: boolean; emBranco: boolean }) 
           borderRadius: '50%',
           background: 'radial-gradient(circle, rgba(127,185,138,.42) 0%, rgba(127,185,138,0) 62%)',
           opacity: 0,
-          animation: `urna-brilho 1100ms var(--ease-out) ${T.engole}ms both`,
+          animation: `urna-brilho 1400ms var(--ease-out) ${T.engole}ms both`,
         }}
       />
 
@@ -185,7 +186,7 @@ function Cena({ reduzido, emBranco }: { reduzido: boolean; emBranco: boolean }) 
             }}
           >
             <div style={{ ...absoluto, inset: 0, willChange: 'transform, opacity', animation: `cedula-voo-y ${VOO_MS}ms ${T.aparece}ms both` }}>
-              {/* Spins around the middle of the folded paper (its bottom half). */}
+              {/* Leans around the middle of the folded paper (its bottom half). */}
               <div
                 style={{
                   ...absoluto,
@@ -198,7 +199,7 @@ function Cena({ reduzido, emBranco }: { reduzido: boolean; emBranco: boolean }) 
               >
                 <Metade parte="baixo" emBranco={emBranco}>
                   {/* The top half's shadow passing over it as it folds. */}
-                  <Sombra animacao={`cedula-sombra-baixo 460ms var(--ease-in-out) ${T.dobra}ms both`} />
+                  <Sombra animacao={`cedula-sombra-baixo ${DOBRA_MS}ms var(--ease-in-out) ${T.dobra}ms both`} />
                 </Metade>
                 {/* The top half folds down over the bottom one, showing its back. */}
                 <div
@@ -211,12 +212,12 @@ function Cena({ reduzido, emBranco }: { reduzido: boolean; emBranco: boolean }) 
                     transformOrigin: '50% 100%',
                     transformStyle: 'preserve-3d',
                     willChange: 'transform',
-                    animation: `cedula-dobra 460ms var(--ease-in-out) ${T.dobra}ms both`,
+                    animation: `cedula-dobra ${DOBRA_MS}ms var(--ease-in-out) ${T.dobra}ms both`,
                   }}
                 >
                   <Metade parte="cima" emBranco={emBranco}>
                     {/* Darker as it turns away from the light… */}
-                    <Sombra animacao={`cedula-sombra 230ms ease-in ${T.dobra}ms both`} />
+                    <Sombra animacao={`cedula-sombra ${DOBRA_MS / 2}ms ease-in ${T.dobra}ms both`} />
                   </Metade>
                   <div
                     style={{
@@ -231,7 +232,7 @@ function Cena({ reduzido, emBranco }: { reduzido: boolean; emBranco: boolean }) 
                     }}
                   >
                     {/* …and its back lighter as it lands face up. */}
-                    <Sombra animacao={`cedula-luz 230ms ease-out ${T.dobra + 230}ms both`} />
+                    <Sombra animacao={`cedula-luz ${DOBRA_MS / 2}ms ease-out ${T.dobra + DOBRA_MS / 2}ms both`} />
                   </div>
                 </div>
               </div>
@@ -269,7 +270,7 @@ function Cena({ reduzido, emBranco }: { reduzido: boolean; emBranco: boolean }) 
           ))}
 
           {/* Rings spreading from the check as it lands. */}
-          {[0, 180].map((atraso) => (
+          {[0, 240].map((atraso) => (
             <div
               key={atraso}
               style={{
@@ -282,7 +283,7 @@ function Cena({ reduzido, emBranco }: { reduzido: boolean; emBranco: boolean }) 
                 border: `2px solid ${VERDE}`,
                 opacity: 0,
                 // forwards, not both: while it waits its turn the ring stays hidden (its first frame is a visible ring).
-                animation: `urna-onda 900ms var(--ease-out) ${T.check + 300 + atraso}ms forwards`,
+                animation: `urna-onda 1200ms var(--ease-out) ${T.check + 380 + atraso}ms forwards`,
               }}
             />
           ))}
@@ -304,7 +305,7 @@ function Cena({ reduzido, emBranco }: { reduzido: boolean; emBranco: boolean }) 
           background: VERDE,
           boxShadow: '0 0 0 8px rgba(127,185,138,.18), 0 12px 32px rgba(127,185,138,.25)',
           willChange: 'transform, opacity',
-          animation: `urna-check 640ms ${T.check}ms both`,
+          animation: `urna-check 820ms ${T.check}ms both`,
         }}
       >
         <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
@@ -315,7 +316,7 @@ function Cena({ reduzido, emBranco }: { reduzido: boolean; emBranco: boolean }) 
             strokeLinecap="round"
             strokeLinejoin="round"
             strokeDasharray="22"
-            style={{ animation: `urna-risco 340ms var(--ease-out) ${T.check + 260}ms both` }}
+            style={{ animation: `urna-risco 440ms var(--ease-out) ${T.check + 360}ms both` }}
           />
         </svg>
       </div>
@@ -333,7 +334,7 @@ function Cena({ reduzido, emBranco }: { reduzido: boolean; emBranco: boolean }) 
 function Urna({ camada }: { camada: 'tras' | 'frente' }) {
   const contorno = 'rgba(169,211,232,.38)';
   // The lid hops around the middle of its front edge, in the drawing's own coordinates (both layers alike).
-  const tampa: CSSProperties = { transformBox: 'view-box', transformOrigin: '84px 26px', animation: `urna-tampa 480ms var(--ease-out) ${T.engole}ms` };
+  const tampa: CSSProperties = { transformBox: 'view-box', transformOrigin: '84px 26px', animation: `urna-tampa 620ms var(--ease-out) ${T.engole}ms` };
   return (
     <svg
       width={URNA.largura}
@@ -346,7 +347,7 @@ function Urna({ camada }: { camada: 'tras' | 'frente' }) {
         overflow: 'visible',
         transformOrigin: '50% 100%',
         willChange: 'transform',
-        animation: `urna-entra 680ms cubic-bezier(.2,.8,.3,1) both, urna-engole 560ms var(--ease-out) ${T.engole}ms`,
+        animation: `urna-entra 820ms cubic-bezier(.2,.8,.3,1) both, urna-engole 720ms var(--ease-out) ${T.engole}ms`,
       }}
     >
       {camada === 'tras' ? (
