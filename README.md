@@ -186,6 +186,12 @@ página não aparece no menu). Entra-se com o mesmo **código da comissão**.
 - **Cada formando tem um cartão** com o botão "Adicionar foto". Dá para
   mandar mais de uma foto por formando, e várias de uma vez. Cada foto tem
   os botões de baixar e de excluir.
+- **Sem salvar a foto antes:** dá para arrastar a foto direto para o cartão
+  (do computador ou do WhatsApp instalado). Do WhatsApp Web o navegador não
+  deixa a foto sair arrastando: aí é clicar com o botão direito na foto,
+  "Copiar imagem", e tocar em "Colar" no cartão (ou clicar no cartão e
+  apertar Ctrl+V). O botão "Colar" também funciona no celular, com a foto
+  copiada.
 - **Quem falta:** o topo mostra quantos já têm foto, e o filtro "Faltam"
   deixa só os que ainda não têm.
 - **Baixar tudo:** "Baixar todas (.zip)" junta todas as fotos num arquivo

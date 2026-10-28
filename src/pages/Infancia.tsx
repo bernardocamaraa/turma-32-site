@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Download, ImageOff, Plus, Trash2 } from 'lucide-react';
+import { ClipboardPaste, Download, ImageOff, Plus, Trash2 } from 'lucide-react';
 import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
@@ -7,7 +7,10 @@ import { Input } from '../components/Input';
 import { PageHeader } from '../components/SectionHeading';
 import { lerCodigo, salvarCodigo } from '../lib/codigoComissao';
 import {
+  arquivosArrastados,
+  arquivosColados,
   buscarInfancia,
+  colarDaAreaDeTransferencia,
   enviarFotoInfancia,
   linkParaBaixar,
   nomeDaFoto,
@@ -95,6 +98,23 @@ export function Infancia() {
     document.addEventListener('visibilitychange', aoVoltar);
     return () => document.removeEventListener('visibilitychange', aoVoltar);
   }, [pronto, codigo]);
+
+  // A photo dropped beside a card would make the browser open it in place of
+  // this page. The cards handle their own drops first.
+  useEffect(() => {
+    if (!pronto) return;
+    function impedir(e: DragEvent) {
+      if (e.defaultPrevented) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'none';
+    }
+    window.addEventListener('dragover', impedir);
+    window.addEventListener('drop', impedir);
+    return () => {
+      window.removeEventListener('dragover', impedir);
+      window.removeEventListener('drop', impedir);
+    };
+  }, [pronto]);
 
   async function baixarTudo() {
     if (!dados) return;
@@ -218,8 +238,9 @@ export function Infancia() {
                 />
               </div>
               <p style={texto}>
-                Recebeu a foto de alguém? Ache o nome e toque em “Adicionar foto”. Quando estiverem todas, baixe tudo
-                de uma vez: cada foto vem com o nome do formando.
+                Recebeu a foto de alguém? Arraste a foto para o cartão do formando, ou copie a foto (no WhatsApp: botão
+                direito, “Copiar imagem”) e toque em “Colar” no cartão. Quando estiverem todas, baixe tudo de uma vez:
+                cada foto vem com o nome do formando.
               </p>
               {erroBaixar ? <span style={erroStyle}>{erroBaixar}</span> : null}
             </div>
@@ -255,7 +276,11 @@ export function Infancia() {
   );
 }
 
-/** One formando: their photos, and the button to add more. */
+/**
+ * One formando: their photos, and the ways to add more — the file picker, a
+ * photo dragged onto the card, or a copied one pasted (the "Colar" button,
+ * or Ctrl+V with the card clicked).
+ */
 function CartaoFormando({
   f,
   codigo,
@@ -269,12 +294,12 @@ function CartaoFormando({
   const [enviando, setEnviando] = useState<{ feitas: number; total: number } | null>(null);
   const [excluindo, setExcluindo] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [arrastando, setArrastando] = useState(false);
+  // Clicked (focused): where Ctrl+V goes, so it's highlighted.
+  const [focado, setFocado] = useState(false);
 
-  async function adicionar(lista: FileList | null) {
-    const arquivos = Array.from(lista ?? []);
-    // Cleared so picking the same file again still fires onChange.
-    if (entrada.current) entrada.current.value = '';
-    if (arquivos.length === 0) return;
+  async function adicionar(arquivos: File[]) {
+    if (arquivos.length === 0 || enviando) return;
     const problema = arquivos.map(problemaNoArquivo).find(Boolean);
     if (problema) {
       setErro(problema);
@@ -315,7 +340,57 @@ function CartaoFormando({
   }
 
   return (
-    <Card padding="var(--space-6)">
+    <Card
+      padding="var(--space-6)"
+      accent={arrastando || focado}
+      tabIndex={0}
+      onFocus={() => setFocado(true)}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocado(false);
+      }}
+      aria-label={`Fotos de ${f.formando}`}
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        setArrastando(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setArrastando(false);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setArrastando(false);
+        arquivosArrastados(e.dataTransfer).then(adicionar, (falha) => setErro(mensagemDe(falha, 'Essa foto não veio.')));
+      }}
+      onPaste={(e) => {
+        const colados = arquivosColados(e.clipboardData);
+        if (colados.length === 0) return;
+        e.preventDefault();
+        adicionar(colados);
+      }}
+      style={{ outline: 'none' }}
+    >
+      {arrastando ? (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: 'var(--radius-lg)',
+            background: 'rgba(17,17,19,.86)',
+            color: 'var(--accent)',
+            fontSize: 'var(--fs-body)',
+            fontWeight: 500,
+            pointerEvents: 'none',
+          }}
+        >
+          Solte para enviar para {f.formando.split(' ')[0]}
+        </div>
+      ) : null}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', height: '100%' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
           <span style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-h4)', fontWeight: 600, letterSpacing: '-.015em', lineHeight: 1.2 }}>
@@ -346,8 +421,20 @@ function CartaoFormando({
 
         {erro ? <span style={erroStyle}>{erro}</span> : null}
 
-        <div style={{ display: 'flex', marginTop: 'auto' }}>
-          <input ref={entrada} type="file" accept="image/*" multiple hidden onChange={(e) => adicionar(e.target.files)} />
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)', marginTop: 'auto' }}>
+          <input
+            ref={entrada}
+            type="file"
+            accept="image/*"
+            multiple
+            hidden
+            onChange={(e) => {
+              const escolhidos = Array.from(e.target.files ?? []);
+              // Cleared so picking the same file again still fires onChange.
+              e.target.value = '';
+              adicionar(escolhidos);
+            }}
+          />
           <Button
             size="sm"
             variant="secondary"
@@ -357,6 +444,19 @@ function CartaoFormando({
           >
             {!enviando ? 'Adicionar foto' : enviando.total > 1 ? `Enviando ${enviando.feitas + 1} de ${enviando.total}…` : 'Enviando…'}
           </Button>
+          {!enviando ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setErro(null);
+                colarDaAreaDeTransferencia().then(adicionar, (falha) => setErro(mensagemDe(falha, 'Não deu para colar a foto.')));
+              }}
+              iconLeft={<ClipboardPaste size={16} aria-hidden />}
+            >
+              Colar
+            </Button>
+          ) : null}
         </div>
       </div>
     </Card>
@@ -386,7 +486,7 @@ function Miniatura({ foto, nome, excluindo, onExcluir }: { foto: FotoInfancia; n
   const [quebrou, setQuebrou] = useState(false);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', width: LADO, opacity: excluindo ? 0.4 : 1 }}>
-      <a href={foto.url} target="_blank" rel="noreferrer" title={nome} style={{ display: 'block' }}>
+      <a href={foto.url} target="_blank" rel="noreferrer" title={nome} draggable={false} style={{ display: 'block' }}>
         {quebrou ? (
           <div
             style={{
@@ -412,6 +512,7 @@ function Miniatura({ foto, nome, excluindo, onExcluir }: { foto: FotoInfancia; n
             src={foto.url}
             alt={nome}
             loading="lazy"
+            draggable={false}
             onError={() => setQuebrou(true)}
             style={{
               width: LADO,

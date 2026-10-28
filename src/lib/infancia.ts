@@ -47,6 +47,73 @@ export function problemaNoArquivo(arquivo: File): string | null {
   return null;
 }
 
+/** A photo that came without a file name (pasted, or dragged from a page): named after its type. */
+function semNome(imagem: Blob, nome = 'foto'): File {
+  const extensao = Object.entries(TIPOS).find(([, tipo]) => tipo === imagem.type)?.[0] ?? 'jpg';
+  return new File([imagem], `${nome}.${extensao}`, { type: imagem.type || 'image/jpeg' });
+}
+
+const SO_COPIANDO =
+  'Essa foto não veio arrastando. No WhatsApp, clique com o botão direito na foto, em "Copiar imagem", e depois em "Colar" aqui.';
+
+/**
+ * The photos dropped on a formando's card: files from the computer (or the
+ * WhatsApp app), or an image dragged from another page. A page's image only
+ * comes when the browser hands it over or its address can be read; WhatsApp
+ * Web's can't, so then the message says to copy and paste instead.
+ */
+export async function arquivosArrastados(dados: DataTransfer): Promise<File[]> {
+  const arquivos = [
+    ...Array.from(dados.files),
+    ...Array.from(dados.items)
+      .filter((i) => i.kind === 'file')
+      .map((i) => i.getAsFile())
+      .filter((f): f is File => f !== null),
+  ];
+  // The same file can show up both in `files` and in `items`.
+  const unicos = arquivos.filter((f, i) => arquivos.findIndex((g) => g.name === f.name && g.size === f.size) === i);
+  if (unicos.length > 0) return unicos;
+
+  const endereco =
+    dados.getData('text/uri-list').split('\n').find((l) => l && !l.startsWith('#')) ||
+    /<img[^>]+src="([^"]+)"/.exec(dados.getData('text/html'))?.[1];
+  if (!endereco) throw new Error(SO_COPIANDO);
+  try {
+    const resposta = await fetch(endereco.trim());
+    const imagem = await resposta.blob();
+    if (!resposta.ok || !imagem.type.startsWith('image/')) throw new Error();
+    return [semNome(imagem)];
+  } catch {
+    throw new Error(SO_COPIANDO);
+  }
+}
+
+/** The photos in a paste (Ctrl+V / Cmd+V). */
+export function arquivosColados(dados: DataTransfer): File[] {
+  return Array.from(dados.files).filter((f) => f.type.startsWith('image/') || f.name.includes('.'));
+}
+
+/**
+ * Reads a copied photo straight from the clipboard, for the "Colar" button
+ * (the browser asks for permission the first time).
+ */
+export async function colarDaAreaDeTransferencia(): Promise<File[]> {
+  if (!navigator.clipboard?.read) throw new Error('Este navegador não deixa colar pelo botão. Clique no cartão e aperte Ctrl+V (ou Cmd+V no Mac).');
+  let itens: ClipboardItems;
+  try {
+    itens = await navigator.clipboard.read();
+  } catch {
+    throw new Error('O navegador não deixou ler a foto copiada. Clique no cartão e aperte Ctrl+V (ou Cmd+V no Mac).');
+  }
+  const fotos: File[] = [];
+  for (const item of itens) {
+    const tipo = item.types.find((t) => t.startsWith('image/'));
+    if (tipo) fotos.push(semNome(await item.getType(tipo), 'foto colada'));
+  }
+  if (fotos.length === 0) throw new Error('Não tem nenhuma foto copiada. Copie a foto primeiro (no WhatsApp: botão direito, "Copiar imagem").');
+  return fotos;
+}
+
 /**
  * Every read and delete goes through the `infancia` Edge Function, which
  * checks the committee code. The response is always the whole list.
