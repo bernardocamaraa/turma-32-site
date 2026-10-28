@@ -10,8 +10,8 @@
 //     number gets tied to that name (identificar_eleitor in votacao.sql).
 //     Votes as that formando, the whole ballot at once (`votarTudo`): for
 //     every open question one option, or up to its `maximo`, never the same
-//     option in two questions (votar_cedula in votacao.sql). Sees a result once the committee
-//     releases it.
+//     option in two questions (votar_cedula in votacao.sql). Sees a result
+//     once the committee releases it.
 //   - `codigo`: COMMITTEE_CODE. Creates, deletes and closes questions,
 //     shows/hides the results, and sees and edits each formando's number.
 //
