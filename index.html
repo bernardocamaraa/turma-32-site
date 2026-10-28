@@ -6,6 +6,10 @@
     <meta name="theme-color" content="#000000" />
     <link rel="icon" type="image/png" href="/icone-180.png" />
     <link rel="apple-touch-icon" href="/icone-180.png" />
+    <!-- Lets the site sit on a phone's home screen as an app: on an iPhone
+         that's the only way a site can show notifications (the committee's
+         vote alert, src/lib/avisos.ts). -->
+    <link rel="manifest" href="/manifest.webmanifest" />
     <!-- The block between the "previa" comments is what WhatsApp & co. read
          to build a link preview. middleware.ts swaps it, for a personal
          /mesas/<link> URL, for one with that formando's name and image;

@@ -14,6 +14,9 @@
 //     votacao.sql). Sees a result once the committee releases it.
 //   - `codigo`: COMMITTEE_CODE. Creates, deletes and closes questions,
 //     shows/hides the results, and sees and edits each formando's number.
+//     Can also turn on the notification for a phone (`avisar`, with the
+//     browser's push subscription): when the last formando votes on a
+//     question, every phone that turned it on is told (Web Push).
 //
 // The ballot is secret (see votacao.sql): who voted and what was voted are
 // stored apart. To keep it that way the committee doesn't see the tally
@@ -25,7 +28,8 @@
 // Deploy with:
 //   supabase functions deploy votacao
 
-import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
+import * as webpush from 'jsr:@negrel/webpush@0.5.0';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -37,6 +41,67 @@ function json(body: unknown, status = 200) {
     status,
     headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
   });
+}
+
+// Who the push services (Apple, Google, Mozilla) can contact about these
+// notifications. Required by Web Push; nothing is ever sent to it.
+const CONTATO_PUSH = 'https://turma-32-site.vercel.app';
+
+/**
+ * The site's Web Push key pair, made the first time and kept in chaves_push
+ * (votacao.sql). Two first calls at once: the second insert fails on the
+ * primary key and both read back the pair that won.
+ */
+async function chavesPush(supabase: SupabaseClient): Promise<CryptoKeyPair> {
+  const { data, error } = await supabase.from('chaves_push').select('chaves').maybeSingle();
+  if (error) throw error;
+  if (data) return await webpush.importVapidKeys(data.chaves as webpush.ExportedVapidKeys);
+  const novas = await webpush.exportVapidKeys(await webpush.generateVapidKeys({ extractable: true }));
+  const { error: erroNovas } = await supabase.from('chaves_push').insert({ id: 1, chaves: novas });
+  if (erroNovas && erroNovas.code !== '23505') throw erroNovas;
+  return await chavesPush(supabase);
+}
+
+/** The public half, for a phone to subscribe with — or null if the keys can't be had, so the vote itself never breaks over it. */
+async function chavePublicaPush(supabase: SupabaseClient): Promise<string | null> {
+  try {
+    return await webpush.exportApplicationServerKey(await chavesPush(supabase));
+  } catch (e) {
+    console.error(e);
+    return null;
+  }
+}
+
+type Aviso = { titulo: string; texto: string; url: string };
+
+/**
+ * Sends a notification to every phone that turned them on — or only to
+ * `endpoint`. A phone the push service no longer knows (notifications
+ * turned off, browser reset) is forgotten. Returns how many got it.
+ */
+async function avisar(supabase: SupabaseClient, aviso: Aviso, endpoint?: string): Promise<number> {
+  let consulta = supabase.from('votacao_avisos').select('endpoint, inscricao');
+  if (endpoint) consulta = consulta.eq('endpoint', endpoint);
+  const { data, error } = await consulta;
+  if (error) throw error;
+  if (data.length === 0) return 0;
+  const servidor = await webpush.ApplicationServer.new({ contactInformation: CONTATO_PUSH, vapidKeys: await chavesPush(supabase) });
+  const entregues = await Promise.all(
+    data.map(async (a) => {
+      try {
+        await servidor.subscribe(a.inscricao as webpush.PushSubscription).pushTextMessage(JSON.stringify(aviso), { urgency: webpush.Urgency.High });
+        return true;
+      } catch (e) {
+        if (e instanceof webpush.PushMessageError && (e.response.status === 404 || e.response.status === 410)) {
+          await supabase.from('votacao_avisos').delete().eq('endpoint', a.endpoint);
+        } else {
+          console.error(String(e), e instanceof webpush.PushMessageError ? await e.response.text().catch(() => '') : '');
+        }
+        return false;
+      }
+    }),
+  );
+  return entregues.filter(Boolean).length;
 }
 
 type Pergunta = {
@@ -55,7 +120,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { codigo, nome, whatsapp, acao, id, votos, texto, tipo, opcoes, maximo, formando } = await req.json();
+    const { codigo, nome, whatsapp, acao, id, votos, texto, tipo, opcoes, maximo, formando, inscricao, endpoint } = await req.json();
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -121,6 +186,31 @@ Deno.serve(async (req) => {
         if (error.code === 'P0001') return recusar(error.message);
         throw error;
       }
+
+      // The ballot that completes a question tells the committee. Only once
+      // someone turned the notification on: otherwise the question would be
+      // marked as told with nobody to tell. The vote is already in, so
+      // nothing here may fail it.
+      try {
+        const { count } = await supabase.from('votacao_avisos').select('endpoint', { count: 'exact', head: true });
+        if (count) {
+          const { data: completas, error: erroCompletas } = await supabase.rpc('votacao_completas');
+          if (erroCompletas) throw erroCompletas;
+          const perguntas = completas as string[];
+          if (perguntas.length > 0) {
+            await avisar(supabase, {
+              titulo: 'Todo mundo votou',
+              texto:
+                perguntas.length === 1
+                  ? `A turma toda já votou em "${perguntas[0]}". Já dá para encerrar e ver o resultado.`
+                  : `A turma toda já votou em ${perguntas.length} perguntas. Já dá para encerrar e ver o resultado.`,
+              url: '/votacao/comissao',
+            });
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
     }
 
     if (comissao && acao === 'criar') {
@@ -172,22 +262,62 @@ Deno.serve(async (req) => {
       }
     }
 
+    // The committee's phones: turn the notification on (and send one right
+    // away, so it's clear it works), off, or test it again.
+    if (comissao && acao === 'avisar') {
+      const valida =
+        inscricao !== null && typeof inscricao === 'object' &&
+        typeof inscricao.endpoint === 'string' && inscricao.endpoint.startsWith('https://') &&
+        typeof inscricao.keys?.p256dh === 'string' && typeof inscricao.keys?.auth === 'string';
+      if (!valida) return recusar('Este aparelho não mandou os dados do aviso. Tente de novo.');
+      const { error } = await supabase.from('votacao_avisos').upsert({
+        endpoint: inscricao.endpoint,
+        inscricao: { endpoint: inscricao.endpoint, keys: { p256dh: inscricao.keys.p256dh, auth: inscricao.keys.auth } },
+      });
+      if (error) throw error;
+      const entregues = await avisar(
+        supabase,
+        { titulo: 'Aviso ligado', texto: 'Este aparelho vai receber uma notificação quando todo mundo votar.', url: '/votacao/comissao' },
+        inscricao.endpoint,
+      );
+      if (entregues === 0) {
+        await supabase.from('votacao_avisos').delete().eq('endpoint', inscricao.endpoint);
+        return recusar('Não deu para mandar a notificação para este aparelho. Tente de novo.');
+      }
+    }
+
+    if (comissao && acao === 'naoAvisar' && typeof endpoint === 'string') {
+      const { error } = await supabase.from('votacao_avisos').delete().eq('endpoint', endpoint);
+      if (error) throw error;
+    }
+
+    if (comissao && acao === 'testarAviso' && typeof endpoint === 'string') {
+      const entregues = await avisar(
+        supabase,
+        { titulo: 'Teste', texto: 'O aviso da votação está funcionando neste aparelho.', url: '/votacao/comissao' },
+        endpoint,
+      );
+      if (entregues === 0) return recusar('A notificação não chegou a este aparelho. Desligue e ligue o aviso de novo.');
+    }
+
     if (comissao && acao === 'excluir' && typeof id === 'string') {
       const { error } = await supabase.from('votacao_perguntas').delete().eq('id', id);
       if (error) throw error;
     }
 
-    const [perguntas, contagem, participacao, formandos] = await Promise.all([
+    const [perguntas, contagem, participacao, formandos, avisos] = await Promise.all([
       supabase.from('votacao_perguntas').select('id, pergunta, tipo, opcoes, aberta, resultado_liberado, maximo').order('criado_em'),
       supabase.from('votacao_contagem').select('pergunta_id, opcao, votos'),
       supabase.from('votacao_participacao').select('pergunta_id, formando'),
       // Numbers go only to the committee (see the response below).
       supabase.from('convidados_formando').select('formando, whatsapp').order('formando'),
+      supabase.from('votacao_avisos').select('endpoint', { count: 'exact', head: true }),
     ]);
     if (perguntas.error) throw perguntas.error;
     if (contagem.error) throw contagem.error;
     if (participacao.error) throw participacao.error;
     if (formandos.error) throw formandos.error;
+    if (avisos.error) throw avisos.error;
 
     const lista = formandos.data as { formando: string; whatsapp: string | null }[];
     const nomes = lista.map((f) => f.formando);
@@ -197,6 +327,10 @@ Deno.serve(async (req) => {
       voce,
       formandos: nomes,
       eleitores: comissao ? lista : null,
+      // For the committee's phones to turn the notification on: the public
+      // half of the site's key, and how many phones already have it on.
+      chavePush: comissao ? await chavePublicaPush(supabase) : null,
+      aparelhosAvisados: comissao ? (avisos.count ?? 0) : null,
       // For a formando whose number isn't on the list: the names they can
       // still pick (the ones with no number yet).
       livres: !comissao && !voce ? lista.filter((f) => !f.whatsapp).map((f) => f.formando) : null,

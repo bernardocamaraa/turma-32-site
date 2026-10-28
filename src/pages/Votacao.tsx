@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import { Check, CircleX, Search, TriangleAlert } from 'lucide-react';
 import { Badge } from '../components/Badge';
 import { BotoesLink } from '../components/BotoesLink';
@@ -7,6 +7,7 @@ import { Card } from '../components/Card';
 import { Input } from '../components/Input';
 import { Select } from '../components/Select';
 import { PageHeader } from '../components/SectionHeading';
+import { desligarAvisos, inscricaoAtual, ligarAvisos, situacaoAvisos } from '../lib/avisos';
 import { lerCodigo, salvarCodigo } from '../lib/codigoComissao';
 import {
   buscarVotacao,
@@ -212,6 +213,7 @@ export function Votacao({ paraComissao = false }: { paraComissao?: boolean }) {
       ) : paraComissao && dados ? (
         <>
           <LinkDaVotacao />
+          <AvisoDaVotacao chavePush={dados.chavePush ?? null} aparelhos={dados.aparelhosAvisados ?? null} agir={agir} />
           <EleitoresDaVotacao eleitores={dados.eleitores ?? []} salvando={salvando} agir={agir} />
           <NovaPergunta salvando={salvando} agir={agir} />
           {dados.perguntas.length === 0 ? (
@@ -1041,6 +1043,139 @@ function LinkDaVotacao() {
         <span style={{ fontSize: 'var(--fs-body)', color: 'var(--accent)', wordBreak: 'break-all' }}>{urlDaVotacao()}</span>
         <span style={pequeno}>É o mesmo para a turma toda: cada formando entra com o próprio WhatsApp.</span>
         <BotoesLink url={urlDaVotacao()} mensagem="A votação da turma está aberta! Entre com o seu WhatsApp. O voto é secreto:" />
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * The committee's phone gets a notification (the browser's own) the moment
+ * everyone has voted on a question, instead of checking this page. On an
+ * iPhone that only works with the site on the home screen.
+ */
+function AvisoDaVotacao({
+  chavePush,
+  aparelhos,
+  agir,
+}: {
+  chavePush: string | null;
+  aparelhos: number | null;
+  agir: (a: AcaoVotacao) => Promise<string | null>;
+}) {
+  const [situacao, setSituacao] = useState(situacaoAvisos);
+  // null while checking whether it's already on here.
+  const [ligado, setLigado] = useState<boolean | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const [feito, setFeito] = useState<string | null>(null);
+
+  useEffect(() => {
+    inscricaoAtual()
+      .then((i) => setLigado(i !== null))
+      .catch(() => setLigado(false));
+  }, []);
+
+  async function fazer(acao: () => Promise<string | null>) {
+    setOcupado(true);
+    setErro(null);
+    setFeito(null);
+    try {
+      setFeito(await acao());
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Não foi possível agora. Tente de novo.');
+    } finally {
+      setSituacao(situacaoAvisos());
+      setOcupado(false);
+    }
+  }
+
+  const ligar = () =>
+    fazer(async () => {
+      const inscricao = await ligarAvisos(chavePush!);
+      const falha = await agir({ acao: 'avisar', inscricao });
+      if (falha) {
+        await desligarAvisos().catch(() => null);
+        throw new Error(falha);
+      }
+      setLigado(true);
+      return 'Pronto! Uma notificação de teste acabou de ser mandada para este aparelho.';
+    });
+
+  const desligar = () =>
+    fazer(async () => {
+      const endpoint = await desligarAvisos();
+      setLigado(false);
+      if (endpoint) {
+        const falha = await agir({ acao: 'naoAvisar', endpoint });
+        if (falha) throw new Error(falha);
+      }
+      return null;
+    });
+
+  const testar = () =>
+    fazer(async () => {
+      const inscricao = await inscricaoAtual();
+      if (!inscricao) {
+        setLigado(false);
+        return null;
+      }
+      const falha = await agir({ acao: 'testarAviso', endpoint: inscricao.endpoint });
+      if (falha) throw new Error(falha);
+      return 'Notificação de teste enviada.';
+    });
+
+  return (
+    <Card padding="var(--space-6) var(--space-7)">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+        <span style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-h4)', fontWeight: 600, letterSpacing: '-.015em' }}>
+          Aviso no celular
+        </span>
+        {situacao === 'iphone-tela-inicio' ? (
+          <p style={texto}>
+            No iPhone, o aviso só funciona com o site na Tela de Início. Toque em Compartilhar (o quadrado com a seta),
+            depois em “Adicionar à Tela de Início”. Abra o site pelo ícone novo, entre aqui com o código e ligue o aviso.
+            Precisa do iOS 16.4 ou mais novo.
+          </p>
+        ) : situacao === 'sem-suporte' ? (
+          <p style={texto}>
+            Este navegador não mostra notificações de sites. No Android ou no computador, abra esta página no Chrome; no
+            iPhone, pela Tela de Início.
+          </p>
+        ) : situacao === 'bloqueado' ? (
+          <p style={texto}>
+            As notificações deste site estão bloqueadas neste aparelho. Libere nas configurações do navegador (permissões
+            do site) e recarregue a página.
+          </p>
+        ) : ligado ? (
+          // Keyed so turning it on doesn't reuse the big button (and its hover) for the small ones.
+          <Fragment key="ligado">
+            <p style={texto}>Este aparelho recebe uma notificação assim que todo mundo votar numa pergunta.</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)', marginLeft: -12 }}>
+              <Button variant="ghost" size="sm" disabled={ocupado} onClick={testar}>
+                Mandar um teste
+              </Button>
+              <Button variant="ghost" size="sm" disabled={ocupado} onClick={desligar}>
+                Parar de avisar
+              </Button>
+            </div>
+          </Fragment>
+        ) : (
+          <Fragment key="desligado">
+            <p style={texto}>Receba uma notificação neste aparelho assim que todo mundo votar, sem precisar ficar conferindo.</p>
+            {chavePush ? (
+              <div style={{ display: 'flex' }}>
+                <Button disabled={ocupado || ligado === null} onClick={ligar}>
+                  {ocupado ? 'Ligando…' : 'Me avisar quando todos votarem'}
+                </Button>
+              </div>
+            ) : (
+              <span style={pequeno}>O aviso ainda não está pronto no servidor.</span>
+            )}
+          </Fragment>
+        )}
+        {feito ? <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--state-ok)' }}>{feito}</span> : null}
+        {erro ? <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--state-error)' }}>{erro}</span> : null}
+        {aparelhos ? <span style={pequeno}>{plural(aparelhos, 'aparelho da comissão recebe', 'aparelhos da comissão recebem')} o aviso.</span> : null}
       </div>
     </Card>
   );

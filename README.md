@@ -173,6 +173,18 @@ com ou sem +55, e até sem o 9 da frente. O site acerta o formato sozinho
   barras para todos (e encerra a pergunta, se ainda estiver aberta).
   "Esconder resultado" volta atrás.
 
+- **Aviso no celular:** em `/votacao/comissao`, o botão "Me avisar quando
+  todos votarem" liga a notificação do próprio navegador (Web Push) naquele
+  aparelho, e já manda uma de teste. Quando o último formando vota numa
+  pergunta, todo aparelho que ligou o aviso recebe "Todo mundo votou", uma
+  vez só por pergunta (`votacao_completas` em `votacao.sql`). No Android e
+  no computador funciona direto no Chrome. No iPhone (iOS 16.4 ou mais novo),
+  só com o site adicionado à Tela de Início e aberto pelo ícone: a página
+  explica o passo a passo. As chaves do Web Push são criadas pela própria
+  função na primeira vez e ficam na tabela `chaves_push`. O service worker
+  (`public/sw.js`) só mostra essas notificações e só é instalado em quem liga
+  o aviso.
+
 Para colocar no ar: rode `supabase/votacao.sql` no SQL Editor (depois do
 `mesas.sql`) e publique a função com `supabase functions deploy votacao`.
 

@@ -9,10 +9,10 @@ import { Album } from './pages/Album';
 import { Turma } from './pages/Turma';
 import { Comissao } from './pages/Comissao';
 import { Mesas } from './pages/Mesas';
-import { Votacao } from './pages/Votacao';
 
-// Committee only: loaded when opened, so it doesn't weigh on every visitor's
-// first load.
+// Loaded when opened, so they don't weigh on every visitor's first load: the
+// vote is reached through its own link, the photos are committee only.
+const Votacao = lazy(() => import('./pages/Votacao').then((m) => ({ default: m.Votacao })));
 const Infancia = lazy(() => import('./pages/Infancia').then((m) => ({ default: m.Infancia })));
 
 function ScrollToTop() {
@@ -47,8 +47,22 @@ function AppRoutes() {
         <Route path="/comissao" element={<Comissao />} />
         <Route path="/mesas" element={<Mesas />} />
         <Route path="/mesas/:link" element={<Mesas />} />
-        <Route path="/votacao" element={<Votacao />} />
-        <Route path="/votacao/comissao" element={<Votacao paraComissao />} />
+        <Route
+          path="/votacao"
+          element={
+            <Suspense fallback={null}>
+              <Votacao />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/votacao/comissao"
+          element={
+            <Suspense fallback={null}>
+              <Votacao paraComissao />
+            </Suspense>
+          }
+        />
         {/* Personal voting links existed briefly; anyone opening one lands
             on the single voting link. */}
         <Route path="/votacao/:link" element={<Navigate to="/votacao" replace />} />
