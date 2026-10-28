@@ -159,6 +159,11 @@ com ou sem +55, e até sem o 9 da frente. O site acerta o formato sozinho
 - **Perguntas:** a comissão cria na aba Votação (`/comissao/votacao`). As opções
   são os próprios formandos ("o mais engraçado"; ninguém vota em si mesmo)
   ou uma lista escrita pela comissão ("qual música de entrada?").
+- **Deixar pronta:** ao criar, a comissão escolhe entre "Criar e abrir agora"
+  e "Deixar pronta". A pergunta pronta fica guardada na área da comissão: a
+  turma não vê nem vota nela (o banco também recusa o voto) até a comissão
+  tocar em "Abrir votação". Com duas ou mais prontas, aparece "Abrir as N
+  agora", que abre todas juntas. Abrir não tem volta.
 - **Um voto por formando em cada pergunta.** Como o voto é secreto, ele não
   pode ser trocado depois.
 - **Várias escolhas:** ao criar a pergunta, a comissão diz quantas escolhas
@@ -178,8 +183,9 @@ com ou sem +55, e até sem o 9 da frente. O site acerta o formato sozinho
   pessoa) em duas perguntas, de nenhuma categoria. A página avisa no topo,
   marca como "já escolhido" o que foi usado em outra pergunta, mostra um erro
   se a escolha se repetir e não deixa enviar. Como o voto não fica guardado,
-  a conferência só vale entre as perguntas enviadas juntas: crie todas antes
-  de mandar o link para a turma.
+  a conferência só vale entre as perguntas enviadas juntas: abra todas de
+  uma vez, antes de a turma começar a votar (dá para ir deixando prontas e
+  abrir todas juntas).
 - **Voto secreto de verdade:** o banco guarda separado quem já votou
   (`votacao_participacao`) e quantos votos cada opção tem
   (`votacao_contagem`). Nenhum registro liga uma pessoa à escolha dela.
@@ -206,6 +212,9 @@ com ou sem +55, e até sem o 9 da frente. O site acerta o formato sozinho
 
 Para colocar no ar: rode `supabase/votacao.sql` no SQL Editor (depois do
 `mesas.sql`) e publique a função com `supabase functions deploy votacao`.
+Rodar o arquivo de novo é seguro (ele só acrescenta o que falta), então,
+quando a votação ganhar algo novo no banco (como as perguntas prontas), rode
+o `votacao.sql` inteiro de novo **antes** de publicar a função.
 
 ## Fotos de criança (`/comissao/fotos-de-crianca`)
 

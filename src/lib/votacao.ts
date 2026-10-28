@@ -10,8 +10,10 @@ export type Pergunta = {
   /** 'formandos': the options are the class itself; 'opcoes': written by the committee. */
   tipo: TipoPergunta;
   opcoes: string[];
-  /** Still accepting votes. Closing is final. */
+  /** Not closed yet: accepting votes, unless still `pronta`. Closing is final. */
   aberta: boolean;
+  /** Ready but not opened yet: the class doesn't see it nor vote on it — so only the committee ever gets one. Opening is final. */
+  pronta: boolean;
   /** The class can see the result. */
   resultadoLiberado: boolean;
   /** How many options a formando picks: 1, or anything from 1 up to this ("escolha até 3"). */
@@ -96,9 +98,11 @@ export type AcaoVotacao =
    * haven't voted on, by question id — or null for a blank vote.
    */
   | { acao: 'votarTudo'; votos: Record<string, string[] | null> }
-  /** `maximo`: how many options each formando picks (1 = just one). */
-  | { acao: 'criar'; texto: string; tipo: TipoPergunta; opcoes: string[]; maximo: number }
-  | { acao: 'encerrar' | 'liberar' | 'esconder' | 'excluir'; id: string }
+  /** `maximo`: how many options each formando picks (1 = just one). `pronta`: leave it to open later. */
+  | { acao: 'criar'; texto: string; tipo: TipoPergunta; opcoes: string[]; maximo: number; pronta: boolean }
+  | { acao: 'abrir' | 'encerrar' | 'liberar' | 'esconder' | 'excluir'; id: string }
+  /** Committee: open every ready question at once, so the class votes on them together. */
+  | { acao: 'abrirProntas' }
   /** Committee: fill in, fix or (null) clear a formando's number. */
   | { acao: 'definirWhatsapp'; formando: string; whatsapp: string | null }
   /** Committee: tell this phone when everyone has voted (src/lib/avisos.ts); sends a first notification right away. */

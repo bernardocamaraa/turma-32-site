@@ -62,8 +62,9 @@ function salvarEleitor(valor: { whatsapp: string } | null) {
  *   once the committee releases it.
  * - The "Votação" tab of the committee area (/comissao/votacao), with
  *   `codigoComissao`: shares the link, fills in each formando's number,
- *   creates questions, follows who still has to vote, closes them and
- *   releases the results.
+ *   creates questions (open right away, or ready to open later), opens
+ *   them, follows who still has to vote, closes them and releases the
+ *   results.
  */
 export function Votacao({ codigoComissao }: { codigoComissao?: string }) {
   const paraComissao = codigoComissao !== undefined;
@@ -166,6 +167,8 @@ export function Votacao({ codigoComissao }: { codigoComissao?: string }) {
   // The committee's tab sits inside the committee area, which has the page
   // title, the way in and the way out.
   if (paraComissao) {
+    const prontas = dados?.perguntas.filter((p) => p.pronta) ?? [];
+    const jaHaVotos = !!dados?.perguntas.some((p) => !p.pronta && (p.votaram ?? 0) > 0);
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' }}>
         {!dados ? (
@@ -176,6 +179,7 @@ export function Votacao({ codigoComissao }: { codigoComissao?: string }) {
             <AvisoDaVotacao chavePush={dados.chavePush ?? null} aparelhos={dados.aparelhosAvisados ?? null} agir={agir} />
             <EleitoresDaVotacao eleitores={dados.eleitores ?? []} salvando={salvando} agir={agir} />
             <NovaPergunta salvando={salvando} agir={agir} />
+            {prontas.length > 1 ? <AbrirProntas prontas={prontas} jaHaVotos={jaHaVotos} salvando={salvando} agir={agir} /> : null}
             {dados.perguntas.length === 0 ? (
               <p style={texto}>Nenhuma votação criada ainda.</p>
             ) : (
@@ -183,7 +187,7 @@ export function Votacao({ codigoComissao }: { codigoComissao?: string }) {
                 .slice()
                 .reverse()
                 .map((p) => (
-                  <PerguntaComissao key={p.id} p={p} total={dados.formandos.length} salvando={salvando} agir={agir} />
+                  <PerguntaComissao key={p.id} p={p} total={dados.formandos.length} jaHaVotos={jaHaVotos} salvando={salvando} agir={agir} />
                 ))
             )}
           </>
@@ -340,6 +344,7 @@ function Identificacao({
 
 /** What a question's state means, as a small pill next to it. */
 function Situacao({ p, paraComissao }: { p: Pergunta; paraComissao?: boolean }) {
+  if (p.pronta) return <Badge>Pronta · a turma ainda não vê</Badge>;
   if (p.resultadoLiberado) return <Badge tone="gild">Resultado</Badge>;
   if (!p.aberta) return <Badge>{paraComissao ? 'Encerrada · só a comissão vê' : 'Encerrada'}</Badge>;
   if (p.jaVotou) return <Badge tone="ok">Você já votou</Badge>;
@@ -789,15 +794,19 @@ function NovaPergunta({ salvando, agir }: { salvando: boolean; agir: (a: AcaoVot
   const [opcoes, setOpcoes] = useState('');
   const [maximo, setMaximo] = useState(1);
   const [erro, setErro] = useState<string | null>(null);
+  // Which of the two buttons was pressed, for its "Criando…".
+  const [deixandoPronta, setDeixandoPronta] = useState(false);
 
   const lista = opcoes.split('\n').map((o) => o.trim()).filter(Boolean);
   // Picking every option would count for nobody in particular.
   const opcoesDemais = tipo === 'opcoes' && lista.length >= 2 && maximo >= lista.length;
-  const pronta = pergunta.trim().length >= 3 && (tipo === 'formandos' || lista.length >= 2) && !opcoesDemais;
+  const preenchida = pergunta.trim().length >= 3 && (tipo === 'formandos' || lista.length >= 2) && !opcoesDemais;
 
-  async function criar() {
+  /** `pronta`: leave it for later — the class doesn't see it until it's opened. */
+  async function criar(pronta: boolean) {
     setErro(null);
-    const falha = await agir({ acao: 'criar', texto: pergunta, tipo, opcoes: lista, maximo });
+    setDeixandoPronta(pronta);
+    const falha = await agir({ acao: 'criar', texto: pergunta, tipo, opcoes: lista, maximo, pronta });
     setErro(falha);
     if (!falha) {
       setPergunta('');
@@ -892,14 +901,18 @@ function NovaPergunta({ salvando, agir }: { salvando: boolean; agir: (a: AcaoVot
         ) : null}
 
         <span style={pequeno}>
-          O formando não pode escolher a mesma opção em duas perguntas, e envia todas de uma vez. Crie todas antes de
-          mandar o link: quem já votou não tem como ser conferido numa pergunta criada depois.
+          "Deixar pronta" guarda a pergunta aqui: a turma não vê nem vota até vocês abrirem. O formando não pode escolher
+          a mesma opção em duas perguntas e envia todas as abertas de uma vez, então abra todas juntas: quem já votou
+          não tem como ser conferido numa pergunta aberta depois.
         </span>
 
         {erro ? <p style={{ ...texto, color: 'var(--state-error)' }}>{erro}</p> : null}
-        <div style={{ display: 'flex' }}>
-          <Button size="lg" disabled={!pronta || salvando} onClick={criar}>
-            {salvando ? 'Criando…' : 'Criar votação'}
+        <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+          <Button size="lg" disabled={!preenchida || salvando} onClick={() => criar(false)}>
+            {salvando && !deixandoPronta ? 'Criando…' : 'Criar e abrir agora'}
+          </Button>
+          <Button size="lg" variant="secondary" disabled={!preenchida || salvando} onClick={() => criar(true)}>
+            {salvando && deixandoPronta ? 'Criando…' : 'Deixar pronta'}
           </Button>
         </div>
       </div>
@@ -907,25 +920,93 @@ function NovaPergunta({ salvando, agir }: { salvando: boolean; agir: (a: AcaoVot
   );
 }
 
-/** One question, as the committee sees it: who voted, the result once closed, and what to do next. */
+/**
+ * What opening ready questions means, for the committee to confirm — with
+ * the catch when the class already voted on others: those formandos vote on
+ * these apart, and the no-repeat check can't reach back to their earlier
+ * choices (nothing remembers them).
+ */
+function confirmarAbertura(oQue: string, jaHaVotos: boolean): boolean {
+  return window.confirm(
+    `${oQue} Não tem como voltar a deixar pronta.` +
+      (jaHaVotos
+        ? '\n\nQuem já enviou os votos vai votar nisso à parte, e aí o site não tem como conferir se a pessoa repetiu uma escolha das outras perguntas.'
+        : ''),
+  );
+}
+
+/** Opens every ready question at once, so each formando gets them in the same ballot. */
+function AbrirProntas({
+  prontas,
+  jaHaVotos,
+  salvando,
+  agir,
+}: {
+  prontas: Pergunta[];
+  /** Whether anyone already voted on an opened question. */
+  jaHaVotos: boolean;
+  salvando: boolean;
+  agir: (a: AcaoVotacao) => Promise<string | null>;
+}) {
+  const [erro, setErro] = useState<string | null>(null);
+
+  async function abrir() {
+    if (!confirmarAbertura(`Abrir as ${prontas.length} perguntas prontas? A turma passa a ver e votar em todas.`, jaHaVotos)) return;
+    setErro(null);
+    setErro(await agir({ acao: 'abrirProntas' }));
+  }
+
+  return (
+    <Card padding="var(--space-6) var(--space-7)">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', maxWidth: '40rem' }}>
+        <span style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-h3)', fontWeight: 700, letterSpacing: '-.02em' }}>
+          {plural(prontas.length, 'pergunta pronta', 'perguntas prontas')}
+        </span>
+        <p style={texto}>
+          A turma ainda não vê essas perguntas. Abrindo todas juntas, cada formando vota nelas de uma vez, e o site
+          confere que ninguém repete a mesma escolha.
+        </p>
+        {erro ? <p style={{ ...texto, color: 'var(--state-error)' }}>{erro}</p> : null}
+        <div style={{ display: 'flex' }}>
+          <Button disabled={salvando} onClick={abrir}>
+            Abrir as {prontas.length} agora
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * One question, as the committee sees it: who voted, the result once
+ * closed, and what to do next — or, while it's ready, the way to open it.
+ */
 function PerguntaComissao({
   p,
   total,
+  jaHaVotos,
   salvando,
   agir,
 }: {
   p: Pergunta;
   total: number;
+  /** Whether anyone already voted on an opened question (see confirmarAbertura). */
+  jaHaVotos: boolean;
   salvando: boolean;
   agir: (a: AcaoVotacao) => Promise<string | null>;
 }) {
   const [erro, setErro] = useState<string | null>(null);
   const votaram = p.votaram ?? 0;
 
-  async function fazer(acao: 'encerrar' | 'liberar' | 'esconder' | 'excluir', confirmacao?: string) {
+  async function fazer(acao: 'abrir' | 'encerrar' | 'liberar' | 'esconder' | 'excluir', confirmacao?: string) {
     if (confirmacao && !window.confirm(confirmacao)) return;
     setErro(null);
     setErro(await agir({ acao, id: p.id }));
+  }
+
+  async function abrir() {
+    if (!confirmarAbertura(`Abrir "${p.pergunta}"? A turma passa a ver e votar nela.`, jaHaVotos)) return;
+    await fazer('abrir');
   }
 
   return (
@@ -942,72 +1023,91 @@ function PerguntaComissao({
           }
         />
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-4)', fontSize: 'var(--fs-body)' }}>
-            <span>
-              {votaram} de {total} formandos votaram
-            </span>
-            <span style={{ color: 'var(--text-muted)' }}>{total ? Math.round((votaram / total) * 100) : 0}%</span>
-          </div>
-          <div style={{ height: 6, borderRadius: 3, background: 'rgba(245,245,247,.08)', overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${total ? (votaram / total) * 100 : 0}%`, background: 'var(--ice-300)', transition: 'width var(--dur-slow) var(--ease-out)' }} />
-          </div>
-          {p.aberta && p.faltam && p.faltam.length > 0 ? (
-            <details>
-              <summary style={{ cursor: 'pointer', fontSize: 'var(--fs-body-sm)', color: 'var(--accent)' }}>
-                Quem ainda não votou ({p.faltam.length})
-              </summary>
-              <p style={{ ...texto, fontSize: 'var(--fs-body-sm)', marginTop: 'var(--space-3)' }}>{p.faltam.join(', ')}</p>
-            </details>
-          ) : null}
-        </div>
-
-        {p.resultado ? (
-          <Barras resultado={p.resultado} brancos={p.brancos} votaram={null} />
-        ) : (
-          <p style={{ ...pequeno, margin: 0 }}>
-            A contagem aparece para vocês quando encerrarem a votação. Enquanto ela está aberta, ninguém vê, para que
-            não dê para descobrir o voto de alguém comparando quem acabou de votar com quem ganhou um voto.
+        {p.pronta ? (
+          <p style={texto}>
+            A turma ainda não vê essa pergunta e não dá para votar nela. Quando vocês abrirem, ela aparece na página da
+            votação para todo mundo.
           </p>
+        ) : (
+          <>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-4)', fontSize: 'var(--fs-body)' }}>
+                <span>
+                  {votaram} de {total} formandos votaram
+                </span>
+                <span style={{ color: 'var(--text-muted)' }}>{total ? Math.round((votaram / total) * 100) : 0}%</span>
+              </div>
+              <div style={{ height: 6, borderRadius: 3, background: 'rgba(245,245,247,.08)', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${total ? (votaram / total) * 100 : 0}%`, background: 'var(--ice-300)', transition: 'width var(--dur-slow) var(--ease-out)' }} />
+              </div>
+              {p.aberta && p.faltam && p.faltam.length > 0 ? (
+                <details>
+                  <summary style={{ cursor: 'pointer', fontSize: 'var(--fs-body-sm)', color: 'var(--accent)' }}>
+                    Quem ainda não votou ({p.faltam.length})
+                  </summary>
+                  <p style={{ ...texto, fontSize: 'var(--fs-body-sm)', marginTop: 'var(--space-3)' }}>{p.faltam.join(', ')}</p>
+                </details>
+              ) : null}
+            </div>
+
+            {p.resultado ? (
+              <Barras resultado={p.resultado} brancos={p.brancos} votaram={null} />
+            ) : (
+              <p style={{ ...pequeno, margin: 0 }}>
+                A contagem aparece para vocês quando encerrarem a votação. Enquanto ela está aberta, ninguém vê, para que
+                não dê para descobrir o voto de alguém comparando quem acabou de votar com quem ganhou um voto.
+              </p>
+            )}
+          </>
         )}
 
         {erro ? <p style={{ ...texto, color: 'var(--state-error)' }}>{erro}</p> : null}
 
         <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', alignItems: 'center' }}>
-          {p.aberta ? (
-            <Button
-              variant="secondary"
-              disabled={salvando}
-              onClick={() =>
-                fazer('encerrar', 'Encerrar não tem volta: depois disso ninguém mais vota nessa pergunta, e vocês passam a ver a contagem. Encerrar?')
-              }
-            >
-              Encerrar votação
-            </Button>
-          ) : null}
-          {!p.resultadoLiberado ? (
-            <Button
-              disabled={salvando}
-              onClick={() =>
-                fazer(
-                  'liberar',
-                  p.aberta
-                    ? 'Isso encerra a votação (sem volta) e mostra o resultado para a turma toda. Continuar?'
-                    : 'Mostrar o resultado para a turma toda?',
-                )
-              }
-            >
-              Mostrar resultado para a turma
+          {p.pronta ? (
+            <Button disabled={salvando} onClick={abrir}>
+              Abrir votação
             </Button>
           ) : (
-            <Button variant="secondary" disabled={salvando} onClick={() => fazer('esconder')}>
-              Esconder resultado
-            </Button>
+            <>
+              {p.aberta ? (
+                <Button
+                  variant="secondary"
+                  disabled={salvando}
+                  onClick={() =>
+                    fazer('encerrar', 'Encerrar não tem volta: depois disso ninguém mais vota nessa pergunta, e vocês passam a ver a contagem. Encerrar?')
+                  }
+                >
+                  Encerrar votação
+                </Button>
+              ) : null}
+              {!p.resultadoLiberado ? (
+                <Button
+                  disabled={salvando}
+                  onClick={() =>
+                    fazer(
+                      'liberar',
+                      p.aberta
+                        ? 'Isso encerra a votação (sem volta) e mostra o resultado para a turma toda. Continuar?'
+                        : 'Mostrar o resultado para a turma toda?',
+                    )
+                  }
+                >
+                  Mostrar resultado para a turma
+                </Button>
+              ) : (
+                <Button variant="secondary" disabled={salvando} onClick={() => fazer('esconder')}>
+                  Esconder resultado
+                </Button>
+              )}
+            </>
           )}
           <Button
             variant="ghost"
             disabled={salvando}
-            onClick={() => fazer('excluir', `Excluir "${p.pergunta}" e todos os votos dela? Não dá para desfazer.`)}
+            onClick={() =>
+              fazer('excluir', p.pronta ? `Excluir "${p.pergunta}"? Não dá para desfazer.` : `Excluir "${p.pergunta}" e todos os votos dela? Não dá para desfazer.`)
+            }
             style={{ color: 'var(--state-error)' }}
           >
             Excluir

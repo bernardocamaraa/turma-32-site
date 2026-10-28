@@ -15,9 +15,10 @@
 -- vote's committee page. The number also lets the committee message each
 -- formando directly from the table map.
 --
--- The committee creates questions. A question's options are either the
--- formandos themselves ("o mais engraçado") or a list written by the
--- committee ("qual música de entrada?"). A formando sends all open
+-- The committee creates questions, open right away or ready to open later
+-- (`pronta`). A question's options are either the formandos themselves
+-- ("o mais engraçado") or a list written by the committee ("qual música de
+-- entrada?"). A formando sends all open
 -- questions in one ballot, and can't pick the same option (the same person)
 -- in two of them (votar_cedula at the end of this file).
 --
@@ -43,7 +44,8 @@ create table if not exists public.votacao_perguntas (
   pergunta text not null check (char_length(btrim(pergunta)) between 3 and 200),
   tipo text not null check (tipo in ('formandos', 'opcoes')),
   opcoes text[] not null default '{}',
-  -- Accepting votes. The committee closes it, or releasing the result does.
+  -- Not closed: accepting votes, once opened (`pronta` below). The committee
+  -- closes it, or releasing the result does.
   aberta boolean not null default true,
   -- Whether formandos see the tally. Until then only the committee does.
   resultado_liberado boolean not null default false,
@@ -71,6 +73,12 @@ create table if not exists public.votacao_contagem (
 alter table public.votacao_perguntas add column if not exists maximo int not null default 1
   check (maximo between 1 and 20);
 
+-- Written ahead and not opened yet: the class doesn't see it and it takes no
+-- votes until the committee opens it. Opening is final, like closing.
+-- Questions from before this column were opened when created, hence the
+-- default.
+alter table public.votacao_perguntas add column if not exists pronta boolean not null default false;
+
 alter table public.votacao_perguntas enable row level security;
 alter table public.votacao_participacao enable row level security;
 alter table public.votacao_contagem enable row level security;
@@ -92,15 +100,19 @@ declare
   v_tipo text;
   v_opcoes text[];
   v_aberta boolean;
+  v_pronta boolean;
   v_maximo int;
   v_opcao text;
 begin
   -- `for share` makes a committee closing the question at this very moment
   -- wait for this vote to finish (or this vote see it closed).
-  select tipo, opcoes, aberta, maximo into v_tipo, v_opcoes, v_aberta, v_maximo
+  select tipo, opcoes, aberta, pronta, maximo into v_tipo, v_opcoes, v_aberta, v_pronta, v_maximo
   from votacao_perguntas where id = p_pergunta for share;
   if not found then
     raise exception 'Essa votação não existe mais.';
+  end if;
+  if v_pronta then
+    raise exception 'Essa votação ainda não foi aberta.';
   end if;
   if not v_aberta then
     raise exception 'Essa votação já foi encerrada.';
@@ -246,6 +258,7 @@ begin
   select string_agg('"' || p.pergunta || '"', ', ' order by p.criado_em) into v_faltam
   from votacao_perguntas p
   where p.aberta
+    and not p.pronta
     and not (p_votos ? p.id::text)
     and not exists (select 1 from votacao_participacao v where v.pergunta_id = p.id and v.formando = p_formando);
   if v_faltam is not null then
@@ -328,6 +341,7 @@ set search_path = public
 as $$
   update votacao_perguntas p set aviso_completa = true
   where p.aberta
+    and not p.pronta
     and not p.aviso_completa
     and (select count(*) from votacao_participacao v where v.pergunta_id = p.id)
       >= (select count(*) from convidados_formando)

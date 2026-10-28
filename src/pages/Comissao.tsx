@@ -194,9 +194,10 @@ const lista = (nomes: string[]) => (nomes.length <= 1 ? nomes.join('') : `${nome
 const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
 
 function resumoVotacao(d: DadosVotacao): string {
-  const abertas = d.perguntas.filter((p) => p.aberta);
+  const abertas = d.perguntas.filter((p) => p.aberta && !p.pronta);
+  const prontas = d.perguntas.filter((p) => p.pronta).length;
   if (d.perguntas.length === 0) return 'Nenhuma pergunta criada ainda.';
-  if (abertas.length === 0) return 'Nenhuma pergunta aberta agora.';
+  if (abertas.length === 0) return prontas ? `Nenhuma pergunta aberta agora · ${plural(prontas, 'pronta', 'prontas')} para abrir` : 'Nenhuma pergunta aberta agora.';
   // Everyone sends all open questions at once, so the one missing the most people says it all.
   const p = abertas.reduce((a, b) => ((b.faltam?.length ?? 0) > (a.faltam?.length ?? 0) ? b : a));
   const faltam = p.faltam ?? [];
