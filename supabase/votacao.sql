@@ -288,3 +288,51 @@ $$;
 
 revoke all on function public.votar_cedula(text, jsonb) from public, anon, authenticated;
 grant execute on function public.votar_cedula(text, jsonb) to service_role;
+
+-- Notifying the committee: the browser's own notifications (Web Push). A
+-- committee phone that turns them on (in /votacao/comissao) gets one the
+-- moment every formando has voted on an open question, instead of checking
+-- the page.
+
+-- The devices to tell: each row is the push subscription the browser hands
+-- over (its endpoint and keys).
+create table if not exists public.votacao_avisos (
+  endpoint text primary key,
+  inscricao jsonb not null,
+  criado_em timestamptz not null default now()
+);
+
+-- The site's own Web Push key pair (VAPID), made by the Edge Function the
+-- first time it's needed. The private half signs every notification.
+create table if not exists public.chaves_push (
+  id int primary key default 1 check (id = 1),
+  chaves jsonb not null
+);
+
+-- Whether the committee was already told that everyone voted on this
+-- question, so it's told once.
+alter table public.votacao_perguntas add column if not exists aviso_completa boolean not null default false;
+
+alter table public.votacao_avisos enable row level security;
+alter table public.chaves_push enable row level security;
+-- Deliberately no policies on these two: anon can't read or write them.
+
+-- Marks the open questions every formando has now voted on, and returns
+-- them, each only once ever: the update claims the row, so two last
+-- ballots at the same moment can't both send the notification.
+create or replace function public.votacao_completas()
+returns setof text
+language sql
+security definer
+set search_path = public
+as $$
+  update votacao_perguntas p set aviso_completa = true
+  where p.aberta
+    and not p.aviso_completa
+    and (select count(*) from votacao_participacao v where v.pergunta_id = p.id)
+      >= (select count(*) from convidados_formando)
+  returning p.pergunta;
+$$;
+
+revoke all on function public.votacao_completas() from public, anon, authenticated;
+grant execute on function public.votacao_completas() to service_role;

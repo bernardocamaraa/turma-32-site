@@ -37,6 +37,10 @@ export type DadosVotacao = {
   eleitores: { formando: string; whatsapp: string | null }[] | null;
   /** Names with no number yet, for a formando whose number isn't on the list to pick from (null for the committee or once identified). */
   livres: string[] | null;
+  /** The site's public Web Push key, for a committee phone to turn the notification on — committee only. */
+  chavePush?: string | null;
+  /** How many phones get the "everyone voted" notification — committee only. */
+  aparelhosAvisados?: number | null;
   perguntas: Pergunta[];
 };
 
@@ -96,7 +100,11 @@ export type AcaoVotacao =
   | { acao: 'criar'; texto: string; tipo: TipoPergunta; opcoes: string[]; maximo: number }
   | { acao: 'encerrar' | 'liberar' | 'esconder' | 'excluir'; id: string }
   /** Committee: fill in, fix or (null) clear a formando's number. */
-  | { acao: 'definirWhatsapp'; formando: string; whatsapp: string | null };
+  | { acao: 'definirWhatsapp'; formando: string; whatsapp: string | null }
+  /** Committee: tell this phone when everyone has voted (src/lib/avisos.ts); sends a first notification right away. */
+  | { acao: 'avisar'; inscricao: PushSubscriptionJSON }
+  /** Committee: stop telling this phone, or send it a test notification. */
+  | { acao: 'naoAvisar' | 'testarAviso'; endpoint: string };
 
 /**
  * Every read and write goes through the `votacao` Edge Function, which

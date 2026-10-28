@@ -2,14 +2,13 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { useParams } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
-import { Input } from '../components/Input';
+import { CarregandoSecao } from '../components/CarregandoSecao';
 import { MapaMesas } from '../components/MapaMesas';
 import { Select } from '../components/Select';
 import { PageHeader } from '../components/SectionHeading';
 import { FORMANDOS } from '../lib/formandos';
 import { Minus, Plus, X } from 'lucide-react';
 import { buscarMesas, POSICOES_MESAS, urlDoFormando, type AcessoMesas, type AlteracaoMesas, type DadosMesas } from '../lib/mesas';
-import { lerCodigo, salvarCodigo } from '../lib/codigoComissao';
 import { BotoesLink } from '../components/BotoesLink';
 import { useIsMobile } from '../lib/useViewport';
 
@@ -25,13 +24,13 @@ const rotuloCampo = {
  * - /mesas/<link>: a formando's personal URL. Opens straight on the map and
  *   can only move that formando's seats (the Edge Function decides whose,
  *   from the link — not from anything this page sends).
- * - /mesas: the committee, with its code. Can move anyone's seats and gets
- *   the panel with each formando's link to send out.
+ * - The "Mesas" tab of the committee area (/comissao/mesas), with
+ *   `codigoComissao`. Can move anyone's seats and gets the panel with each
+ *   formando's link to send out.
  */
-export function Mesas() {
+export function Mesas({ codigoComissao }: { codigoComissao?: string }) {
   const mobile = useIsMobile();
   const { link } = useParams<{ link?: string }>();
-  const [codigo, setCodigo] = useState(() => (link ? '' : lerCodigo()));
   // Whose seats the committee is moving; for a formando it comes from the link.
   const [escolhido, setEscolhido] = useState('');
   const [dados, setDados] = useState<DadosMesas | null>(null);
@@ -63,7 +62,7 @@ export function Mesas() {
     }
   }, [selecionada, mobile]);
 
-  const acesso: AcessoMesas = link ? { link } : { codigo: codigo.trim() };
+  const acesso: AcessoMesas = link ? { link } : { codigo: codigoComissao ?? '' };
   const nome = dados?.voce ?? escolhido;
 
   async function entrar() {
@@ -72,18 +71,17 @@ export function Mesas() {
     try {
       const resultado = await buscarMesas(acesso);
       setDados(resultado);
-      if (!link) salvarCodigo(codigo.trim());
     } catch (e) {
       setErroAcesso(e instanceof Error ? e.message : 'Não foi possível entrar agora.');
-      if (!link) salvarCodigo(null);
     } finally {
       setEntrando(false);
     }
   }
 
-  // A personal link logs in by itself; the committee too, with a saved code.
+  // A personal link logs in by itself; the committee's code was checked when
+  // entering the committee area.
   useEffect(() => {
-    if (link || codigo) entrar();
+    entrar();
   }, [link]);
 
   // Other formandos are filling tables at the same time — refresh the map
@@ -105,7 +103,7 @@ export function Mesas() {
       ativo = false;
       clearInterval(id);
     };
-  }, [logado, link, codigo]);
+  }, [logado, link, codigoComissao]);
 
   /** Applies a change and returns the error message to show, or null if it worked. */
   async function alterar(alteracao: AlteracaoMesas): Promise<string | null> {
@@ -126,15 +124,6 @@ export function Mesas() {
     const falha = await alterar({ formando: nome, mesa: mesa.id, lugares });
     setErro(falha);
     if (!falha) setQuantidade(lugares);
-  }
-
-  function sair() {
-    salvarCodigo(null);
-    setDados(null);
-    setCodigo('');
-    setEscolhido('');
-    setSelecionada(null);
-    setErro(null);
   }
 
   const total = dados?.convidados.find((c) => c.formando === nome)?.total ?? 0;
@@ -292,6 +281,108 @@ export function Mesas() {
     </>
   ) : null;
 
+  const conteudo = dados ? (
+    <>
+      <Card padding={mobile ? 'var(--space-6)' : 'var(--space-7)'}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: mobile ? 'stretch' : 'flex-end',
+            justifyContent: 'space-between',
+            gap: 'var(--space-6)',
+            flexDirection: mobile ? 'column' : 'row',
+          }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', minWidth: 0, maxWidth: '34rem' }}>
+            {dados.comissao ? (
+              <Select
+                label="Marcando os lugares de"
+                options={FORMANDOS}
+                placeholder="Escolha um formando"
+                value={escolhido}
+                onChange={(e) => {
+                  setEscolhido(e.target.value);
+                  setSelecionada(null);
+                }}
+              />
+            ) : (
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-h2)', fontWeight: 700, letterSpacing: '-.025em', lineHeight: 1.1 }}>
+                Olá, {nome.split(' ')[0]}.
+              </span>
+            )}
+            <p style={{ margin: 0, fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)' }}>
+              {dados.comissao && !nome
+                ? 'Escolha um formando acima para marcar os lugares dele.'
+                : fechado
+                  ? 'A comissão fechou o mapa. Ele fica só para consulta.'
+                  : total === 0
+                    ? 'A comissão ainda não cadastrou quantas pessoas você leva. Assim que cadastrar, você consegue marcar.'
+                    : restante > 0
+                      ? 'Toque numa mesa para ver quem está nela e marcar os seus lugares. Se couber, coloque todo mundo na mesma.'
+                      : 'Todos os seus lugares estão marcados. Toque numa das suas mesas para mudar.'}
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: 'var(--space-7)' }}>
+            <Numero label={total > 0 ? `você + ${total - 1}` : 'pessoas'} valor={total} />
+            <Numero label="marcadas" valor={marcados} destaque />
+            <Numero label="faltam" valor={restante} />
+          </div>
+        </div>
+      </Card>
+
+      <div ref={areaMapa} style={{ position: 'relative' }}>
+        <Card padding={mobile ? 'var(--space-4)' : 'var(--space-7)'} style={{ overflow: 'hidden' }}>
+          {mobile ? (
+            <span style={{ display: 'block', marginBottom: 'var(--space-3)', ...rotuloCampo }}>Arraste para o lado para ver o mapa todo.</span>
+          ) : null}
+          <div ref={rolagemMapa} style={{ overflowX: 'auto' }}>
+            <div style={{ minWidth: mobile ? 660 : 560, maxWidth: 960, margin: '0 auto' }}>
+              <MapaMesas
+                mesas={dados.mesas}
+                reservas={dados.reservas}
+                formando={nome}
+                selecionada={selecionada}
+                onSelecionar={selecionar}
+                painel={mobile ? 'baixo' : ladoDoPainel}
+              />
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-5)', marginTop: 'var(--space-5)' }}>
+            <Legenda cor="var(--gild-400)" texto="Seus lugares" />
+            <Legenda cor="var(--ice-300)" texto="Outros formandos" />
+            <Legenda cor="var(--smoke-300)" texto="Professores" />
+            <Legenda texto="Livre" />
+            <Legenda tracejada texto="Mesa reservada" />
+          </div>
+        </Card>
+
+        {mesa && !mobile ? (
+          <PainelMesa key={mesa.id} modo="ao-lado" lado={ladoDoPainel} onFechar={() => selecionar(null)}>
+            {conteudoPainel}
+          </PainelMesa>
+        ) : null}
+      </div>
+
+      {mesa && mobile ? (
+        <PainelMesa key={mesa.id} modo="folha" lado={ladoDoPainel} onFechar={() => selecionar(null)}>
+          {conteudoPainel}
+        </PainelMesa>
+      ) : null}
+
+      {dados.comissao ? <PainelComissao dados={dados} salvando={salvando} alterar={alterar} /> : null}
+    </>
+  ) : null;
+
+  // The committee's tab sits inside the committee area, which has the page
+  // title, the way in and the way out.
+  if (!link) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' }}>
+        {conteudo ?? <CarregandoSecao erro={erroAcesso} onTentar={entrar} />}
+      </div>
+    );
+  }
+
   return (
     <main
       style={{
@@ -306,7 +397,7 @@ export function Mesas() {
     >
       <PageHeader eyebrow="Área dos formandos" title="Mapa das mesas." />
 
-      {!dados && link ? (
+      {conteudo ?? (
         // A personal link: nothing to type, just loading or a dead link.
         <Card padding="var(--space-7)">
           <p style={{ margin: 0, fontSize: 'var(--fs-body-lg)', lineHeight: 'var(--lh-normal)', color: erroAcesso ? 'var(--state-error)' : 'var(--text-muted)' }}>
@@ -320,132 +411,6 @@ export function Mesas() {
             </div>
           ) : null}
         </Card>
-      ) : !dados ? (
-        <Card padding="var(--space-7)">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxWidth: 420 }}>
-            <p style={{ margin: 0, fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)' }}>
-              Cada formando marca a mesa pelo link pessoal que recebeu da comissão. Se você
-              é formando, abra o seu link. Esta entrada é só da comissão.
-            </p>
-            <Input
-              label="Código da comissão"
-              placeholder="••••••"
-              type="password"
-              value={codigo}
-              onChange={(e) => {
-                setCodigo(e.target.value);
-                setErroAcesso(null);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && codigo.trim() && !entrando) entrar();
-              }}
-            />
-            {erroAcesso ? <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--state-error)' }}>{erroAcesso}</span> : null}
-            <div style={{ display: 'flex' }}>
-              <Button size="lg" disabled={!codigo.trim() || entrando} onClick={entrar}>
-                {entrando ? 'Entrando…' : 'Entrar'}
-              </Button>
-            </div>
-          </div>
-        </Card>
-      ) : (
-        <>
-          <Card padding={mobile ? 'var(--space-6)' : 'var(--space-7)'}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: mobile ? 'stretch' : 'flex-end',
-                justifyContent: 'space-between',
-                gap: 'var(--space-6)',
-                flexDirection: mobile ? 'column' : 'row',
-              }}
-            >
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', minWidth: 0, maxWidth: '34rem' }}>
-                {dados.comissao ? (
-                  <Select
-                    label="Marcando os lugares de"
-                    options={FORMANDOS}
-                    placeholder="Escolha um formando"
-                    value={escolhido}
-                    onChange={(e) => {
-                      setEscolhido(e.target.value);
-                      setSelecionada(null);
-                    }}
-                  />
-                ) : (
-                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-h2)', fontWeight: 700, letterSpacing: '-.025em', lineHeight: 1.1 }}>
-                    Olá, {nome.split(' ')[0]}.
-                  </span>
-                )}
-                <p style={{ margin: 0, fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)' }}>
-                  {dados.comissao && !nome
-                    ? 'Escolha um formando acima para marcar os lugares dele.'
-                    : fechado
-                      ? 'A comissão fechou o mapa. Ele fica só para consulta.'
-                      : total === 0
-                        ? 'A comissão ainda não cadastrou quantas pessoas você leva. Assim que cadastrar, você consegue marcar.'
-                        : restante > 0
-                          ? 'Toque numa mesa para ver quem está nela e marcar os seus lugares. Se couber, coloque todo mundo na mesma.'
-                          : 'Todos os seus lugares estão marcados. Toque numa das suas mesas para mudar.'}
-                </p>
-              </div>
-              <div style={{ display: 'flex', gap: 'var(--space-7)' }}>
-                <Numero label={total > 0 ? `você + ${total - 1}` : 'pessoas'} valor={total} />
-                <Numero label="marcadas" valor={marcados} destaque />
-                <Numero label="faltam" valor={restante} />
-              </div>
-            </div>
-          </Card>
-
-          <div ref={areaMapa} style={{ position: 'relative' }}>
-            <Card padding={mobile ? 'var(--space-4)' : 'var(--space-7)'} style={{ overflow: 'hidden' }}>
-              {mobile ? (
-                <span style={{ display: 'block', marginBottom: 'var(--space-3)', ...rotuloCampo }}>Arraste para o lado para ver o mapa todo.</span>
-              ) : null}
-              <div ref={rolagemMapa} style={{ overflowX: 'auto' }}>
-                <div style={{ minWidth: mobile ? 660 : 560, maxWidth: 960, margin: '0 auto' }}>
-                  <MapaMesas
-                    mesas={dados.mesas}
-                    reservas={dados.reservas}
-                    formando={nome}
-                    selecionada={selecionada}
-                    onSelecionar={selecionar}
-                    painel={mobile ? 'baixo' : ladoDoPainel}
-                  />
-                </div>
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-5)', marginTop: 'var(--space-5)' }}>
-                <Legenda cor="var(--gild-400)" texto="Seus lugares" />
-                <Legenda cor="var(--ice-300)" texto="Outros formandos" />
-                <Legenda cor="var(--smoke-300)" texto="Professores" />
-                <Legenda texto="Livre" />
-                <Legenda tracejada texto="Mesa reservada" />
-              </div>
-            </Card>
-
-            {mesa && !mobile ? (
-              <PainelMesa key={mesa.id} modo="ao-lado" lado={ladoDoPainel} onFechar={() => selecionar(null)}>
-                {conteudoPainel}
-              </PainelMesa>
-            ) : null}
-          </div>
-
-          {mesa && mobile ? (
-            <PainelMesa key={mesa.id} modo="folha" lado={ladoDoPainel} onFechar={() => selecionar(null)}>
-              {conteudoPainel}
-            </PainelMesa>
-          ) : null}
-
-          {dados.comissao ? <PainelComissao dados={dados} salvando={salvando} alterar={alterar} /> : null}
-
-          {dados.comissao ? (
-            <div style={{ display: 'flex' }}>
-              <Button variant="ghost" onClick={sair}>
-                Sair
-              </Button>
-            </div>
-          ) : null}
-        </>
       )}
     </main>
   );

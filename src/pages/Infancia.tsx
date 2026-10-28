@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { Download, ImageOff, Plus, Trash2 } from 'lucide-react';
+import { ClipboardPaste, Download, ImageOff, Plus, Trash2 } from 'lucide-react';
 import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
-import { Input } from '../components/Input';
-import { PageHeader } from '../components/SectionHeading';
-import { lerCodigo, salvarCodigo } from '../lib/codigoComissao';
+import { CarregandoSecao } from '../components/CarregandoSecao';
 import {
+  arquivosArrastados,
+  arquivosColados,
   buscarInfancia,
+  colarDaAreaDeTransferencia,
   enviarFotoInfancia,
   linkParaBaixar,
   nomeDaFoto,
@@ -30,15 +31,14 @@ const mensagemDe = (e: unknown, padrao: string) => (e instanceof Error ? e.messa
 const GUARDAR_LINK_MS = 12 * 60 * 60 * 1000;
 
 /**
- * The childhood photos (/infancia), committee only: every formando with a
- * space for their photo. The formandos send theirs to the committee on
- * WhatsApp, the committee puts each one under the right name, and in the end
- * everything comes down in one .zip, each photo named after its formando.
+ * The childhood photos, the "Fotos de criança" tab of the committee area
+ * (/comissao/fotos-de-crianca): every formando with a space for their photo.
+ * The formandos send theirs to the committee on WhatsApp, the committee puts
+ * each one under the right name, and in the end everything comes down in one
+ * .zip, each photo named after its formando.
  */
-export function Infancia() {
-  const [codigo, setCodigo] = useState(lerCodigo);
+export function Infancia({ codigo }: { codigo: string }) {
   const [dados, setDados] = useState<DadosInfancia | null>(null);
-  const [entrando, setEntrando] = useState(false);
   const [erroAcesso, setErroAcesso] = useState<string | null>(null);
   const [soFaltam, setSoFaltam] = useState(false);
   const [baixando, setBaixando] = useState<{ feitas: number; total: number } | null>(null);
@@ -60,28 +60,22 @@ export function Infancia() {
     };
   }
 
-  async function entrar() {
-    setEntrando(true);
+  async function carregar() {
     setErroAcesso(null);
     try {
-      setDados(guardar(await buscarInfancia(codigo.trim())));
-      salvarCodigo(codigo.trim());
+      setDados(guardar(await buscarInfancia(codigo)));
     } catch (e) {
-      setErroAcesso(mensagemDe(e, 'Não foi possível entrar agora.'));
-      salvarCodigo(null);
-    } finally {
-      setEntrando(false);
+      setErroAcesso(mensagemDe(e, 'Não foi possível abrir as fotos agora.'));
     }
   }
 
   /** Loads the list again — after an upload, a delete, or with `excluir`, deleting that photo first. Throws on failure. */
   async function recarregar(excluir?: string) {
-    setDados(guardar(await buscarInfancia(codigo.trim(), excluir)));
+    setDados(guardar(await buscarInfancia(codigo, excluir)));
   }
 
-  // With a saved code, straight in.
   useEffect(() => {
-    if (codigo) entrar();
+    carregar();
   }, []);
 
   // Other people in the committee add photos from their own phones: catch up
@@ -95,6 +89,23 @@ export function Infancia() {
     document.addEventListener('visibilitychange', aoVoltar);
     return () => document.removeEventListener('visibilitychange', aoVoltar);
   }, [pronto, codigo]);
+
+  // A photo dropped beside a card would make the browser open it in place of
+  // this page. The cards handle their own drops first.
+  useEffect(() => {
+    if (!pronto) return;
+    function impedir(e: DragEvent) {
+      if (e.defaultPrevented) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'none';
+    }
+    window.addEventListener('dragover', impedir);
+    window.addEventListener('drop', impedir);
+    return () => {
+      window.removeEventListener('dragover', impedir);
+      window.removeEventListener('drop', impedir);
+    };
+  }, [pronto]);
 
   async function baixarTudo() {
     if (!dados) return;
@@ -117,58 +128,16 @@ export function Infancia() {
     }
   }
 
-  function sair() {
-    salvarCodigo(null);
-    setCodigo('');
-    setDados(null);
-  }
-
   const total = dados?.formandos.length ?? 0;
   const comFoto = dados?.formandos.filter((f) => f.fotos.length > 0).length ?? 0;
   const totalFotos = dados?.formandos.reduce((soma, f) => soma + f.fotos.length, 0) ?? 0;
   const visiveis = dados?.formandos.filter((f) => !soFaltam || f.fotos.length === 0) ?? [];
 
+  // The page title, the way in and the way out belong to the committee area.
   return (
-    <main
-      style={{
-        maxWidth: 'var(--maxw-page)',
-        margin: '0 auto',
-        padding: 'var(--space-9) var(--gutter-page) var(--space-10)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 'var(--space-7)',
-      }}
-    >
-      <PageHeader eyebrow="Comissão · Turma 32" title="Fotos de criança." />
-
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' }}>
       {!dados ? (
-        <Card padding="var(--space-7)">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxWidth: 420 }}>
-            <p style={texto}>
-              Esta área é só da comissão: aqui fica a foto de criança de cada formando, para baixar todas juntas
-              depois. Digite o código da comissão.
-            </p>
-            <Input
-              label="Código da comissão"
-              placeholder="••••••"
-              type="password"
-              value={codigo}
-              onChange={(e) => {
-                setCodigo(e.target.value);
-                setErroAcesso(null);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && codigo.trim() && !entrando) entrar();
-              }}
-            />
-            {erroAcesso ? <span style={erroStyle}>{erroAcesso}</span> : null}
-            <div style={{ display: 'flex' }}>
-              <Button size="lg" disabled={!codigo.trim() || entrando} onClick={entrar}>
-                {entrando ? 'Entrando…' : 'Entrar'}
-              </Button>
-            </div>
-          </div>
-        </Card>
+        <CarregandoSecao erro={erroAcesso} onTentar={carregar} />
       ) : (
         <>
           <Card padding="var(--space-7)">
@@ -218,8 +187,9 @@ export function Infancia() {
                 />
               </div>
               <p style={texto}>
-                Recebeu a foto de alguém? Ache o nome e toque em “Adicionar foto”. Quando estiverem todas, baixe tudo
-                de uma vez: cada foto vem com o nome do formando.
+                Recebeu a foto de alguém? Arraste a foto para o cartão do formando, ou copie a foto (no WhatsApp: botão
+                direito, “Copiar imagem”) e toque em “Colar” no cartão. Quando estiverem todas, baixe tudo de uma vez:
+                cada foto vem com o nome do formando.
               </p>
               {erroBaixar ? <span style={erroStyle}>{erroBaixar}</span> : null}
             </div>
@@ -239,23 +209,21 @@ export function Infancia() {
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))', gap: 'var(--space-5)' }}>
               {visiveis.map((f) => (
-                <CartaoFormando key={f.formando} f={f} codigo={codigo.trim()} recarregar={recarregar} />
+                <CartaoFormando key={f.formando} f={f} codigo={codigo} recarregar={recarregar} />
               ))}
             </div>
           )}
-
-          <div style={{ display: 'flex' }}>
-            <Button variant="ghost" onClick={sair}>
-              Sair
-            </Button>
-          </div>
         </>
       )}
-    </main>
+    </div>
   );
 }
 
-/** One formando: their photos, and the button to add more. */
+/**
+ * One formando: their photos, and the ways to add more — the file picker, a
+ * photo dragged onto the card, or a copied one pasted (the "Colar" button,
+ * or Ctrl+V with the card clicked).
+ */
 function CartaoFormando({
   f,
   codigo,
@@ -269,12 +237,12 @@ function CartaoFormando({
   const [enviando, setEnviando] = useState<{ feitas: number; total: number } | null>(null);
   const [excluindo, setExcluindo] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [arrastando, setArrastando] = useState(false);
+  // Clicked (focused): where Ctrl+V goes, so it's highlighted.
+  const [focado, setFocado] = useState(false);
 
-  async function adicionar(lista: FileList | null) {
-    const arquivos = Array.from(lista ?? []);
-    // Cleared so picking the same file again still fires onChange.
-    if (entrada.current) entrada.current.value = '';
-    if (arquivos.length === 0) return;
+  async function adicionar(arquivos: File[]) {
+    if (arquivos.length === 0 || enviando) return;
     const problema = arquivos.map(problemaNoArquivo).find(Boolean);
     if (problema) {
       setErro(problema);
@@ -315,7 +283,57 @@ function CartaoFormando({
   }
 
   return (
-    <Card padding="var(--space-6)">
+    <Card
+      padding="var(--space-6)"
+      accent={arrastando || focado}
+      tabIndex={0}
+      onFocus={() => setFocado(true)}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocado(false);
+      }}
+      aria-label={`Fotos de ${f.formando}`}
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        setArrastando(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setArrastando(false);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setArrastando(false);
+        arquivosArrastados(e.dataTransfer).then(adicionar, (falha) => setErro(mensagemDe(falha, 'Essa foto não veio.')));
+      }}
+      onPaste={(e) => {
+        const colados = arquivosColados(e.clipboardData);
+        if (colados.length === 0) return;
+        e.preventDefault();
+        adicionar(colados);
+      }}
+      style={{ outline: 'none' }}
+    >
+      {arrastando ? (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: 'var(--radius-lg)',
+            background: 'rgba(17,17,19,.86)',
+            color: 'var(--accent)',
+            fontSize: 'var(--fs-body)',
+            fontWeight: 500,
+            pointerEvents: 'none',
+          }}
+        >
+          Solte para enviar para {f.formando.split(' ')[0]}
+        </div>
+      ) : null}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', height: '100%' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
           <span style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-h4)', fontWeight: 600, letterSpacing: '-.015em', lineHeight: 1.2 }}>
@@ -346,8 +364,20 @@ function CartaoFormando({
 
         {erro ? <span style={erroStyle}>{erro}</span> : null}
 
-        <div style={{ display: 'flex', marginTop: 'auto' }}>
-          <input ref={entrada} type="file" accept="image/*" multiple hidden onChange={(e) => adicionar(e.target.files)} />
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)', marginTop: 'auto' }}>
+          <input
+            ref={entrada}
+            type="file"
+            accept="image/*"
+            multiple
+            hidden
+            onChange={(e) => {
+              const escolhidos = Array.from(e.target.files ?? []);
+              // Cleared so picking the same file again still fires onChange.
+              e.target.value = '';
+              adicionar(escolhidos);
+            }}
+          />
           <Button
             size="sm"
             variant="secondary"
@@ -357,6 +387,19 @@ function CartaoFormando({
           >
             {!enviando ? 'Adicionar foto' : enviando.total > 1 ? `Enviando ${enviando.feitas + 1} de ${enviando.total}…` : 'Enviando…'}
           </Button>
+          {!enviando ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setErro(null);
+                colarDaAreaDeTransferencia().then(adicionar, (falha) => setErro(mensagemDe(falha, 'Não deu para colar a foto.')));
+              }}
+              iconLeft={<ClipboardPaste size={16} aria-hidden />}
+            >
+              Colar
+            </Button>
+          ) : null}
         </div>
       </div>
     </Card>
@@ -386,7 +429,7 @@ function Miniatura({ foto, nome, excluindo, onExcluir }: { foto: FotoInfancia; n
   const [quebrou, setQuebrou] = useState(false);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', width: LADO, opacity: excluindo ? 0.4 : 1 }}>
-      <a href={foto.url} target="_blank" rel="noreferrer" title={nome} style={{ display: 'block' }}>
+      <a href={foto.url} target="_blank" rel="noreferrer" title={nome} draggable={false} style={{ display: 'block' }}>
         {quebrou ? (
           <div
             style={{
@@ -412,6 +455,7 @@ function Miniatura({ foto, nome, excluindo, onExcluir }: { foto: FotoInfancia; n
             src={foto.url}
             alt={nome}
             loading="lazy"
+            draggable={false}
             onError={() => setQuebrou(true)}
             style={{
               width: LADO,

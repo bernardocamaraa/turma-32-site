@@ -59,6 +59,26 @@ A leitura acontece só dentro da Edge Function `committee-data`
 guarda a *service role key* (nunca exposta ao navegador) e só devolve os
 dados depois de conferir o código digitado.
 
+## Área da comissão (`/comissao`)
+
+Tudo o que a comissão administra fica num lugar só, com uma entrada só: o
+**código da comissão**, que fica lembrado no aparelho (o botão "Sair da área
+da comissão" esquece). O link fica no rodapé do site, e o menu não mostra.
+Cada parte é uma aba, com endereço próprio (dá para salvar ou mandar):
+
+| Aba | Endereço | O que tem |
+| --- | --- | --- |
+| Início | `/comissao` | Um resumo de cada parte: quem falta votar, lugares marcados, fotos de criança, álbum e mensagens. |
+| Votação | `/comissao/votacao` | Perguntas, WhatsApp dos formandos, quem falta votar, resultados e o aviso no celular. |
+| Mesas | `/comissao/mesas` | Quantas pessoas cada formando leva, os links pessoais e o mapa. |
+| Fotos de criança | `/comissao/fotos-de-crianca` | A foto de cada formando, para baixar todas juntas. |
+| Álbum e mensagens | `/comissao/album` | Liberar o álbum da festa, moderar as fotos e ler as mensagens. |
+
+As abas ficam presas no topo ao rolar a página. Os endereços antigos
+(`/votacao/comissao`, `/mesas` sem link, `/infancia`) levam para a aba certa.
+As páginas dos formandos continuam separadas: `/votacao` (entram pelo
+WhatsApp) e `/mesas/<link pessoal>`.
+
 ## Álbum da festa
 
 O álbum liga em três peças do Supabase, todas em `schema.sql`:
@@ -72,7 +92,7 @@ O álbum liga em três peças do Supabase, todas em `schema.sql`:
   enquanto `album_aberto=true` (checado via RLS, não só na interface).
   A comissão apaga qualquer foto pela Edge Function.
 
-## Mapa das mesas (`/mesas`)
+## Mapa das mesas (`/mesas/<link>` e `/comissao/mesas`)
 
 Cada formando recebe da comissão um **link pessoal** (`/mesas/<link>`) e,
 por ele, marca em qual mesa a família dele vai sentar. Cada mesa tem 10 lugares, desenhados como
@@ -85,9 +105,8 @@ espalhar os lugares dele por mais de uma mesa, se não couber tudo numa só.
   copiando do portal da casa de festas (que continua sendo a lista de
   convidados). Ela digita só os convidados, sem contar o formando; o site
   soma +1 pelo próprio formando e guarda o total de lugares. O formando só
-  distribui esses lugares. Isso fica no painel que aparece
-  quando se entra em `/mesas` com o **código da comissão** (há um atalho
-  na área da comissão; a página não aparece no menu).
+  distribui esses lugares. Isso fica no painel da aba **Mesas** da área da
+  comissão (`/comissao/mesas`).
 - **Links pessoais**: no mesmo painel, cada formando tem os botões "Copiar
   link", "Mandar no WhatsApp" e "Novo link". Este último troca o link na
   hora, caso algum vaze, e o antigo para de funcionar.
@@ -125,7 +144,7 @@ pode ser digitado de qualquer jeito: com ou sem DDD (sem DDD, vale o 21),
 com ou sem +55, e até sem o 9 da frente. O site acerta o formato sozinho
 (`normalizarWhatsapp` em `src/lib/votacao.ts`).
 
-- **Números dos formandos:** a comissão cadastra em `/votacao/comissao`,
+- **Números dos formandos:** a comissão cadastra na aba Votação da área da comissão (`/comissao/votacao`),
   com o código dela, na lista "WhatsApp dos formandos" (botões "Adicionar"
   e "Editar"; apagar o número libera o nome). Os números só aparecem para a
   comissão.
@@ -137,7 +156,7 @@ com ou sem +55, e até sem o 9 da frente. O site acerta o formato sozinho
 - **Mapa das mesas:** com o número cadastrado, o botão "Mandar no WhatsApp"
   do painel das mesas abre direto a conversa daquele formando.
 
-- **Perguntas:** a comissão cria em `/votacao/comissao`. As opções
+- **Perguntas:** a comissão cria na aba Votação (`/comissao/votacao`). As opções
   são os próprios formandos ("o mais engraçado"; ninguém vota em si mesmo)
   ou uma lista escrita pela comissão ("qual música de entrada?").
 - **Um voto por formando em cada pergunta.** Como o voto é secreto, ele não
@@ -173,19 +192,36 @@ com ou sem +55, e até sem o 9 da frente. O site acerta o formato sozinho
   barras para todos (e encerra a pergunta, se ainda estiver aberta).
   "Esconder resultado" volta atrás.
 
+- **Aviso no celular:** na aba Votação (`/comissao/votacao`), o botão "Me avisar quando
+  todos votarem" liga a notificação do próprio navegador (Web Push) naquele
+  aparelho, e já manda uma de teste. Quando o último formando vota numa
+  pergunta, todo aparelho que ligou o aviso recebe "Todo mundo votou", uma
+  vez só por pergunta (`votacao_completas` em `votacao.sql`). No Android e
+  no computador funciona direto no Chrome. No iPhone (iOS 16.4 ou mais novo),
+  só com o site adicionado à Tela de Início e aberto pelo ícone: a página
+  explica o passo a passo. As chaves do Web Push são criadas pela própria
+  função na primeira vez e ficam na tabela `chaves_push`. O service worker
+  (`public/sw.js`) só mostra essas notificações e só é instalado em quem liga
+  o aviso.
+
 Para colocar no ar: rode `supabase/votacao.sql` no SQL Editor (depois do
 `mesas.sql`) e publique a função com `supabase functions deploy votacao`.
 
-## Fotos de criança (`/infancia`)
+## Fotos de criança (`/comissao/fotos-de-crianca`)
 
 Um "drive" só da comissão para juntar a foto de criança de cada formando.
 Os formandos mandam a foto para a comissão no WhatsApp, e a comissão coloca
-cada uma no nome certo em `/infancia` (há um atalho na área da comissão; a
-página não aparece no menu). Entra-se com o mesmo **código da comissão**.
+cada uma no nome certo, na aba **Fotos de criança** da área da comissão.
 
 - **Cada formando tem um cartão** com o botão "Adicionar foto". Dá para
   mandar mais de uma foto por formando, e várias de uma vez. Cada foto tem
   os botões de baixar e de excluir.
+- **Sem salvar a foto antes:** dá para arrastar a foto direto para o cartão
+  (do computador ou do WhatsApp instalado). Do WhatsApp Web o navegador não
+  deixa a foto sair arrastando: aí é clicar com o botão direito na foto,
+  "Copiar imagem", e tocar em "Colar" no cartão (ou clicar no cartão e
+  apertar Ctrl+V). O botão "Colar" também funciona no celular, com a foto
+  copiada.
 - **Quem falta:** o topo mostra quantos já têm foto, e o filtro "Faltam"
   deixa só os que ainda não têm.
 - **Baixar tudo:** "Baixar todas (.zip)" junta todas as fotos num arquivo
@@ -246,7 +282,9 @@ mudança, use um link que ainda não foi enviado, ou acrescente `?1` no fim.
 src/
   components/   # Badge, Button, Card, Input, Select, NavBar, Dialog, etc.
                  # (porte 1:1 do design system em ../project/_ds)
-  pages/        # Home, Baile, Turma, Album, Comissao, Mesas, Votacao, Infancia
+  pages/        # Home, Baile, Turma, Album, Mesas, Votacao (formandos) e
+                 # Comissao (a área da comissão, com as abas: Votacao,
+                 # Mesas, Infancia e o álbum e mensagens)
   lib/          # Supabase client, countdown, formandos, hooks de motion/scroll
 supabase/
   schema.sql                        # tabelas + RLS
