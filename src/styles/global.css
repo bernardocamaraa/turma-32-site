@@ -198,6 +198,43 @@ g[role="button"]:focus-visible .mesa-alvo {
   }
 }
 
+/* Vote confirmation (components/UrnaVoto.tsx): the ballot shows up, folds
+   in half, drops through the box's slot, the box takes it in and a check
+   pops. Each element's own style is where it ends, so with reduced motion
+   (animations off, below) the box and the check simply show. */
+@keyframes urna-entra {
+  from { opacity: 0; transform: translateY(18px); }
+}
+
+@keyframes urna-engole {
+  0%, 100% { transform: none; }
+  45% { transform: scale(1.03, .94); }
+}
+
+@keyframes cedula-aparece {
+  from { opacity: 0; transform: translateY(-22px) scale(.9) rotate(-4deg); }
+}
+
+@keyframes cedula-dobra {
+  to { transform: rotateX(-180deg); }
+}
+
+@keyframes cedula-cai {
+  to { transform: translateY(80px); }
+}
+
+@keyframes urna-check {
+  from { opacity: 0; transform: scale(.3); }
+}
+
+@keyframes urna-texto {
+  from { opacity: 0; transform: translateY(10px); }
+}
+
+@keyframes urna-sai {
+  to { opacity: 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation: none !important;
