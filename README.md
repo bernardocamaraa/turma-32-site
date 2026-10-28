@@ -176,6 +176,34 @@ com ou sem +55, e até sem o 9 da frente. O site acerta o formato sozinho
 Para colocar no ar: rode `supabase/votacao.sql` no SQL Editor (depois do
 `mesas.sql`) e publique a função com `supabase functions deploy votacao`.
 
+## Fotos de criança (`/infancia`)
+
+Um "drive" só da comissão para juntar a foto de criança de cada formando.
+Os formandos mandam a foto para a comissão no WhatsApp, e a comissão coloca
+cada uma no nome certo em `/infancia` (há um atalho na área da comissão; a
+página não aparece no menu). Entra-se com o mesmo **código da comissão**.
+
+- **Cada formando tem um cartão** com o botão "Adicionar foto". Dá para
+  mandar mais de uma foto por formando, e várias de uma vez. Cada foto tem
+  os botões de baixar e de excluir.
+- **Quem falta:** o topo mostra quantos já têm foto, e o filtro "Faltam"
+  deixa só os que ainda não têm.
+- **Baixar tudo:** "Baixar todas (.zip)" junta todas as fotos num arquivo
+  só, cada uma com o nome do formando (`Bernardo Câmara.jpg`; com mais de
+  uma, `Bernardo Câmara 1.jpg`, `Bernardo Câmara 2.jpg`). O .zip é montado
+  no próprio navegador.
+- **Fotos privadas:** são fotos da turma criança, então o bucket
+  `fotos-infancia` é privado e a chave anon não lê nem envia nada nele. A
+  função `infancia` confere o código e só então entrega links assinados
+  (valem um dia) e links de envio. O arquivo vai do navegador direto para o
+  Storage, sem passar pela função. Até 25MB por foto, só imagens (inclusive
+  o `.heic` do iPhone).
+- Não há tabela: os próprios arquivos são o registro, em
+  `<slug do formando>/<id>.<extensão>`.
+
+Para colocar no ar: rode `supabase/infancia.sql` no SQL Editor (depois do
+`mesas.sql`) e publique a função com `supabase functions deploy infancia`.
+
 ## Prévia dos links (WhatsApp, iMessage, Telegram…)
 
 O cartão que aparece quando alguém cola um link do site vem das tags
@@ -218,13 +246,17 @@ mudança, use um link que ainda não foi enviado, ou acrescente `?1` no fim.
 src/
   components/   # Badge, Button, Card, Input, Select, NavBar, Dialog, etc.
                  # (porte 1:1 do design system em ../project/_ds)
-  pages/        # Home, Baile, Turma, Album, Comissao, Mesas
+  pages/        # Home, Baile, Turma, Album, Comissao, Mesas, Votacao, Infancia
   lib/          # Supabase client, countdown, formandos, hooks de motion/scroll
 supabase/
   schema.sql                        # tabelas + RLS
   mesas.sql                         # mapa das mesas (rodar depois do schema.sql)
   functions/committee-data/index.ts # Edge Function da área da comissão
   functions/mesas/index.ts          # Edge Function do mapa das mesas
+  votacao.sql                       # votação (rodar depois do mesas.sql)
+  functions/votacao/index.ts        # Edge Function da votação
+  infancia.sql                      # fotos de criança (rodar depois do mesas.sql)
+  functions/infancia/index.ts       # Edge Function das fotos de criança
 ```
 
 > A Edge Function é publicada à parte (`supabase functions deploy
