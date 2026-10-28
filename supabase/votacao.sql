@@ -76,12 +76,12 @@ alter table public.votacao_participacao enable row level security;
 alter table public.votacao_contagem enable row level security;
 -- Deliberately no policies on these three: anon can't read or write them.
 
--- Casts one formando's vote on one question: one option, or up to the
--- question's `maximo` different ones. Marking them as having voted and
--- adding one to each option happen in the same transaction, so a vote can't
--- be counted without being marked (or the other way round), and the primary
--- key on votacao_participacao is what stops a second vote — even from two
--- tabs at the same moment.
+-- Casts one formando's vote on one question: one option, up to the
+-- question's `maximo` different ones, or a blank vote (`p_opcoes` null).
+-- Marking them as having voted and adding one to each option happen in the
+-- same transaction, so a vote can't be counted without being marked (or the
+-- other way round), and the primary key on votacao_participacao is what
+-- stops a second vote — even from two tabs at the same moment.
 create or replace function public.votar_opcoes(p_formando text, p_pergunta uuid, p_opcoes text[])
 returns void
 language plpgsql
@@ -109,31 +109,33 @@ begin
     raise exception 'Formando não encontrado.';
   end if;
 
-  if p_opcoes is null or cardinality(p_opcoes) = 0 then
-    raise exception 'Escolha uma opção em cada pergunta.';
-  end if;
-  if cardinality(p_opcoes) > v_maximo then
-    raise exception 'Nessa pergunta dá para escolher no máximo %.', v_maximo;
-  end if;
-  if array_position(p_opcoes, null) is not null then
-    raise exception 'Escolha uma das opções da lista.';
-  end if;
-  if (select count(distinct o) from unnest(p_opcoes) o) <> cardinality(p_opcoes) then
-    raise exception 'Escolha opções diferentes na mesma pergunta.';
-  end if;
-
-  foreach v_opcao in array p_opcoes loop
-    if v_tipo = 'formandos' then
-      if not exists (select 1 from convidados_formando where formando = v_opcao) then
-        raise exception 'Escolha um formando da lista.';
-      end if;
-      if v_opcao = p_formando then
-        raise exception 'Não dá para votar em você mesmo.';
-      end if;
-    elsif not (v_opcao = any (v_opcoes)) then
+  if p_opcoes is not null then
+    if cardinality(p_opcoes) = 0 then
+      raise exception 'Escolha uma opção em cada pergunta.';
+    end if;
+    if cardinality(p_opcoes) > v_maximo then
+      raise exception 'Nessa pergunta dá para escolher no máximo %.', v_maximo;
+    end if;
+    if array_position(p_opcoes, null) is not null then
       raise exception 'Escolha uma das opções da lista.';
     end if;
-  end loop;
+    if (select count(distinct o) from unnest(p_opcoes) o) <> cardinality(p_opcoes) then
+      raise exception 'Escolha opções diferentes na mesma pergunta.';
+    end if;
+
+    foreach v_opcao in array p_opcoes loop
+      if v_tipo = 'formandos' then
+        if not exists (select 1 from convidados_formando where formando = v_opcao) then
+          raise exception 'Escolha um formando da lista.';
+        end if;
+        if v_opcao = p_formando then
+          raise exception 'Não dá para votar em você mesmo.';
+        end if;
+      elsif not (v_opcao = any (v_opcoes)) then
+        raise exception 'Escolha uma das opções da lista.';
+      end if;
+    end loop;
+  end if;
 
   insert into votacao_participacao (pergunta_id, formando) values (p_pergunta, p_formando)
   on conflict do nothing;
@@ -141,8 +143,10 @@ begin
     raise exception 'Você já votou nessa pergunta.';
   end if;
 
+  -- A blank vote is counted under '' — never an option, since options are
+  -- trimmed and can't be empty — so the tally can show it apart.
   insert into votacao_contagem (pergunta_id, opcao, votos)
-  select p_pergunta, o, 1 from unnest(p_opcoes) o
+  select p_pergunta, o, 1 from unnest(coalesce(p_opcoes, array[''])) o
   on conflict (pergunta_id, opcao) do update set votos = votacao_contagem.votos + 1;
 end;
 $$;
@@ -208,8 +212,8 @@ grant execute on function public.identificar_eleitor(text, text) to service_role
 -- question.)
 
 -- Casts a formando's whole ballot at once: `p_votos` is {question id:
--- [options]} (or a single option as a string) with a choice for every open
--- question they haven't voted on yet.
+-- [options]} (or a single option as a string, or null for a blank vote)
+-- with a choice for every open question they haven't voted on yet.
 -- All or nothing, in one transaction, so no question can be skipped. It's
 -- also the only moment the choices can be compared with each other —
 -- nothing stores them afterwards — so the same option twice is refused
@@ -227,7 +231,7 @@ declare
   v_voto record;
 begin
   if p_votos is null or jsonb_typeof(p_votos) <> 'object'
-     or exists (select 1 from jsonb_each(p_votos) e where jsonb_typeof(e.value) not in ('string', 'array'))
+     or exists (select 1 from jsonb_each(p_votos) e where jsonb_typeof(e.value) not in ('string', 'array', 'null'))
      or exists (
        select 1 from jsonb_each(p_votos) e,
          jsonb_array_elements(case when jsonb_typeof(e.value) = 'array' then e.value else '[]' end) x
@@ -272,8 +276,9 @@ begin
     perform votar_opcoes(
       p_formando,
       v_voto.key::uuid,
-      case
-        when jsonb_typeof(v_voto.value) = 'string' then array[v_voto.value #>> '{}']
+      case jsonb_typeof(v_voto.value)
+        when 'null' then null
+        when 'string' then array[v_voto.value #>> '{}']
         else array(select jsonb_array_elements_text(v_voto.value))
       end
     );

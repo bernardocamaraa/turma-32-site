@@ -9,9 +9,9 @@
 //     have no number (`livres`); sent again with one of them as `nome`, the
 //     number gets tied to that name (identificar_eleitor in votacao.sql).
 //     Votes as that formando, the whole ballot at once (`votarTudo`): for
-//     every open question one option, or up to its `maximo`, never the same
-//     option in two questions (votar_cedula in votacao.sql). Sees a result
-//     once the committee releases it.
+//     every open question one option, up to its `maximo`, or a blank vote
+//     (null), never the same option in two questions (votar_cedula in
+//     votacao.sql). Sees a result once the committee releases it.
 //   - `codigo`: COMMITTEE_CODE. Creates, deletes and closes questions,
 //     shows/hides the results, and sees and edits each formando's number.
 //
@@ -106,12 +106,13 @@ Deno.serve(async (req) => {
     // A formando votes as themselves only: the name the number belongs to.
     // The whole ballot goes in at once — see votar_cedula in votacao.sql.
     if (voce && acao === 'votarTudo') {
-      // { question id: [options] } — or one option as a plain string.
+      // { question id: [options] } — or one option as a plain string, or
+      // null for a blank vote.
       const valida =
         votos !== null && typeof votos === 'object' && !Array.isArray(votos) &&
         Object.keys(votos).length > 0 &&
         Object.values(votos).every(
-          (v) => typeof v === 'string' || (Array.isArray(v) && v.length > 0 && v.every((o) => typeof o === 'string')),
+          (v) => v === null || typeof v === 'string' || (Array.isArray(v) && v.length > 0 && v.every((o) => typeof o === 'string')),
         );
       if (!valida) return recusar('Escolha uma opção em cada pergunta.');
       const { error } = await supabase.rpc('votar_cedula', { p_formando: voce, p_votos: votos });
@@ -206,7 +207,10 @@ Deno.serve(async (req) => {
         // when the committee wrote them; for "formandos" questions only
         // names that got votes are listed.
         const veResultado = p.resultado_liberado || (comissao && !p.aberta);
-        const daPergunta = contagem.data.filter((c) => c.pergunta_id === p.id);
+        const contados = contagem.data.filter((c) => c.pergunta_id === p.id);
+        // Blank votes are counted under '' (votar_opcoes): shown apart, not as an option.
+        const brancos = (contados.find((c) => c.opcao === '')?.votos as number | undefined) ?? 0;
+        const daPergunta = contados.filter((c) => c.opcao !== '');
         const resultado = veResultado
           ? [
               ...daPergunta.map((c) => ({ opcao: c.opcao as string, votos: c.votos as number })),
@@ -227,6 +231,7 @@ Deno.serve(async (req) => {
           votaram: comissao || veResultado ? votaram.length : null,
           faltam: comissao ? nomes.filter((n) => !votaram.includes(n)) : null,
           resultado,
+          brancos: veResultado ? brancos : null,
         };
       }),
     });
