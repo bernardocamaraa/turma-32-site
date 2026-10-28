@@ -24,6 +24,8 @@ export type Pergunta = {
   faltam: string[] | null;
   /** Votes per option, most voted first — once released, or to the committee once closed. */
   resultado: Resultado[] | null;
+  /** Blank votes, apart from the options — sent along with `resultado`. */
+  brancos: number | null;
 };
 
 export type DadosVotacao = {
@@ -85,8 +87,11 @@ export function formatarWhatsapp(digitos: string): string {
 }
 
 export type AcaoVotacao =
-  /** A formando's whole ballot: the options picked on each open question they haven't voted on, by question id. */
-  | { acao: 'votarTudo'; votos: Record<string, string[]> }
+  /**
+   * A formando's whole ballot: the options picked on each open question they
+   * haven't voted on, by question id — or null for a blank vote.
+   */
+  | { acao: 'votarTudo'; votos: Record<string, string[] | null> }
   /** `maximo`: how many options each formando picks (1 = just one). */
   | { acao: 'criar'; texto: string; tipo: TipoPergunta; opcoes: string[]; maximo: number }
   | { acao: 'encerrar' | 'liberar' | 'esconder' | 'excluir'; id: string }

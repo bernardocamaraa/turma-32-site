@@ -414,12 +414,14 @@ function Cedula({
   salvando: boolean;
   agir: (a: AcaoVotacao) => Promise<string | null>;
 }) {
-  const [escolhas, setEscolhas] = useState<Record<string, string[]>>({});
+  // The options picked on each question; null means a blank vote.
+  const [escolhas, setEscolhas] = useState<Record<string, string[] | null>>({});
   const [erro, setErro] = useState<string | null>(null);
 
   const de = (id: string) => escolhas[id] ?? [];
+  const emBranco = (id: string) => escolhas[id] === null;
   const pendentes = perguntas.filter((p) => p.aberta && !p.jaVotou);
-  const faltam = pendentes.filter((p) => de(p.id).length === 0);
+  const faltam = pendentes.filter((p) => !emBranco(p.id) && de(p.id).length === 0);
   const outras = (p: Pergunta) => pendentes.filter((q) => q.id !== p.id);
   // Options picked in `p` that are also picked in another question, and where.
   const repetidas = (p: Pergunta) =>
@@ -427,7 +429,7 @@ function Cedula({
   const comRepeticao = pendentes.filter((p) => repetidas(p).length > 0);
   const pronta = pendentes.length > 0 && faltam.length === 0 && comRepeticao.length === 0;
 
-  function escolher(id: string, opcoes: string[]) {
+  function escolher(id: string, opcoes: string[] | null) {
     setErro(null);
     setEscolhas((atual) => ({ ...atual, [id]: opcoes }));
   }
@@ -438,9 +440,10 @@ function Cedula({
 
   async function enviar() {
     if (!pronta) return;
-    const resumo = pendentes.map((p) => `• ${p.pergunta}\n   ${de(p.id).join(', ')}`).join('\n');
+    const resumo = pendentes.map((p) => `• ${p.pergunta}\n   ${emBranco(p.id) ? 'Em branco' : de(p.id).join(', ')}`).join('\n');
     if (!window.confirm(`Confirmar os seus votos?\n\n${resumo}\n\nDepois de enviados, não dá para trocar.`)) return;
-    const falha = await agir({ acao: 'votarTudo', votos: Object.fromEntries(pendentes.map((p) => [p.id, de(p.id)])) });
+    const votos = Object.fromEntries(pendentes.map((p) => [p.id, emBranco(p.id) ? null : de(p.id)]));
+    const falha = await agir({ acao: 'votarTudo', votos });
     setErro(falha);
     if (!falha) setEscolhas({});
   }
@@ -454,6 +457,7 @@ function Cedula({
           voce={voce}
           formandos={formandos}
           escolhidas={de(p.id)}
+          emBranco={emBranco(p.id)}
           usadasEmOutras={outras(p).flatMap((q) => de(q.id))}
           repetidas={repetidas(p)}
           onEscolher={(opcoes) => escolher(p.id, opcoes)}
@@ -534,13 +538,14 @@ function ListaDePerguntas({
 
 /**
  * One question of the ballot: the options to pick from (one, or up to the
- * question's `maximo`), or that you voted, or the result.
+ * question's `maximo`) or a blank vote, or that you voted, or the result.
  */
 function PerguntaFormando({
   p,
   voce,
   formandos,
   escolhidas,
+  emBranco,
   usadasEmOutras,
   repetidas,
   onEscolher,
@@ -549,11 +554,13 @@ function PerguntaFormando({
   voce: string;
   formandos: string[];
   escolhidas: string[];
+  emBranco: boolean;
   /** What's picked in the other questions right now. */
   usadasEmOutras: string[];
   /** Options picked here that are also picked in another question — an error to fix before sending. */
   repetidas: { opcao: string; em: Pergunta }[];
-  onEscolher: (opcoes: string[]) => void;
+  /** The options now picked, or null for a blank vote. */
+  onEscolher: (opcoes: string[] | null) => void;
 }) {
   const [busca, setBusca] = useState('');
   const varias = p.maximo > 1;
@@ -562,7 +569,8 @@ function PerguntaFormando({
   // One choice: picking another replaces it. Several: each tap adds or
   // removes one, until the limit — then a name has to be unpicked first.
   function alternar(o: string) {
-    if (escolhidas.includes(o)) onEscolher(escolhidas.filter((x) => x !== o));
+    if (emBranco) onEscolher([o]);
+    else if (escolhidas.includes(o)) onEscolher(escolhidas.filter((x) => x !== o));
     else if (!varias) onEscolher([o]);
     else if (!cheia) onEscolher([...escolhidas, o]);
   }
@@ -578,7 +586,7 @@ function PerguntaFormando({
         <CabecalhoPergunta p={p} />
 
         {p.resultado ? (
-          <Barras resultado={p.resultado} votaram={p.votaram} />
+          <Barras resultado={p.resultado} brancos={p.brancos} votaram={p.votaram} />
         ) : p.jaVotou ? (
           <Aviso icone>Seu voto foi registrado. O resultado aparece aqui quando a comissão liberar.</Aviso>
         ) : !p.aberta ? (
@@ -611,10 +619,12 @@ function PerguntaFormando({
             ) : null}
 
             {varias ? (
-              <span aria-live="polite" style={{ ...pequeno, color: cheia ? 'var(--text-muted)' : 'var(--text-faint)' }}>
-                {cheia
-                  ? `${p.maximo} escolhidos, o máximo. Para trocar, desmarque um.`
-                  : `Escolha até ${p.maximo} · ${escolhidas.length === 1 ? '1 escolhido' : `${escolhidas.length} escolhidos`}`}
+              <span aria-live="polite" style={{ ...pequeno, color: cheia || emBranco ? 'var(--text-muted)' : 'var(--text-faint)' }}>
+                {emBranco
+                  ? 'Voto em branco. Para votar em alguém, toque num nome.'
+                  : cheia
+                    ? `${p.maximo} escolhidos, o máximo. Para trocar, desmarque um.`
+                    : `Escolha até ${p.maximo} · ${escolhidas.length === 1 ? '1 escolhido' : `${escolhidas.length} escolhidos`}`}
               </span>
             ) : null}
 
@@ -646,7 +656,8 @@ function PerguntaFormando({
                       fontSize: 'var(--fs-body)',
                       fontWeight: 500,
                       cursor: bloqueada ? 'not-allowed' : 'pointer',
-                      opacity: bloqueada ? 0.4 : 1,
+                      // With a blank vote the names fade, but a tap still picks one.
+                      opacity: bloqueada ? 0.4 : emBranco ? 0.55 : 1,
                       transition: 'background var(--dur) var(--ease-out), color var(--dur) var(--ease-out), transform var(--dur-fast) var(--ease-out), opacity var(--dur) var(--ease-out)',
                       transform: ativa ? 'scale(1.03)' : 'none',
                     }}
@@ -658,6 +669,32 @@ function PerguntaFormando({
                 );
               })}
               {visiveis.length === 0 ? <span style={pequeno}>Nenhum nome encontrado.</span> : null}
+            </div>
+
+            <div>
+              <button
+                type="button"
+                aria-pressed={emBranco}
+                onClick={() => onEscolher(emBranco ? [] : null)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  minHeight: 44,
+                  padding: '0 18px',
+                  borderRadius: 'var(--radius-pill)',
+                  border: emBranco ? '1px solid var(--chalk-050)' : '1px dashed var(--stroke-muted)',
+                  background: emBranco ? 'var(--chalk-050)' : 'transparent',
+                  color: emBranco ? '#000' : 'var(--text-muted)',
+                  fontSize: 'var(--fs-body)',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  transition: 'background var(--dur) var(--ease-out), color var(--dur) var(--ease-out)',
+                }}
+              >
+                {emBranco ? <Check size={16} strokeWidth={2.4} aria-hidden /> : null}
+                {emBranco ? 'Em branco' : 'Votar em branco'}
+              </button>
             </div>
 
             {repetidas.length > 0 ? (
@@ -704,9 +741,10 @@ function Aviso({ children, icone }: { children: ReactNode; icone?: boolean }) {
 
 /**
  * The tally as bars that grow to size when they appear, most voted first;
- * the winner (or the tied winners) in gold.
+ * the winner (or the tied winners) in gold. Blank votes are counted below,
+ * apart: the percentages are of the votes given to an option.
  */
-function Barras({ resultado, votaram }: { resultado: Resultado[]; votaram: number | null }) {
+function Barras({ resultado, brancos, votaram }: { resultado: Resultado[]; brancos: number | null; votaram: number | null }) {
   const [cheio, setCheio] = useState(false);
   useEffect(() => {
     const id = requestAnimationFrame(() => setCheio(true));
@@ -715,11 +753,15 @@ function Barras({ resultado, votaram }: { resultado: Resultado[]; votaram: numbe
   const total = resultado.reduce((s, r) => s + r.votos, 0);
   const maximo = Math.max(...resultado.map((r) => r.votos), 0);
 
-  if (total === 0) return <Aviso>Ninguém votou nessa pergunta.</Aviso>;
+  if (total === 0 && !brancos) return <Aviso>Ninguém votou nessa pergunta.</Aviso>;
+  const rodape = [
+    votaram !== null ? plural(votaram, 'formando votou', 'formandos votaram') : null,
+    brancos ? plural(brancos, 'voto em branco', 'votos em branco') : null,
+  ].filter(Boolean);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-      {resultado.map((r, i) => {
+      {(total > 0 ? resultado : []).map((r, i) => {
         const vencedor = r.votos === maximo && maximo > 0;
         const fracao = r.votos / total;
         return (
@@ -744,7 +786,8 @@ function Barras({ resultado, votaram }: { resultado: Resultado[]; votaram: numbe
           </div>
         );
       })}
-      {votaram !== null ? <span style={pequeno}>{plural(votaram, 'formando votou', 'formandos votaram')}.</span> : null}
+      {total === 0 ? <Aviso>Todos os votos foram em branco.</Aviso> : null}
+      {rodape.length > 0 ? <span style={pequeno}>{rodape.join(' · ')}.</span> : null}
     </div>
   );
 }
@@ -934,7 +977,7 @@ function PerguntaComissao({
         </div>
 
         {p.resultado ? (
-          <Barras resultado={p.resultado} votaram={null} />
+          <Barras resultado={p.resultado} brancos={p.brancos} votaram={null} />
         ) : (
           <p style={{ ...pequeno, margin: 0 }}>
             A contagem aparece para vocês quando encerrarem a votação. Enquanto ela está aberta, ninguém vê, para que
