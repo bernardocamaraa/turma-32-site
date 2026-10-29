@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { Check, CircleX, Search, TriangleAlert } from 'lucide-react';
 import { Badge } from '../components/Badge';
 import { BotoesLink } from '../components/BotoesLink';
@@ -16,15 +16,17 @@ import {
   formatarWhatsapp,
   nomesDaPergunta,
   normalizarWhatsapp,
+  resultadoDaTurma,
   urlDaVotacao,
   type AcaoVotacao,
   type AcessoVotacao,
   type DadosVotacao,
+  type Exibicao,
   type Pergunta,
   type Resultado,
   type TipoPergunta,
 } from '../lib/votacao';
-import { useIsMobile } from '../lib/useViewport';
+import { useIsMobile, usePrefersReducedMotion } from '../lib/useViewport';
 
 const POLL_MS = 20000;
 
@@ -583,7 +585,7 @@ function PerguntaFormando({
         <CabecalhoPergunta p={p} />
 
         {p.resultado ? (
-          <Barras resultado={p.resultado} brancos={p.brancos} votaram={p.votaram} />
+          <ResultadoTurma resultado={p.resultado} exibicao={p.exibicao} validos={p.validos} brancos={p.brancos} maximo={p.maximo} />
         ) : p.jaVotou ? (
           <Aviso icone>Seu voto foi registrado. O resultado aparece aqui quando a comissão liberar.</Aviso>
         ) : !p.aberta ? (
@@ -736,44 +738,275 @@ function Aviso({ children, icone }: { children: ReactNode; icone?: boolean }) {
   );
 }
 
+// The reveal of a result, in ms from when it comes into view: the caption
+// first, then each name in turn (each taking `nome` to come out of the
+// blur), and the totals counting up at the end.
+const REVELA = { primeiro: 700, entre: 800, nome: 1100, contagem: 900 };
+
 /**
- * The tally as bars that grow to size when they appear, most voted first;
- * the winner (or the tied winners) in gold. Blank votes are counted below,
- * apart: the percentages are of the votes given to an option.
+ * When a result plays its reveal: 'espera' until it scrolls into view,
+ * then 'agora'. 'pronto' with reduced motion (or no IntersectionObserver):
+ * everything is just there.
  */
-function Barras({ resultado, brancos, votaram }: { resultado: Resultado[]; brancos: number | null; votaram: number | null }) {
+function useRevelacao<T extends HTMLElement>(): [RefObject<T>, 'espera' | 'agora' | 'pronto'] {
+  const ref = useRef<T>(null);
+  const reduzido = usePrefersReducedMotion();
+  const [estado, setEstado] = useState<'espera' | 'agora' | 'pronto'>(() =>
+    reduzido || typeof IntersectionObserver === 'undefined' ? 'pronto' : 'espera',
+  );
+
+  useEffect(() => {
+    if (reduzido) {
+      setEstado('pronto');
+      return;
+    }
+    const el = ref.current;
+    if (estado !== 'espera' || !el) return;
+    const observer = new IntersectionObserver(
+      ([e]) => {
+        if (e.isIntersecting) {
+          setEstado('agora');
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.2, rootMargin: '0px 0px -15% 0px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [reduzido, estado]);
+
+  return [ref, estado];
+}
+
+/** Counts from 0 up to `alvo`, `atraso` ms after `comecar` — or is just `alvo` when not `contar`. */
+function useContagem(alvo: number, contar: boolean, comecar: boolean, atraso: number): number {
+  const [n, setN] = useState(contar ? 0 : alvo);
+  useEffect(() => {
+    if (!contar) {
+      setN(alvo);
+      return;
+    }
+    if (!comecar) return;
+    let raf = 0;
+    const t = setTimeout(() => {
+      const inicio = performance.now();
+      const passo = (agora: number) => {
+        const x = Math.min((agora - inicio) / REVELA.contagem, 1);
+        setN(Math.round(alvo * (1 - (1 - x) ** 3)));
+        if (x < 1) raf = requestAnimationFrame(passo);
+      };
+      raf = requestAnimationFrame(passo);
+    }, atraso);
+    return () => {
+      clearTimeout(t);
+      cancelAnimationFrame(raf);
+    };
+  }, [alvo, contar, comecar, atraso]);
+  return n;
+}
+
+/** When a part of the reveal starts (`--atraso` in the .revela-* rules of global.css). */
+const aos = (ms: number) => ({ '--atraso': `${Math.round(ms)}ms` }) as CSSProperties;
+
+/**
+ * A released result as the class sees it: only the most voted, in large
+ * gold type, revealed when the result comes into view — one name after the
+ * other out of a blur, a glint running across each, gold confetti as the
+ * last one lands. Then each one's votes and the valid and blank votes, when
+ * the committee shows them (Exibicao). `resultado` comes already cut down
+ * to what shows: by the server for the class, by resultadoDaTurma in the
+ * committee's preview. More names than `primeiros` means a tie for the
+ * last place.
+ */
+function ResultadoTurma({
+  resultado,
+  exibicao,
+  validos,
+  brancos,
+  maximo,
+}: {
+  resultado: Resultado[];
+  exibicao: Exibicao;
+  validos: number | null;
+  brancos: number | null;
+  maximo: number;
+}) {
+  const [ref, estado] = useRevelacao<HTMLDivElement>();
+  const n = resultado.length;
+  const nome = (i: number) => REVELA.primeiro + i * REVELA.entre;
+  // The last name is in, all but settling.
+  const fim = nome(Math.max(n - 1, 0)) + REVELA.nome * 0.6;
+
+  // Where the confetti bursts from: the middle of the names, which may
+  // fill only part of the row.
+  const lista = useRef<HTMLOListElement>(null);
+  const [meio, setMeio] = useState<number | null>(null);
+  useEffect(() => {
+    const ol = lista.current;
+    if (estado !== 'agora' || !ol || ol.children.length === 0) return;
+    const nomes = [...ol.children].map((li) => li.getBoundingClientRect());
+    const esquerda = Math.min(...nomes.map((r) => r.left));
+    const direita = Math.max(...nomes.map((r) => r.right));
+    setMeio((esquerda + direita) / 2 - ol.getBoundingClientRect().left);
+  }, [estado]);
+
+  return (
+    <div
+      ref={ref}
+      className={estado === 'espera' ? 'revela-espera' : estado === 'agora' ? 'revela-agora' : undefined}
+      style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}
+    >
+      {n === 0 ? (
+        <Aviso>{brancos ? 'Todos os votos foram em branco.' : 'Nenhuma opção recebeu voto.'}</Aviso>
+      ) : (
+        <>
+          <span className="revela-parte" style={{ ...aos(0), fontSize: 'var(--fs-body)', fontWeight: 500, color: 'var(--text-muted)' }}>
+            {n === 1 ? 'O mais votado' : `Os ${n} mais votados`}
+          </span>
+          <div style={{ position: 'relative' }}>
+            <ol ref={lista} style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexWrap: 'wrap', gap: 'var(--space-5) var(--space-8)' }}>
+              {resultado.map((r, i) => (
+                <li key={r.opcao} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span
+                    className="revela-parte revela-nome"
+                    style={{
+                      ...aos(nome(i)),
+                      display: 'block',
+                      fontFamily: 'var(--font-display)',
+                      fontSize: 'var(--fs-display-3)',
+                      fontWeight: 700,
+                      letterSpacing: '-.035em',
+                      lineHeight: 1.05,
+                      textWrap: 'balance' as never,
+                    }}
+                  >
+                    {r.opcao}
+                  </span>
+                  {r.votos !== null ? (
+                    <span className="revela-parte" style={{ ...aos(nome(i) + 600), fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+                      {plural(r.votos, 'voto', 'votos')}
+                    </span>
+                  ) : null}
+                </li>
+              ))}
+            </ol>
+            {estado === 'agora' && meio !== null ? <ConfeteDourado meio={meio} atraso={fim - 80} /> : null}
+          </div>
+          {n > exibicao.primeiros ? (
+            <span className="revela-parte" style={{ ...aos(fim), ...pequeno }}>
+              Houve empate, por isso aparecem {n} nomes em vez de {exibicao.primeiros}.
+            </span>
+          ) : null}
+          {/* With several picks each, the names' votes add up to more than the valid votes. */}
+          {exibicao.votos && maximo > 1 ? (
+            <span className="revela-parte" style={{ ...aos(fim), ...pequeno }}>
+              Cada formando podia escolher até {maximo} opções.
+            </span>
+          ) : null}
+        </>
+      )}
+      {validos !== null && brancos !== null ? (
+        <div className="revela-parte" style={aos(fim + 150)}>
+          <Totais validos={validos} brancos={brancos} contar={estado !== 'pronto'} comecar={estado === 'agora'} atraso={fim + 150} />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+const CORES_DOURADAS = ['var(--gild-200)', 'var(--gild-300)', 'var(--gild-400)', 'var(--chalk-050)'];
+
+/** The confetti pieces, fixed so the reveal looks the same for everyone: fanned up and out from the names. */
+const PECAS_DOURADAS = Array.from({ length: 26 }, (_, i) => {
+  const angulo = (-172 + (164 / 25) * i) * (Math.PI / 180);
+  const distancia = 70 + ((i * 37) % 80);
+  const redondo = i % 3 === 0;
+  return {
+    dx: Math.round(Math.cos(angulo) * distancia * 1.4),
+    dy: Math.round(Math.sin(angulo) * distancia) - 10,
+    giro: (i % 2 ? 1 : -1) * (200 + ((i * 53) % 300)),
+    largura: redondo ? 7 : 6,
+    altura: redondo ? 7 : 12,
+    redondo,
+    cor: CORES_DOURADAS[i % CORES_DOURADAS.length],
+    duracao: 1400 + ((i * 41) % 400),
+    atraso: (i * 17) % 120,
+  };
+});
+
+/**
+ * Gold confetti bursting from the names (`meio`: px from the left of the
+ * list), `atraso` ms after it mounts — the urna's confetti (urna-confete in
+ * global.css), in gold. Its own clipped layer, so no piece widens the page
+ * on a phone.
+ */
+function ConfeteDourado({ meio, atraso }: { meio: number; atraso: number }) {
+  return (
+    <div aria-hidden style={{ position: 'absolute', inset: '-80px -8px -40px', overflow: 'hidden', pointerEvents: 'none' }}>
+      {PECAS_DOURADAS.map((c, i) => (
+        <span
+          key={i}
+          style={
+            {
+              position: 'absolute',
+              // The layer reaches 8px past the list on each side, 80px above it and 40px below.
+              left: meio + 8 - c.largura / 2,
+              top: `calc(50% + 20px - ${c.altura / 2}px)`,
+              width: c.largura,
+              height: c.altura,
+              borderRadius: c.redondo ? '50%' : 2,
+              background: c.cor,
+              opacity: 0,
+              willChange: 'transform, opacity',
+              '--dx': `${c.dx}px`,
+              '--dy': `${c.dy}px`,
+              '--giro': `${c.giro}deg`,
+              animation: `urna-confete ${c.duracao}ms ${Math.round(atraso + c.atraso)}ms both`,
+            } as CSSProperties
+          }
+        />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The full tally as bars that grow to size when they appear, most voted
+ * first; the winner (or the tied winners) in gold. The committee's view:
+ * the class sees ResultadoTurma. Blank votes aren't bars (see Totais): the
+ * percentages are of the votes given to an option.
+ */
+function Barras({ resultado, brancos }: { resultado: Resultado[]; brancos: number | null }) {
   const [cheio, setCheio] = useState(false);
   useEffect(() => {
     const id = requestAnimationFrame(() => setCheio(true));
     return () => cancelAnimationFrame(id);
   }, []);
-  const total = resultado.reduce((s, r) => s + r.votos, 0);
-  const maximo = Math.max(...resultado.map((r) => r.votos), 0);
+  // The committee always gets the counts.
+  const votos = (r: Resultado) => r.votos ?? 0;
+  const total = resultado.reduce((s, r) => s + votos(r), 0);
+  const maximo = Math.max(...resultado.map(votos), 0);
 
-  if (total === 0 && !brancos) return <Aviso>Ninguém votou nessa pergunta.</Aviso>;
-  const rodape = [
-    votaram !== null ? plural(votaram, 'formando votou', 'formandos votaram') : null,
-    brancos ? plural(brancos, 'voto em branco', 'votos em branco') : null,
-  ].filter(Boolean);
+  if (total === 0) return <Aviso>{brancos ? 'Todos os votos foram em branco.' : 'Ninguém votou nessa pergunta.'}</Aviso>;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-      {(total > 0 ? resultado : []).map((r, i) => {
-        const vencedor = r.votos === maximo && maximo > 0;
-        const fracao = r.votos / total;
+      {resultado.map((r, i) => {
+        const vencedor = votos(r) === maximo && maximo > 0;
+        const fracao = votos(r) / total;
         return (
           <div key={r.opcao} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-4)', fontSize: 'var(--fs-body)' }}>
               <span style={{ fontWeight: vencedor ? 600 : 400, color: vencedor ? 'var(--gild-300)' : 'var(--text-primary)' }}>{r.opcao}</span>
               <span style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                {plural(r.votos, 'voto', 'votos')} · {Math.round(fracao * 100)}%
+                {plural(votos(r), 'voto', 'votos')} · {Math.round(fracao * 100)}%
               </span>
             </div>
             <div style={{ height: 8, borderRadius: 4, background: 'rgba(245,245,247,.08)', overflow: 'hidden' }}>
               <div
                 style={{
                   height: '100%',
-                  width: cheio ? `${Math.max(fracao * 100, r.votos ? 2 : 0)}%` : '0%',
+                  width: cheio ? `${Math.max(fracao * 100, votos(r) ? 2 : 0)}%` : '0%',
                   borderRadius: 4,
                   background: vencedor ? 'var(--gild-400)' : 'var(--ice-400)',
                   transition: `width 1100ms var(--ease-out) ${i * 70}ms`,
@@ -783,8 +1016,42 @@ function Barras({ resultado, brancos, votaram }: { resultado: Resultado[]; branc
           </div>
         );
       })}
-      {total === 0 ? <Aviso>Todos os votos foram em branco.</Aviso> : null}
-      {rodape.length > 0 ? <span style={pequeno}>{rodape.join(' · ')}.</span> : null}
+    </div>
+  );
+}
+
+/**
+ * The valid votes (ballots that picked someone) and the blank ones, side by
+ * side. In the class's reveal (`contar`), they count up from 0 `atraso` ms
+ * after it starts (`comecar`).
+ */
+function Totais({
+  validos,
+  brancos,
+  contar = false,
+  comecar = false,
+  atraso = 0,
+}: {
+  validos: number;
+  brancos: number;
+  contar?: boolean;
+  comecar?: boolean;
+  atraso?: number;
+}) {
+  const totais = [
+    { n: useContagem(validos, contar, comecar, atraso), rotulo: validos === 1 ? 'voto válido' : 'votos válidos' },
+    { n: useContagem(brancos, contar, comecar, atraso), rotulo: brancos === 1 ? 'voto em branco' : 'votos em branco' },
+  ];
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-8)', paddingTop: 'var(--space-5)', borderTop: '1px solid var(--stroke-hair)' }}>
+      {totais.map(({ n, rotulo }) => (
+        <div key={rotulo} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-h2)', fontWeight: 700, letterSpacing: '-.02em', lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
+            {n}
+          </span>
+          <span style={pequeno}>{rotulo}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -1145,7 +1412,11 @@ function PerguntaComissao({
             </div>
 
             {p.resultado ? (
-              <Barras resultado={p.resultado} brancos={p.brancos} votaram={null} />
+              <>
+                <Barras resultado={p.resultado} brancos={p.brancos} />
+                {p.validos !== null && p.brancos !== null ? <Totais validos={p.validos} brancos={p.brancos} /> : null}
+                <ExibicaoResultado p={p} salvando={salvando} agir={agir} />
+              </>
             ) : (
               <p style={{ ...pequeno, margin: 0 }}>
                 A contagem aparece para vocês quando encerrarem a votação. Enquanto ela está aberta, ninguém vê, para que
@@ -1221,6 +1492,127 @@ function PerguntaComissao({
         </div>
       </div>
     </Card>
+  );
+}
+
+/** "How many names show", as the committee reads it; position + 1 is the number. */
+const QUANTOS_NOMES = ['Só o mais votado', 'Os 2 mais votados', 'Os 3 mais votados', 'Os 4 mais votados', 'Os 5 mais votados'];
+
+/**
+ * The committee chooses what the class sees of a closed question's result
+ * (Exibicao) — the class never gets the full count above — with a preview
+ * of exactly that, reveal included. Each change is saved right away.
+ */
+function ExibicaoResultado({
+  p,
+  salvando,
+  agir,
+}: {
+  p: Pergunta;
+  salvando: boolean;
+  agir: (a: AcaoVotacao) => Promise<string | null>;
+}) {
+  // Shown at once while it saves; back to the saved one if that fails.
+  const [exibicao, setExibicao] = useState(p.exibicao);
+  const [erro, setErro] = useState<string | null>(null);
+  const { primeiros, votos, totais } = p.exibicao;
+  // Catches up with what's saved (another committee phone, the next refresh).
+  useEffect(() => setExibicao({ primeiros, votos, totais }), [primeiros, votos, totais]);
+
+  async function mudar(mudanca: Partial<Exibicao>) {
+    const nova = { ...exibicao, ...mudanca };
+    setExibicao(nova);
+    setErro(null);
+    const falha = await agir({ acao: 'exibir', id: p.id, exibicao: nova });
+    if (falha) {
+      setErro(falha);
+      setExibicao(p.exibicao);
+    }
+  }
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 'var(--space-5)',
+        padding: 'clamp(16px, 3vw, 24px)',
+        borderRadius: 'var(--radius-md)',
+        border: '1px solid var(--stroke-hair)',
+        background: 'rgba(245,245,247,.03)',
+      }}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+        <span style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-h4)', fontWeight: 600, letterSpacing: '-.015em' }}>
+          O que a turma vê do resultado
+        </span>
+        <span style={pequeno}>
+          {p.resultadoLiberado
+            ? 'A turma já está vendo este resultado: cada mudança aqui vale na hora.'
+            : 'Vale quando vocês mostrarem o resultado para a turma.'}{' '}
+          A turma vê só os mais votados, com os nomes sendo revelados um a um. A contagem completa acima fica só com
+          vocês e nem chega ao celular de ninguém.
+        </span>
+      </div>
+
+      <div style={{ maxWidth: 260 }}>
+        <Select
+          label="Quantos nomes aparecem"
+          options={QUANTOS_NOMES}
+          value={QUANTOS_NOMES[exibicao.primeiros - 1]}
+          disabled={salvando}
+          onChange={(e) => mudar({ primeiros: QUANTOS_NOMES.indexOf(e.target.value) + 1 })}
+        />
+      </div>
+      <span style={{ ...pequeno, marginTop: 'calc(-1 * var(--space-3))' }}>Se houver empate na última vaga, todos os empatados aparecem.</span>
+      <Marcar marcado={exibicao.votos} disabled={salvando} onMudar={(v) => mudar({ votos: v })}>
+        Mostrar quantos votos cada um teve
+      </Marcar>
+      <Marcar marcado={exibicao.totais} disabled={salvando} onMudar={(v) => mudar({ totais: v })}>
+        Mostrar os votos válidos e em branco
+      </Marcar>
+
+      {erro ? <p style={{ ...texto, color: 'var(--state-error)' }}>{erro}</p> : null}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', paddingTop: 'var(--space-5)', borderTop: '1px solid var(--stroke-hair)' }}>
+        <span style={{ ...pequeno, fontWeight: 600 }}>Prévia do que a turma vê</span>
+        <ResultadoTurma
+          // Plays the reveal again on each change, as the class will see it.
+          key={JSON.stringify(exibicao)}
+          resultado={resultadoDaTurma(p.resultado ?? [], exibicao)}
+          exibicao={exibicao}
+          validos={exibicao.totais ? p.validos : null}
+          brancos={exibicao.totais ? p.brancos : null}
+          maximo={p.maximo}
+        />
+      </div>
+    </div>
+  );
+}
+
+/** A checkbox with its sentence, for the committee's settings. */
+function Marcar({
+  marcado,
+  disabled,
+  onMudar,
+  children,
+}: {
+  marcado: boolean;
+  disabled?: boolean;
+  onMudar: (marcado: boolean) => void;
+  children: ReactNode;
+}) {
+  return (
+    <label style={{ display: 'inline-flex', alignItems: 'center', alignSelf: 'flex-start', gap: 'var(--space-3)', minHeight: 44, fontSize: 'var(--fs-body)', cursor: disabled ? 'default' : 'pointer' }}>
+      <input
+        type="checkbox"
+        checked={marcado}
+        disabled={disabled}
+        onChange={(e) => onMudar(e.target.checked)}
+        style={{ width: 20, height: 20, margin: 0, accentColor: 'var(--chalk-050)', cursor: 'inherit' }}
+      />
+      {children}
+    </label>
   );
 }
 

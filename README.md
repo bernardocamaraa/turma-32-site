@@ -208,9 +208,21 @@ com ou sem +55, e até sem o 9 da frente. O site acerta o formato sozinho
   Encerrar não tem volta: ver a contagem ao vivo, ou reabrir depois de
   espiar, permitiria descobrir votos comparando quem acabou de votar com
   quem ganhou um voto.
-- **Resultado para a turma:** "Mostrar resultado para a turma" libera as
-  barras para todos (e encerra a pergunta, se ainda estiver aberta).
+- **Resultado para a turma:** "Mostrar resultado para a turma" libera o
+  resultado para todos (e encerra a pergunta, se ainda estiver aberta).
   "Esconder resultado" volta atrás.
+- **O que a turma vê:** a contagem completa, com as barras de todas as
+  opções, fica só com a comissão. A turma vê só os mais votados, em letras
+  grandes e douradas, revelados quando o resultado aparece na tela: um nome
+  de cada vez sai de um borrão, um brilho passa por ele, cai um confete
+  dourado e os votos válidos e em branco sobem contando (com movimento
+  reduzido no aparelho, tudo aparece de uma vez). Em cada pergunta
+  encerrada, o quadro "O que a turma vê do resultado" escolhe quantos nomes
+  aparecem (no começo, quantas escolhas a pergunta tinha; empate na última
+  vaga traz todos os empatados), se mostra os votos de cada um e se mostra
+  os votos válidos e em branco, com uma prévia. "Votos válidos" são os
+  formandos que escolheram alguém. O que fica escondido nem é enviado ao
+  celular da turma (`resultado_*` em `votacao.sql`).
 
 - **Aviso no celular:** na aba Votação (`/comissao/votacao`), o botão "Me avisar quando
   todos votarem" liga a notificação do próprio navegador (Web Push) naquele

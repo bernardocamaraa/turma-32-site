@@ -318,10 +318,57 @@ g[role="button"]:focus-visible .mesa-alvo {
   to { opacity: 0; }
 }
 
+/* A released result revealed to the class when it comes into view
+   (ResultadoTurma in pages/Votacao.tsx). Waiting, every part is hidden;
+   then each starts at its --atraso: the caption, each name in turn coming
+   out of a gold blur with a glint running across it, each one's votes,
+   and the totals. The end state is each element's own style, so with
+   reduced motion (animations off, below) everything simply shows. */
+.revela-espera .revela-parte {
+  opacity: 0;
+}
+
+.revela-agora .revela-parte {
+  animation: revela-surge 700ms var(--ease-out) var(--atraso, 0ms) both;
+}
+
+.revela-nome {
+  background: linear-gradient(100deg, var(--gild-300) 40%, #fff8e7 50%, var(--gild-300) 60%) 100% 0 / 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.revela-agora .revela-nome {
+  animation:
+    revela-nome 1100ms var(--ease-out) var(--atraso, 0ms) both,
+    revela-brilho 1500ms ease-in-out calc(var(--atraso, 0ms) + 600ms) both;
+}
+
+@keyframes revela-surge {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes revela-nome {
+  0% { opacity: 0; filter: blur(24px); transform: translateY(18px) scale(.9); }
+  50% { opacity: 1; }
+  100% { opacity: 1; filter: none; transform: none; }
+}
+
+@keyframes revela-brilho {
+  from { background-position: 100% 0; }
+  to { background-position: 0 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation: none !important;
     transition: none !important;
+  }
+
+  .revela-espera .revela-parte {
+    opacity: 1;
   }
 
   .reveal {
