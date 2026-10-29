@@ -114,6 +114,8 @@ export type AcaoVotacao =
   | { acao: 'votarTudo'; votos: Record<string, string[] | null> }
   /** `maximo`: how many options each formando picks (1 = just one). `pronta`: leave it to open later. `mesmoAssim`: as in 'abrir'. */
   | { acao: 'criar'; texto: string; tipo: TipoPergunta; opcoes: string[]; maximo: number; pronta: boolean; mesmoAssim?: boolean }
+  /** Committee: change a ready question, which nobody has seen yet. Refused once it's opened. */
+  | { acao: 'editar'; id: string; texto: string; tipo: TipoPergunta; opcoes: string[]; maximo: number }
   /**
    * Committee: open a ready question, or every ready one at once so the
    * class votes on them together. Refused when a name is also in a question

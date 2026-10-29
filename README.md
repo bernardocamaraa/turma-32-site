@@ -164,6 +164,10 @@ com ou sem +55, e até sem o 9 da frente. O site acerta o formato sozinho
   turma não vê nem vota nela (o banco também recusa o voto) até a comissão
   tocar em "Abrir votação". Com duas ou mais prontas, aparece "Abrir as N
   agora", que abre todas juntas. Abrir não tem volta.
+- **Editar:** enquanto está pronta, a pergunta tem o botão "Editar": dá
+  para mudar o texto, os nomes (acrescentar ou tirar um candidato) e
+  quantas escolhas cada um faz. Depois de aberta, ela não muda mais, porque
+  os votos já foram para as opções dela.
 - **Um voto por formando em cada pergunta.** Como o voto é secreto, ele não
   pode ser trocado depois.
 - **Várias escolhas:** ao criar a pergunta, a comissão diz quantas escolhas
