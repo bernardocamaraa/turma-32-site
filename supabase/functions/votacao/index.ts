@@ -15,7 +15,9 @@
 //     votacao.sql). Sees a result once the committee releases it.
 //   - `codigo`: COMMITTEE_CODE. Creates questions (open right away, or
 //     ready to open later), opens, deletes and closes them, shows/hides
-//     the results, and sees and edits each formando's number.
+//     the results, and sees and edits each formando's number. Opening
+//     refuses a question that shares a name with one already voted on,
+//     unless `mesmoAssim` (abrir_perguntas in votacao.sql).
 //     Can also turn on the notification for a phone (`avisar`, with the
 //     browser's push subscription): when the last formando votes on a
 //     question, every phone that turned it on is told (Web Push).
@@ -123,7 +125,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { codigo, nome, whatsapp, acao, id, votos, texto, tipo, opcoes, maximo, pronta, formando, inscricao, endpoint } = await req.json();
+    const { codigo, nome, whatsapp, acao, id, votos, texto, tipo, opcoes, maximo, pronta, mesmoAssim, formando, inscricao, endpoint } = await req.json();
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -131,6 +133,18 @@ Deno.serve(async (req) => {
     );
 
     const recusar = (mensagem: string) => json({ error: mensagem }, 400);
+
+    /**
+     * Opens ready questions — `ids`, or every ready one (null). Returns the
+     * refusal to show when a name is also in a question already voted on
+     * (abrir_perguntas in votacao.sql), or null once they're open.
+     */
+    async function abrir(ids: string[] | null): Promise<string | null> {
+      const { error } = await supabase.rpc('abrir_perguntas', { p_ids: ids, p_mesmo_assim: mesmoAssim === true });
+      if (!error) return null;
+      if (error.code === 'P0001') return error.message;
+      throw error;
+    }
 
     // Who is calling: the committee, a formando (by number), or nobody yet.
     let comissao = false;
@@ -233,22 +247,37 @@ Deno.serve(async (req) => {
         return recusar(`Com ${lista.length} opções, dá para deixar escolher no máximo ${lista.length - 1}.`);
       }
       // `pronta`: written now, opened later (below); the class doesn't see it until then.
-      const { error } = await supabase.from('votacao_perguntas').insert({ pergunta, tipo, opcoes: lista, maximo: escolhas, pronta: pronta === true });
+      const { data: criada, error } = await supabase
+        .from('votacao_perguntas')
+        .insert({ pergunta, tipo, opcoes: lista, maximo: escolhas, pronta: true })
+        .select('id')
+        .single();
       if (error) throw error;
+      // Opened right away goes through the same check as a ready one. If it's
+      // refused, the question goes too: left behind as ready, trying again
+      // would make a second one.
+      if (pronta !== true) {
+        const recusa = await abrir([criada.id as string]);
+        if (recusa) {
+          const { error: erroApagar } = await supabase.from('votacao_perguntas').delete().eq('id', criada.id);
+          if (erroApagar) throw erroApagar;
+          return recusar(recusa);
+        }
+      }
     }
 
     // Opening a ready question shows it to the class and starts its vote.
     // There's no going back to ready, as there's no reopening.
     if (comissao && acao === 'abrir' && typeof id === 'string') {
-      const { error } = await supabase.from('votacao_perguntas').update({ pronta: false }).eq('id', id);
-      if (error) throw error;
+      const recusa = await abrir([id]);
+      if (recusa) return recusar(recusa);
     }
 
     // Every ready question at once, so they land in the same ballot: the
     // no-repeat rule only covers questions sent together (votar_cedula).
     if (comissao && acao === 'abrirProntas') {
-      const { error } = await supabase.from('votacao_perguntas').update({ pronta: false }).eq('pronta', true);
-      if (error) throw error;
+      const recusa = await abrir(null);
+      if (recusa) return recusar(recusa);
     }
 
     if (comissao && typeof id === 'string' && (acao === 'encerrar' || acao === 'liberar' || acao === 'esconder')) {

@@ -12,7 +12,9 @@ import { CarregandoSecao } from '../components/CarregandoSecao';
 import { precarregarUrna, UrnaVoto } from '../components/UrnaVoto';
 import {
   buscarVotacao,
+  chaveDoNome,
   formatarWhatsapp,
+  nomesDaPergunta,
   normalizarWhatsapp,
   urlDaVotacao,
   type AcaoVotacao,
@@ -168,7 +170,7 @@ export function Votacao({ codigoComissao }: { codigoComissao?: string }) {
   // title, the way in and the way out.
   if (paraComissao) {
     const prontas = dados?.perguntas.filter((p) => p.pronta) ?? [];
-    const jaHaVotos = !!dados?.perguntas.some((p) => !p.pronta && (p.votaram ?? 0) > 0);
+    const conferir: Conferir = (abrindo, ids) => conferirAbertura(abrindo, ids, dados!);
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' }}>
         {!dados ? (
@@ -178,8 +180,8 @@ export function Votacao({ codigoComissao }: { codigoComissao?: string }) {
             <LinkDaVotacao />
             <AvisoDaVotacao chavePush={dados.chavePush ?? null} aparelhos={dados.aparelhosAvisados ?? null} agir={agir} />
             <EleitoresDaVotacao eleitores={dados.eleitores ?? []} salvando={salvando} agir={agir} />
-            <NovaPergunta salvando={salvando} agir={agir} />
-            {prontas.length > 1 ? <AbrirProntas prontas={prontas} jaHaVotos={jaHaVotos} salvando={salvando} agir={agir} /> : null}
+            <NovaPergunta conferir={conferir} salvando={salvando} agir={agir} />
+            {prontas.length > 1 ? <AbrirProntas prontas={prontas} conferir={conferir} salvando={salvando} agir={agir} /> : null}
             {dados.perguntas.length === 0 ? (
               <p style={texto}>Nenhuma votação criada ainda.</p>
             ) : (
@@ -187,7 +189,7 @@ export function Votacao({ codigoComissao }: { codigoComissao?: string }) {
                 .slice()
                 .reverse()
                 .map((p) => (
-                  <PerguntaComissao key={p.id} p={p} total={dados.formandos.length} jaHaVotos={jaHaVotos} salvando={salvando} agir={agir} />
+                  <PerguntaComissao key={p.id} p={p} total={dados.formandos.length} conferir={conferir} salvando={salvando} agir={agir} />
                 ))
             )}
           </>
@@ -409,9 +411,14 @@ function Cedula({
   const pendentes = perguntas.filter((p) => p.aberta && !p.jaVotou);
   const faltam = pendentes.filter((p) => !emBranco(p.id) && de(p.id).length === 0);
   const outras = (p: Pergunta) => pendentes.filter((q) => q.id !== p.id);
-  // Options picked in `p` that are also picked in another question, and where.
+  // Options picked in `p` that are also picked in another question, and where
+  // — the same name however it's spelled there (chaveDoNome).
   const repetidas = (p: Pergunta) =>
-    de(p.id).flatMap((opcao) => outras(p).filter((q) => de(q.id).includes(opcao)).map((q) => ({ opcao, em: q })));
+    de(p.id).flatMap((opcao) =>
+      outras(p)
+        .filter((q) => de(q.id).some((o) => chaveDoNome(o) === chaveDoNome(opcao)))
+        .map((q) => ({ opcao, em: q })),
+    );
   const comRepeticao = pendentes.filter((p) => repetidas(p).length > 0);
   const pronta = pendentes.length > 0 && faltam.length === 0 && comRepeticao.length === 0;
 
@@ -449,7 +456,7 @@ function Cedula({
           formandos={formandos}
           escolhidas={de(p.id)}
           emBranco={emBranco(p.id)}
-          usadasEmOutras={outras(p).flatMap((q) => de(q.id))}
+          usadasEmOutras={outras(p).flatMap((q) => de(q.id).map(chaveDoNome))}
           repetidas={repetidas(p)}
           onEscolher={(opcoes) => escolher(p.id, opcoes)}
         />
@@ -546,7 +553,7 @@ function PerguntaFormando({
   formandos: string[];
   escolhidas: string[];
   emBranco: boolean;
-  /** What's picked in the other questions right now. */
+  /** What's picked in the other questions right now, as chaveDoNome keys. */
   usadasEmOutras: string[];
   /** Options picked here that are also picked in another question — an error to fix before sending. */
   repetidas: { opcao: string; em: Pergunta }[];
@@ -568,8 +575,7 @@ function PerguntaFormando({
 
   // Nobody votes for themselves on the "formandos" questions.
   const opcoes = p.tipo === 'formandos' ? formandos.filter((f) => f !== voce) : p.opcoes;
-  const normalizar = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-  const visiveis = busca ? opcoes.filter((o) => normalizar(o).includes(normalizar(busca))) : opcoes;
+  const visiveis = busca ? opcoes.filter((o) => chaveDoNome(o).includes(chaveDoNome(busca))) : opcoes;
 
   return (
     <Card id={`pergunta-${p.id}`} padding="clamp(24px, 4vw, 40px)" style={{ scrollMarginTop: 80 }}>
@@ -624,7 +630,7 @@ function PerguntaFormando({
                 const ativa = escolhidas.includes(o);
                 // Picked in another question: still clickable (the error below
                 // explains why it can't stay), but marked so it's seen first.
-                const usada = !ativa && usadasEmOutras.includes(o);
+                const usada = !ativa && usadasEmOutras.includes(chaveDoNome(o));
                 const bloqueada = cheia && !ativa;
                 return (
                   <button
@@ -787,7 +793,15 @@ function Barras({ resultado, brancos, votaram }: { resultado: Resultado[]; branc
 const QUANTAS_ESCOLHAS = ['Só uma', 'Até 2', 'Até 3', 'Até 4', 'Até 5'];
 
 /** The committee's form for a new question. */
-function NovaPergunta({ salvando, agir }: { salvando: boolean; agir: (a: AcaoVotacao) => Promise<string | null> }) {
+function NovaPergunta({
+  conferir,
+  salvando,
+  agir,
+}: {
+  conferir: Conferir;
+  salvando: boolean;
+  agir: (a: AcaoVotacao) => Promise<string | null>;
+}) {
   const mobile = useIsMobile();
   const [pergunta, setPergunta] = useState('');
   const [tipo, setTipo] = useState<TipoPergunta>('formandos');
@@ -804,9 +818,16 @@ function NovaPergunta({ salvando, agir }: { salvando: boolean; agir: (a: AcaoVot
 
   /** `pronta`: leave it for later — the class doesn't see it until it's opened. */
   async function criar(pronta: boolean) {
+    // Opening right away only asks when a name runs into another question.
+    let mesmoAssim = false;
+    if (!pronta) {
+      const sim = confirmarAbertura(`Abrir "${pergunta.trim()}" agora? A turma passa a ver e votar nela.`, conferir([{ tipo, opcoes: lista }], []), true);
+      if (!sim) return;
+      mesmoAssim = sim.mesmoAssim;
+    }
     setErro(null);
     setDeixandoPronta(pronta);
-    const falha = await agir({ acao: 'criar', texto: pergunta, tipo, opcoes: lista, maximo, pronta });
+    const falha = await agir({ acao: 'criar', texto: pergunta, tipo, opcoes: lista, maximo, pronta, mesmoAssim });
     setErro(falha);
     if (!falha) {
       setPergunta('');
@@ -902,8 +923,9 @@ function NovaPergunta({ salvando, agir }: { salvando: boolean; agir: (a: AcaoVot
 
         <span style={pequeno}>
           "Deixar pronta" guarda a pergunta aqui: a turma não vê nem vota até vocês abrirem. O formando não pode escolher
-          a mesma opção em duas perguntas e envia todas as abertas de uma vez, então abra todas juntas: quem já votou
-          não tem como ser conferido numa pergunta aberta depois.
+          o mesmo nome em duas perguntas (acento e maiúscula não contam), e o site confere isso nas perguntas que ele
+          envia juntas. Então perguntas com nomes em comum precisam abrir juntas, antes de a turma votar: depois, o site
+          não abre outra com algum desses nomes, a não ser que vocês confirmem abrir mesmo assim.
         </span>
 
         {erro ? <p style={{ ...texto, color: 'var(--state-error)' }}>{erro}</p> : null}
@@ -920,40 +942,74 @@ function NovaPergunta({ salvando, agir }: { salvando: boolean; agir: (a: AcaoVot
   );
 }
 
+/** What opening some questions runs into, by the names they share with the other questions. */
+type Abertura = {
+  /**
+   * A name also in a question the class already voted on. Whoever voted
+   * there votes on these apart, with nothing left to compare their choice
+   * with, so the server only opens them when told to (abrir_perguntas in
+   * votacao.sql).
+   */
+  repete: { nome: string; em: Pergunta } | null;
+  /** Other ready questions with a name in common, which should open together with these. */
+  juntas: Pergunta[];
+};
+
+/** conferirAbertura with the committee's current data: the questions being opened, and their ids (none for a new one). */
+type Conferir = (abrindo: Pick<Pergunta, 'tipo' | 'opcoes'>[], ids: string[]) => Abertura;
+
+function conferirAbertura(abrindo: Pick<Pergunta, 'tipo' | 'opcoes'>[], ids: string[], dados: DadosVotacao): Abertura {
+  const nomes = new Map(abrindo.flatMap((p) => nomesDaPergunta(p, dados.formandos)).map((n) => [chaveDoNome(n), n]));
+  const emComum = (p: Pergunta) => nomesDaPergunta(p, dados.formandos).map(chaveDoNome).find((c) => nomes.has(c));
+  const outras = dados.perguntas.filter((p) => !ids.includes(p.id) && emComum(p) !== undefined);
+  const votada = outras.find((p) => !p.pronta && (p.votaram ?? 0) > 0);
+  return {
+    repete: votada ? { nome: nomes.get(emComum(votada)!)!, em: votada } : null,
+    juntas: outras.filter((p) => p.pronta),
+  };
+}
+
 /**
- * What opening ready questions means, for the committee to confirm — with
- * the catch when the class already voted on others: those formandos vote on
- * these apart, and the no-repeat check can't reach back to their earlier
- * choices (nothing remembers them).
+ * What opening questions means, for the committee to confirm, with what it
+ * runs into (see Abertura). Returns null to stop, or whether to open past a
+ * repeated name. `soComAviso`: don't ask when there's nothing to warn about.
  */
-function confirmarAbertura(oQue: string, jaHaVotos: boolean): boolean {
-  return window.confirm(
-    `${oQue} Não tem como voltar a deixar pronta.` +
-      (jaHaVotos
-        ? '\n\nQuem já enviou os votos vai votar nisso à parte, e aí o site não tem como conferir se a pessoa repetiu uma escolha das outras perguntas.'
-        : ''),
-  );
+function confirmarAbertura(oQue: string, { repete, juntas }: Abertura, soComAviso = false): { mesmoAssim: boolean } | null {
+  const avisos = [
+    juntas.length > 0
+      ? `${juntas.length === 1 ? `A pergunta pronta "${juntas[0].pergunta}" tem` : `Outras ${juntas.length} perguntas prontas têm`} nomes em comum com esta. Para o site conferir que ninguém repete um nome, abram todas juntas, antes de a turma votar.`
+      : null,
+    repete
+      ? `Atenção: "${repete.nome}" também está em "${repete.em.pergunta}", que já recebeu votos. Quem votou lá vai votar aqui à parte, e o site não tem como conferir se a pessoa repetiu o nome, porque o voto é secreto e não fica guardado.`
+      : null,
+  ].filter((a): a is string => a !== null);
+  if (soComAviso && avisos.length === 0) return { mesmoAssim: false };
+  const texto = [`${oQue} Não tem como voltar a deixar pronta.`, ...avisos, ...(repete ? ['Abrir mesmo assim?'] : [])].join('\n\n');
+  return window.confirm(texto) ? { mesmoAssim: repete !== null } : null;
 }
 
 /** Opens every ready question at once, so each formando gets them in the same ballot. */
 function AbrirProntas({
   prontas,
-  jaHaVotos,
+  conferir,
   salvando,
   agir,
 }: {
   prontas: Pergunta[];
-  /** Whether anyone already voted on an opened question. */
-  jaHaVotos: boolean;
+  conferir: Conferir;
   salvando: boolean;
   agir: (a: AcaoVotacao) => Promise<string | null>;
 }) {
   const [erro, setErro] = useState<string | null>(null);
 
   async function abrir() {
-    if (!confirmarAbertura(`Abrir as ${prontas.length} perguntas prontas? A turma passa a ver e votar em todas.`, jaHaVotos)) return;
+    const sim = confirmarAbertura(
+      `Abrir as ${prontas.length} perguntas prontas? A turma passa a ver e votar em todas.`,
+      conferir(prontas, prontas.map((p) => p.id)),
+    );
+    if (!sim) return;
     setErro(null);
-    setErro(await agir({ acao: 'abrirProntas' }));
+    setErro(await agir({ acao: 'abrirProntas', ...sim }));
   }
 
   return (
@@ -984,29 +1040,30 @@ function AbrirProntas({
 function PerguntaComissao({
   p,
   total,
-  jaHaVotos,
+  conferir,
   salvando,
   agir,
 }: {
   p: Pergunta;
   total: number;
-  /** Whether anyone already voted on an opened question (see confirmarAbertura). */
-  jaHaVotos: boolean;
+  conferir: Conferir;
   salvando: boolean;
   agir: (a: AcaoVotacao) => Promise<string | null>;
 }) {
   const [erro, setErro] = useState<string | null>(null);
   const votaram = p.votaram ?? 0;
 
-  async function fazer(acao: 'abrir' | 'encerrar' | 'liberar' | 'esconder' | 'excluir', confirmacao?: string) {
+  async function fazer(acao: 'encerrar' | 'liberar' | 'esconder' | 'excluir', confirmacao?: string) {
     if (confirmacao && !window.confirm(confirmacao)) return;
     setErro(null);
     setErro(await agir({ acao, id: p.id }));
   }
 
   async function abrir() {
-    if (!confirmarAbertura(`Abrir "${p.pergunta}"? A turma passa a ver e votar nela.`, jaHaVotos)) return;
-    await fazer('abrir');
+    const sim = confirmarAbertura(`Abrir "${p.pergunta}"? A turma passa a ver e votar nela.`, conferir([p], [p.id]));
+    if (!sim) return;
+    setErro(null);
+    setErro(await agir({ acao: 'abrir', id: p.id, ...sim }));
   }
 
   return (

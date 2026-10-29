@@ -180,12 +180,22 @@ com ou sem +55, e até sem o 9 da frente. O site acerta o formato sozinho
   uma opção. No banco, o branco é contado na opção `''` (vazia), que nunca é
   uma opção de verdade.
 - **O voto não se repete:** ninguém pode escolher a mesma opção (a mesma
-  pessoa) em duas perguntas, de nenhuma categoria. A página avisa no topo,
-  marca como "já escolhido" o que foi usado em outra pergunta, mostra um erro
-  se a escolha se repetir e não deixa enviar. Como o voto não fica guardado,
-  a conferência só vale entre as perguntas enviadas juntas: abra todas de
-  uma vez, antes de a turma começar a votar (dá para ir deixando prontas e
-  abrir todas juntas).
+  pessoa) em duas perguntas, de nenhuma categoria (orador 1º e 2º voto,
+  juramento, homenagens…). A página avisa no topo, marca como "já
+  escolhido" o que foi usado em outra pergunta, mostra um erro se a escolha
+  se repetir e não deixa enviar; o servidor confere de novo. O nome é
+  comparado sem acento, maiúscula nem espaço a mais ("Laís Boldrim" e
+  "lais boldrim" são a mesma pessoa), porque a comissão digita os nomes de
+  cada pergunta à mão (`chave_opcao` em `votacao.sql`).
+- **Perguntas com nomes em comum abrem juntas:** como o voto não fica
+  guardado, a conferência só vale entre as perguntas enviadas juntas. Por
+  isso, deixe todas prontas e abra de uma vez ("Abrir as N agora"), antes de
+  a turma começar a votar. Depois que alguém votou numa pergunta, o site não
+  abre outra que tenha algum nome dela (`abrir_perguntas` em `votacao.sql`):
+  quem já votou ia votar nela à parte e poderia repetir o nome. A comissão vê
+  qual nome e qual pergunta, e pode abrir mesmo assim, se quiser (por
+  exemplo, uma votação separada mais tarde, onde repetir não tem problema).
+  Abrir só uma das prontas que têm nomes em comum também avisa antes.
 - **Voto secreto de verdade:** o banco guarda separado quem já votou
   (`votacao_participacao`) e quantos votos cada opção tem
   (`votacao_contagem`). Nenhum registro liga uma pessoa à escolha dela.

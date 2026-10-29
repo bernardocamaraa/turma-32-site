@@ -20,7 +20,9 @@
 -- ("o mais engraçado") or a list written by the committee ("qual música de
 -- entrada?"). A formando sends all open
 -- questions in one ballot, and can't pick the same option (the same person)
--- in two of them (votar_cedula at the end of this file).
+-- in two of them (votar_cedula at the end of this file). Since that's only
+-- checkable within one ballot, a question sharing a name with one already
+-- voted on doesn't open (abrir_perguntas).
 --
 -- The ballot is secret by construction, not by policy: who voted on a
 -- question (votacao_participacao) and how many votes each option got
@@ -223,14 +225,32 @@ grant execute on function public.identificar_eleitor(text, text) to service_role
 -- ran it still have that column, unused — the rule now covers every
 -- question.)
 
+-- A name as the no-repeat rule compares it: accents, capitals and extra
+-- spaces aside, so "Laís Boldrim" in one question and "lais  boldrim" in
+-- another are the same person. The committee types an "opcoes" question's
+-- names by hand, one question at a time, so they may not come out
+-- identical. (chaveDoNome in src/lib/votacao.ts does the same on the page.)
+create or replace function public.chave_opcao(p_opcao text)
+returns text
+language sql
+immutable
+parallel safe
+as $$
+  select lower(btrim(regexp_replace(regexp_replace(normalize(p_opcao, nfd), '[\u0300-\u036f]', '', 'g'), '\s+', ' ', 'g')));
+$$;
+
+revoke all on function public.chave_opcao(text) from public, anon, authenticated;
+grant execute on function public.chave_opcao(text) to service_role;
+
 -- Casts a formando's whole ballot at once: `p_votos` is {question id:
 -- [options]} (or a single option as a string, or null for a blank vote)
 -- with a choice for every open question they haven't voted on yet.
 -- All or nothing, in one transaction, so no question can be skipped. It's
 -- also the only moment the choices can be compared with each other —
--- nothing stores them afterwards — so the same option twice is refused
--- here. (A question opened after someone already sent their ballot can't
--- be compared with what they chose then.)
+-- nothing stores them afterwards — so the same name twice is refused
+-- here. A question opened after someone already sent their ballot couldn't
+-- be compared with what they chose then: that's why abrir_perguntas below
+-- won't open one that shares a name with a question already voted on.
 create or replace function public.votar_cedula(p_formando text, p_votos jsonb)
 returns void
 language plpgsql
@@ -255,6 +275,12 @@ begin
     raise exception 'Uma das votações não existe mais. Recarregue a página.';
   end if;
 
+  -- Shared with every other ballot, exclusive with abrir_perguntas: a
+  -- question can't open while a ballot is going in and slip out of it —
+  -- the ballot either counts before the opening is checked, or waits and
+  -- then has to include the new question.
+  perform pg_advisory_xact_lock_shared(hashtext('votacao_abrir'));
+
   select string_agg('"' || p.pergunta || '"', ', ' order by p.criado_em) into v_faltam
   from votacao_perguntas p
   where p.aberta
@@ -277,7 +303,7 @@ begin
   )
   select a.opcao, a.pergunta as primeira, b.pergunta as segunda into v_repetida
   from escolhas a
-  join escolhas b on a.opcao = b.opcao and (a.criado_em, a.id) < (b.criado_em, b.id)
+  join escolhas b on chave_opcao(a.opcao) = chave_opcao(b.opcao) and (a.criado_em, a.id) < (b.criado_em, b.id)
   order by a.criado_em, b.criado_em
   limit 1;
   if found then
@@ -301,6 +327,58 @@ $$;
 
 revoke all on function public.votar_cedula(text, jsonb) from public, anon, authenticated;
 grant execute on function public.votar_cedula(text, jsonb) to service_role;
+
+-- Opens ready questions: the ones in `p_ids`, or every ready one (null).
+-- The no-repeat rule only covers questions in the same ballot, and nothing
+-- remembers a ballot once it's in. So a question that shares a name with
+-- one the class already voted on (open or closed) is refused: whoever voted
+-- there would vote on this one apart, free to pick that name again.
+-- Questions with names in common have to open together, before anyone
+-- votes. `p_mesmo_assim` opens it anyway, when the committee decides
+-- repeating is fine there (say, a separate vote later on).
+create or replace function public.abrir_perguntas(p_ids uuid[], p_mesmo_assim boolean default false)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_conflito record;
+begin
+  -- See votar_cedula: ballots going in now finish first (and their votes
+  -- count below); the next ones wait for this.
+  perform pg_advisory_xact_lock(hashtext('votacao_abrir'));
+
+  if not coalesce(p_mesmo_assim, false) then
+    with nomes as (
+      select p.id, p.pergunta, p.criado_em, p.pronta, o.nome, chave_opcao(o.nome) as chave
+      from votacao_perguntas p
+      cross join lateral unnest(
+        case when p.tipo = 'formandos' then array(select formando from convidados_formando) else p.opcoes end
+      ) as o(nome)
+    )
+    select a.nome, a.pergunta as abrindo, b.pergunta as votada into v_conflito
+    from nomes a
+    join nomes b on b.chave = a.chave and b.id <> a.id
+    where a.pronta
+      and (p_ids is null or a.id = any (p_ids))
+      and not b.pronta
+      and exists (select 1 from votacao_participacao v where v.pergunta_id = b.id)
+    order by a.criado_em, b.criado_em
+    limit 1;
+    if found then
+      raise exception '"%" está em "%" e também em "%", que já recebeu votos. Quem votou lá votaria nessa à parte, e o site não teria como conferir se a pessoa repetiu o nome. Perguntas com nomes em comum precisam abrir juntas, antes de a turma votar.',
+        v_conflito.nome, v_conflito.abrindo, v_conflito.votada;
+    end if;
+  end if;
+
+  update votacao_perguntas set pronta = false
+  where pronta and (p_ids is null or id = any (p_ids));
+end;
+$$;
+
+revoke all on function public.abrir_perguntas(uuid[], boolean) from public, anon, authenticated;
+grant execute on function public.abrir_perguntas(uuid[], boolean) to service_role;
 
 -- Notifying the committee: the browser's own notifications (Web Push). A
 -- committee phone that turns them on (in /votacao/comissao) gets one the
