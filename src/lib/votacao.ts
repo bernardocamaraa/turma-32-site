@@ -53,6 +53,20 @@ export type DadosVotacao = {
  */
 export type AcessoVotacao = Record<string, never> | { whatsapp: string; nome?: string } | { codigo: string };
 
+/**
+ * A name as the no-repeat rule compares it: accents, capitals and extra
+ * spaces aside, so "Laís Boldrim" in one question and "lais  boldrim" in
+ * another are the same person. Same as chave_opcao in votacao.sql.
+ */
+export function chaveDoNome(nome: string): string {
+  return nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/** The names a question offers: the whole class, or the options the committee wrote. */
+export function nomesDaPergunta(p: Pick<Pergunta, 'tipo' | 'opcoes'>, formandos: string[]): string[] {
+  return p.tipo === 'formandos' ? formandos : p.opcoes;
+}
+
 /** The one link the whole class votes through. */
 export function urlDaVotacao(): string {
   return `${window.location.origin}/votacao`;
@@ -98,11 +112,16 @@ export type AcaoVotacao =
    * haven't voted on, by question id — or null for a blank vote.
    */
   | { acao: 'votarTudo'; votos: Record<string, string[] | null> }
-  /** `maximo`: how many options each formando picks (1 = just one). `pronta`: leave it to open later. */
-  | { acao: 'criar'; texto: string; tipo: TipoPergunta; opcoes: string[]; maximo: number; pronta: boolean }
-  | { acao: 'abrir' | 'encerrar' | 'liberar' | 'esconder' | 'excluir'; id: string }
-  /** Committee: open every ready question at once, so the class votes on them together. */
-  | { acao: 'abrirProntas' }
+  /** `maximo`: how many options each formando picks (1 = just one). `pronta`: leave it to open later. `mesmoAssim`: as in 'abrir'. */
+  | { acao: 'criar'; texto: string; tipo: TipoPergunta; opcoes: string[]; maximo: number; pronta: boolean; mesmoAssim?: boolean }
+  /**
+   * Committee: open a ready question, or every ready one at once so the
+   * class votes on them together. Refused when a name is also in a question
+   * already voted on (abrir_perguntas in votacao.sql), unless `mesmoAssim`.
+   */
+  | { acao: 'abrir'; id: string; mesmoAssim?: boolean }
+  | { acao: 'abrirProntas'; mesmoAssim?: boolean }
+  | { acao: 'encerrar' | 'liberar' | 'esconder' | 'excluir'; id: string }
   /** Committee: fill in, fix or (null) clear a formando's number. */
   | { acao: 'definirWhatsapp'; formando: string; whatsapp: string | null }
   /** Committee: tell this phone when everyone has voted (src/lib/avisos.ts); sends a first notification right away. */
