@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { useParams } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
+import { Carregando } from '../components/Carregando';
 import { CarregandoSecao } from '../components/CarregandoSecao';
 import { MapaMesas } from '../components/MapaMesas';
 import { Select } from '../components/Select';
@@ -257,7 +258,8 @@ export function Mesas({ codigoComissao }: { codigoComissao?: string }) {
           <Button
             fullWidth
             size="lg"
-            disabled={salvando || quantidade === meusNaMesa || quantidade > maximo}
+            disabled={quantidade === meusNaMesa || quantidade > maximo}
+            carregando={salvando}
             onClick={() => marcar(quantidade)}
           >
             {salvando
@@ -397,21 +399,22 @@ export function Mesas({ codigoComissao }: { codigoComissao?: string }) {
     >
       <PageHeader eyebrow="Área dos formandos" title="Mapa das mesas." />
 
-      {conteudo ?? (
-        // A personal link: nothing to type, just loading or a dead link.
-        <Card padding="var(--space-7)">
-          <p style={{ margin: 0, fontSize: 'var(--fs-body-lg)', lineHeight: 'var(--lh-normal)', color: erroAcesso ? 'var(--state-error)' : 'var(--text-muted)' }}>
-            {erroAcesso ?? 'Abrindo o seu mapa…'}
-          </p>
-          {erroAcesso && !entrando ? (
-            <div style={{ display: 'flex', marginTop: 'var(--space-5)' }}>
-              <Button variant="secondary" onClick={entrar}>
-                Tentar de novo
-              </Button>
-            </div>
-          ) : null}
-        </Card>
-      )}
+      {/* A personal link: nothing to type, just loading or a dead link. */}
+      {conteudo ??
+        (erroAcesso ? (
+          <Card padding="var(--space-7)">
+            <p style={{ margin: 0, fontSize: 'var(--fs-body-lg)', lineHeight: 'var(--lh-normal)', color: 'var(--state-error)' }}>{erroAcesso}</p>
+            {!entrando ? (
+              <div style={{ display: 'flex', marginTop: 'var(--space-5)' }}>
+                <Button variant="secondary" onClick={entrar}>
+                  Tentar de novo
+                </Button>
+              </div>
+            ) : null}
+          </Card>
+        ) : (
+          <Carregando texto="Abrindo o seu mapa…" />
+        ))}
     </main>
   );
 }

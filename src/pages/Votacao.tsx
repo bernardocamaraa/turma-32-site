@@ -329,7 +329,7 @@ function Identificacao({
         {erro ? <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--state-error)' }}>{erro}</span> : null}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
           {!pedirNome || livres.length > 0 ? (
-            <Button size="lg" disabled={!numero.trim() || (pedirNome && !nome) || entrando} onClick={enviar}>
+            <Button size="lg" disabled={!numero.trim() || (pedirNome && !nome)} carregando={entrando} onClick={enviar}>
               {entrando ? 'Entrando…' : 'Entrar para votar'}
             </Button>
           ) : null}
@@ -488,7 +488,7 @@ function Cedula({
             {erro ? <p style={{ ...texto, color: 'var(--state-error)' }}>{erro}</p> : null}
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-5)', flexWrap: 'wrap' }}>
-              <Button size="lg" disabled={!pronta || salvando} onClick={enviar}>
+              <Button size="lg" disabled={!pronta} carregando={salvando} onClick={enviar}>
                 {salvando ? 'Enviando…' : 'Enviar meus votos'}
               </Button>
               <span style={pequeno}>
@@ -949,7 +949,7 @@ function FormularioPergunta({
         <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
           {editando ? (
             <>
-              <Button size="lg" disabled={!preenchida || salvando} onClick={salvar}>
+              <Button size="lg" disabled={!preenchida} carregando={salvando} onClick={salvar}>
                 {salvando ? 'Salvando…' : 'Salvar'}
               </Button>
               <Button size="lg" variant="ghost" disabled={salvando} onClick={onFechar}>
@@ -958,10 +958,10 @@ function FormularioPergunta({
             </>
           ) : (
             <>
-              <Button size="lg" disabled={!preenchida || salvando} onClick={() => criar(false)}>
+              <Button size="lg" disabled={!preenchida || salvando} carregando={salvando && !deixandoPronta} onClick={() => criar(false)}>
                 {salvando && !deixandoPronta ? 'Criando…' : 'Criar e abrir agora'}
               </Button>
-              <Button size="lg" variant="secondary" disabled={!preenchida || salvando} onClick={() => criar(true)}>
+              <Button size="lg" variant="secondary" disabled={!preenchida || salvando} carregando={salvando && deixandoPronta} onClick={() => criar(true)}>
                 {salvando && deixandoPronta ? 'Criando…' : 'Deixar pronta'}
               </Button>
             </>
@@ -1354,7 +1354,7 @@ function AvisoDaVotacao({
             <p style={texto}>Receba uma notificação neste aparelho assim que todo mundo votar, sem precisar ficar conferindo.</p>
             {chavePush ? (
               <div style={{ display: 'flex' }}>
-                <Button disabled={ocupado || ligado === null} onClick={ligar}>
+                <Button disabled={ligado === null} carregando={ocupado} onClick={ligar}>
                   {ocupado ? 'Ligando…' : 'Me avisar quando todos votarem'}
                 </Button>
               </div>

@@ -23,6 +23,7 @@ export function IconButton({
 }) {
   const dim = size === 'sm' ? 32 : size === 'lg' ? 56 : 44;
   const [hover, setHover] = useState(false);
+  const [press, setPress] = useState(false);
   const solid = variant === 'solid';
 
   return (
@@ -30,8 +31,17 @@ export function IconButton({
       aria-label={label}
       disabled={disabled}
       onClick={disabled ? undefined : onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      // Hover from a mouse only, as in Button: a tap would leave it lit.
+      onPointerEnter={(e) => {
+        if (e.pointerType === 'mouse') setHover(true);
+      }}
+      onPointerLeave={() => {
+        setHover(false);
+        setPress(false);
+      }}
+      onPointerDown={() => setPress(true)}
+      onPointerUp={() => setPress(false)}
+      onPointerCancel={() => setPress(false)}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -44,7 +54,9 @@ export function IconButton({
         borderRadius: 'var(--radius-sm)',
         cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.38 : 1,
-        transition: 'background var(--dur-fast) var(--ease-out),border-color var(--dur-fast) var(--ease-out)',
+        transform: press && !disabled ? 'scale(.94)' : 'none',
+        transition:
+          'transform var(--dur-fast) var(--ease-out),background var(--dur-fast) var(--ease-out),border-color var(--dur-fast) var(--ease-out)',
         ...style,
       }}
     >

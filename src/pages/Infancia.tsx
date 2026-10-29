@@ -161,7 +161,7 @@ export function Infancia({ codigo }: { codigo: string }) {
                     formandos já têm foto · {plural(totalFotos, 'foto', 'fotos')} no total
                   </span>
                 </div>
-                <Button size="lg" disabled={baixando !== null || totalFotos === 0} onClick={baixarTudo} iconLeft={<Download size={18} aria-hidden />}>
+                <Button size="lg" disabled={totalFotos === 0} carregando={baixando !== null} onClick={baixarTudo} iconLeft={<Download size={18} aria-hidden />}>
                   {!baixando
                     ? 'Baixar todas (.zip)'
                     : baixando.total > 0 && baixando.feitas < baixando.total
@@ -381,9 +381,9 @@ function CartaoFormando({
           <Button
             size="sm"
             variant="secondary"
-            disabled={enviando !== null}
+            carregando={enviando !== null}
             onClick={() => entrada.current?.click()}
-            iconLeft={enviando ? undefined : <Plus size={16} aria-hidden />}
+            iconLeft={<Plus size={16} aria-hidden />}
           >
             {!enviando ? 'Adicionar foto' : enviando.total > 1 ? `Enviando ${enviando.feitas + 1} de ${enviando.total}…` : 'Enviando…'}
           </Button>
