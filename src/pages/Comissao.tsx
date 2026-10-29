@@ -2,6 +2,7 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
+import { Carregando } from '../components/Carregando';
 import { CarregandoSecao } from '../components/CarregandoSecao';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { Input } from '../components/Input';
@@ -88,7 +89,7 @@ export function Comissao() {
 
       {!codigoValido ? (
         automatico ? (
-          <p style={{ ...texto, color: 'var(--text-faint)' }}>Entrando…</p>
+          <Carregando texto="Entrando…" />
         ) : (
           <Card padding="var(--space-7)">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxWidth: 420 }}>
@@ -111,7 +112,7 @@ export function Comissao() {
               />
               {erroAcesso ? <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--state-error)' }}>{erroAcesso}</span> : null}
               <div style={{ display: 'flex' }}>
-                <Button size="lg" disabled={!codigo.trim() || entrando} onClick={entrar}>
+                <Button size="lg" disabled={!codigo.trim()} carregando={entrando} onClick={entrar}>
                   {entrando ? 'Entrando…' : 'Entrar'}
                 </Button>
               </div>
@@ -346,7 +347,7 @@ function AlbumEMensagens({ codigo }: { codigo: string }) {
               {dados.albumAberto ? 'Aberto, convidados já podem enviar fotos.' : 'Fechado, ninguém consegue enviar fotos ainda.'}
             </span>
           </div>
-          <Button size="lg" variant={dados.albumAberto ? 'secondary' : 'primary'} disabled={alternandoAlbum} onClick={alternarAlbum}>
+          <Button size="lg" variant={dados.albumAberto ? 'secondary' : 'primary'} carregando={alternandoAlbum} onClick={alternarAlbum}>
             {alternandoAlbum ? 'Atualizando…' : dados.albumAberto ? 'Fechar álbum' : 'Liberar álbum'}
           </Button>
         </div>
@@ -374,7 +375,7 @@ function AlbumEMensagens({ codigo }: { codigo: string }) {
                   style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--stroke-hair)' }}
                 />
                 {f.legenda ? <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>{f.legenda}</span> : null}
-                <Button variant="ghost" disabled={excluindoFotoId === f.id} onClick={() => excluirFoto(f.id)} style={{ padding: 0, height: 28, fontSize: 10 }}>
+                <Button variant="ghost" carregando={excluindoFotoId === f.id} onClick={() => excluirFoto(f.id)} style={{ padding: 0, height: 28, fontSize: 10 }}>
                   {excluindoFotoId === f.id ? 'Excluindo…' : 'Excluir'}
                 </Button>
               </div>

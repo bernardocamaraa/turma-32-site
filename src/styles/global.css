@@ -8,6 +8,34 @@ html, body, #root {
   min-height: 100%;
 }
 
+html {
+  /* Phones paint their own blue flash over whatever is tapped (Android most
+     of all), which made every button look like a link being clicked. Off
+     everywhere: the buttons answer a tap themselves (see below). */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* No waiting for a possible double-tap zoom before a tap counts; pinch to
+   zoom still works. */
+a, button, input, select, textarea, label, summary, [role="button"] {
+  touch-action: manipulation;
+}
+
+/* The page's frame (App.tsx): at least a screen tall, with the content
+   taking the slack. A short page — one still loading, or any page seen
+   zoomed far out — keeps the footer at the bottom of the screen instead of
+   halfway up with black beneath it. dvh follows a phone's toolbar. */
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.app-conteudo {
+  flex: 1 0 auto;
+}
+
 html, body {
   /* Safety net: a decorative absolutely-positioned glow/halo without its own
      clipping container has caused horizontal overflow before (see the
@@ -66,12 +94,31 @@ a {
   text-decoration: none;
 }
 
-a:hover {
-  color: var(--chalk-050);
+/* Only where there's a real pointer: on a phone a tapped link would keep
+   the hover look until the next tap somewhere else. */
+@media (hover: hover) {
+  a:hover {
+    color: var(--chalk-050);
+  }
 }
 
 button {
   font: inherit;
+}
+
+/* With the browser's tap flash gone, anything tapped on a touch screen dims
+   for as long as the finger is on it. Buttons that set their own opacity
+   (Button, IconButton) have their own pressed look instead. */
+@media (hover: none) {
+  a, button, [role="button"] {
+    transition: opacity var(--dur-fast) var(--ease-out);
+  }
+
+  a:active,
+  button:not(:disabled):active,
+  [role="button"]:active {
+    opacity: .6;
+  }
 }
 
 /* The header is sticky, so an anchor jump (/baile#traje) would otherwise
@@ -129,6 +176,67 @@ button {
 
 @keyframes mesa-lugar {
   from { opacity: 0; transform: scale(0); }
+}
+
+/* Loading (components/Carregando.tsx). The ring is a conic gradient cut
+   down to its rim by the mask: transparent at its tail, through the logo's
+   two ice blues, to white at the head, with a round dot capping the head
+   and a faint full track under it all. With reduced motion (animations
+   off, below) it stands still and the text says what's going on. */
+@keyframes roda-gira {
+  to { transform: rotate(1turn); }
+}
+
+.roda {
+  --espessura: 2px;
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 1em;
+  height: 1em;
+  border-radius: 50%;
+  background:
+    conic-gradient(transparent 0deg, rgba(75, 150, 189, 0) 40deg, var(--ice-500) 170deg, var(--ice-300) 290deg, var(--chalk-050) 360deg),
+    rgba(245, 245, 247, .1);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--espessura) - .5px), #000 calc(100% - var(--espessura)));
+  mask: radial-gradient(farthest-side, transparent calc(100% - var(--espessura) - .5px), #000 calc(100% - var(--espessura)));
+  animation: roda-gira 900ms linear infinite;
+}
+
+.roda::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: var(--espessura);
+  height: var(--espessura);
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: var(--chalk-050);
+}
+
+.roda-grande {
+  --espessura: 3px;
+  animation-duration: 1100ms;
+}
+
+/* Inside a button: the label's own color, no track. */
+.roda-texto {
+  background: conic-gradient(transparent 0deg, transparent 40deg, currentColor 360deg);
+}
+
+.roda-texto::after {
+  background: currentColor;
+}
+
+/* Waits a beat before showing, so a load that's over in an instant never
+   flashes the ring. */
+.carregando {
+  animation: om-fade-in 400ms var(--ease-out) 250ms both;
+}
+
+.carregando-logo {
+  animation: om-glow 2400ms var(--ease-in-out) infinite;
 }
 
 /* A scene pinned to the viewport while its (taller) section scrolls past —

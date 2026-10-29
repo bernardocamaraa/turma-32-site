@@ -1,5 +1,6 @@
 import { Button } from './Button';
 import { Card } from './Card';
+import { Carregando } from './Carregando';
 
 /**
  * A tab of the committee area while its data loads — or, if it didn't, why
@@ -7,7 +8,7 @@ import { Card } from './Card';
  * area, so there's no login here.
  */
 export function CarregandoSecao({ erro, onTentar }: { erro: string | null; onTentar: () => void }) {
-  if (!erro) return <p style={{ margin: 0, fontSize: 'var(--fs-body)', color: 'var(--text-faint)' }}>Carregando…</p>;
+  if (!erro) return <Carregando />;
   return (
     <Card padding="var(--space-7)">
       <p style={{ margin: 0, fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-normal)', color: 'var(--state-error)' }}>{erro}</p>

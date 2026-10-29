@@ -36,8 +36,11 @@ export function Card({
   return (
     <div
       className={className}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      // A mouse only: a tap on a phone would leave the card lifted.
+      onPointerEnter={(e) => {
+        if (e.pointerType === 'mouse') setHover(true);
+      }}
+      onPointerLeave={() => setHover(false)}
       style={{
         position: 'relative',
         padding,

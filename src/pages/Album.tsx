@@ -200,7 +200,7 @@ export function Album() {
           enviado ? (
             <Button onClick={() => setDialogAberto(false)}>Fechar</Button>
           ) : (
-            <Button disabled={!arquivo || enviando} onClick={enviar}>
+            <Button disabled={!arquivo} carregando={enviando} onClick={enviar}>
               {enviando ? 'Enviando…' : 'Enviar'}
             </Button>
           )

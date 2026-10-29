@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { lazy, Suspense, useEffect } from 'react';
+import { Carregando } from './components/Carregando';
 import { NavBar } from './components/NavBar';
 import { Footer } from './components/Footer';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -59,7 +60,7 @@ function AppRoutes() {
         <Route
           path="/comissao/*"
           element={
-            <Suspense fallback={null}>
+            <Suspense fallback={<Carregando tela />}>
               <Comissao />
             </Suspense>
           }
@@ -68,7 +69,7 @@ function AppRoutes() {
         <Route
           path="/votacao"
           element={
-            <Suspense fallback={null}>
+            <Suspense fallback={<Carregando tela />}>
               <Votacao />
             </Suspense>
           }
@@ -89,10 +90,12 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--ink-950)', fontFamily: 'var(--font-core)' }}>
+    <div className="app" style={{ background: 'var(--ink-950)', fontFamily: 'var(--font-core)' }}>
       <ScrollToTop />
       <NavBar />
-      <AppRoutes />
+      <div className="app-conteudo">
+        <AppRoutes />
+      </div>
       <Footer />
     </div>
   );

@@ -1,4 +1,5 @@
-import { useState, type CSSProperties, type MouseEventHandler, type ReactNode } from 'react';
+import { useState, type CSSProperties, type MouseEventHandler, type PointerEvent, type ReactNode } from 'react';
+import { Roda } from './Carregando';
 
 type Variant = 'primary' | 'gild' | 'secondary' | 'ghost';
 type Size = 'sm' | 'md' | 'lg';
@@ -22,6 +23,8 @@ type ButtonProps = {
   variant?: Variant;
   size?: Size;
   disabled?: boolean;
+  /** Working on it: the ring turns where the left icon goes, and it can't be pressed again meanwhile. */
+  carregando?: boolean;
   fullWidth?: boolean;
   iconLeft?: ReactNode;
   iconRight?: ReactNode;
@@ -38,7 +41,8 @@ type ButtonProps = {
 export function Button({
   variant = 'primary',
   size = 'md',
-  disabled = false,
+  disabled: desativado = false,
+  carregando = false,
   fullWidth = false,
   iconLeft,
   iconRight,
@@ -56,6 +60,9 @@ export function Button({
   const [hover, setHover] = useState(false);
   const [press, setPress] = useState(false);
   const ghost = variant === 'ghost';
+  // While it loads it's as unpressable as a disabled one, but stays at full
+  // strength so the ring and the label ("Entrando…") read clearly.
+  const disabled = desativado || carregando;
 
   const sharedStyle: CSSProperties = {
     display: fullWidth ? 'flex' : 'inline-flex',
@@ -78,16 +85,20 @@ export function Button({
     border: '1px solid ' + k.border,
     borderRadius: 'var(--radius-pill)',
     transform: press && !disabled ? 'scale(.97)' : 'none',
-    opacity: disabled ? 0.38 : 1,
-    cursor: disabled ? 'not-allowed' : 'pointer',
+    opacity: disabled && !carregando ? 0.38 : 1,
+    cursor: carregando ? 'progress' : disabled ? 'not-allowed' : 'pointer',
     transition: 'transform var(--dur-fast) var(--ease-out), background var(--dur) var(--ease-out)',
     WebkitTapHighlightColor: 'transparent',
     ...style,
   };
 
   const handlers = {
-    onMouseEnter: () => setHover(true),
-    onMouseLeave: () => {
+    // A mouse only: a phone fakes a hover on every tap, and it would stay
+    // lit after the finger is gone.
+    onPointerEnter: (e: PointerEvent) => {
+      if (e.pointerType === 'mouse') setHover(true);
+    },
+    onPointerLeave: () => {
       setHover(false);
       setPress(false);
     },
@@ -98,8 +109,8 @@ export function Button({
 
   if (as === 'a') {
     return (
-      <a href={href} target={target} rel={rel} onClick={onClick} {...handlers} style={sharedStyle}>
-        {iconLeft}
+      <a href={href} target={target} rel={rel} onClick={onClick} aria-busy={carregando || undefined} {...handlers} style={sharedStyle}>
+        {carregando ? <Roda daCorDoTexto /> : iconLeft}
         {children}
         {iconRight}
       </a>
@@ -107,8 +118,15 @@ export function Button({
   }
 
   return (
-    <button type={type ?? 'button'} disabled={disabled} onClick={disabled ? undefined : onClick} {...handlers} style={sharedStyle}>
-      {iconLeft}
+    <button
+      type={type ?? 'button'}
+      disabled={disabled}
+      aria-busy={carregando || undefined}
+      onClick={disabled ? undefined : onClick}
+      {...handlers}
+      style={sharedStyle}
+    >
+      {carregando ? <Roda daCorDoTexto /> : iconLeft}
       {children}
       {iconRight}
     </button>
