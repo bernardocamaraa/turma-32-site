@@ -180,7 +180,7 @@ export function Votacao({ codigoComissao }: { codigoComissao?: string }) {
             <LinkDaVotacao />
             <AvisoDaVotacao chavePush={dados.chavePush ?? null} aparelhos={dados.aparelhosAvisados ?? null} agir={agir} />
             <EleitoresDaVotacao eleitores={dados.eleitores ?? []} salvando={salvando} agir={agir} />
-            <NovaPergunta conferir={conferir} salvando={salvando} agir={agir} />
+            <FormularioPergunta conferir={conferir} salvando={salvando} agir={agir} />
             {prontas.length > 1 ? <AbrirProntas prontas={prontas} conferir={conferir} salvando={salvando} agir={agir} /> : null}
             {dados.perguntas.length === 0 ? (
               <p style={texto}>Nenhuma votação criada ainda.</p>
@@ -792,21 +792,29 @@ function Barras({ resultado, brancos, votaram }: { resultado: Resultado[]; branc
 /** "How many can each formando pick", as the committee reads it; position + 1 is the number. */
 const QUANTAS_ESCOLHAS = ['Só uma', 'Até 2', 'Até 3', 'Até 4', 'Até 5'];
 
-/** The committee's form for a new question. */
-function NovaPergunta({
+/**
+ * The committee's form for a new question — or, with `editando`, for
+ * changing a ready one (text, options, how many picks), which nobody has
+ * seen yet. `onFechar`: leaves the editing.
+ */
+function FormularioPergunta({
+  editando,
+  onFechar,
   conferir,
   salvando,
   agir,
 }: {
+  editando?: Pergunta;
+  onFechar?: () => void;
   conferir: Conferir;
   salvando: boolean;
   agir: (a: AcaoVotacao) => Promise<string | null>;
 }) {
   const mobile = useIsMobile();
-  const [pergunta, setPergunta] = useState('');
-  const [tipo, setTipo] = useState<TipoPergunta>('formandos');
-  const [opcoes, setOpcoes] = useState('');
-  const [maximo, setMaximo] = useState(1);
+  const [pergunta, setPergunta] = useState(editando?.pergunta ?? '');
+  const [tipo, setTipo] = useState<TipoPergunta>(editando?.tipo ?? 'formandos');
+  const [opcoes, setOpcoes] = useState(editando?.opcoes.join('\n') ?? '');
+  const [maximo, setMaximo] = useState(editando?.maximo ?? 1);
   const [erro, setErro] = useState<string | null>(null);
   // Which of the two buttons was pressed, for its "Criando…".
   const [deixandoPronta, setDeixandoPronta] = useState(false);
@@ -836,10 +844,20 @@ function NovaPergunta({
     }
   }
 
+  async function salvar() {
+    if (!editando) return;
+    setErro(null);
+    const falha = await agir({ acao: 'editar', id: editando.id, texto: pergunta, tipo, opcoes: lista, maximo });
+    setErro(falha);
+    if (!falha) onFechar?.();
+  }
+
   return (
     <Card padding={mobile ? 'var(--space-6)' : 'var(--space-7)'}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxWidth: '40rem' }}>
-        <span style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-h3)', fontWeight: 700, letterSpacing: '-.02em' }}>Nova votação</span>
+        <span style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-h3)', fontWeight: 700, letterSpacing: '-.02em' }}>
+          {editando ? 'Editar pergunta pronta' : 'Nova votação'}
+        </span>
         <Input label="Pergunta" placeholder="Ex.: Quem vai ficar rico primeiro?" value={pergunta} maxLength={200} onChange={(e) => setPergunta(e.target.value)} />
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
@@ -922,20 +940,32 @@ function NovaPergunta({
         ) : null}
 
         <span style={pequeno}>
-          "Deixar pronta" guarda a pergunta aqui: a turma não vê nem vota até vocês abrirem. O formando não pode escolher
-          o mesmo nome em duas perguntas (acento e maiúscula não contam), e o site confere isso nas perguntas que ele
-          envia juntas. Então perguntas com nomes em comum precisam abrir juntas, antes de a turma votar: depois, o site
-          não abre outra com algum desses nomes, a não ser que vocês confirmem abrir mesmo assim.
+          {editando
+            ? 'A turma ainda não vê essa pergunta, então dá para mudar tudo. Depois de aberta, ela não muda mais. Escreva cada nome igual nas outras perguntas (acento e maiúscula não contam), para o site saber que é a mesma pessoa.'
+            : `"Deixar pronta" guarda a pergunta aqui: a turma não vê nem vota até vocês abrirem, e dá para editar até lá. O formando não pode escolher o mesmo nome em duas perguntas (acento e maiúscula não contam), e o site confere isso nas perguntas que ele envia juntas. Então perguntas com nomes em comum precisam abrir juntas, antes de a turma votar: depois, o site não abre outra com algum desses nomes, a não ser que vocês confirmem abrir mesmo assim.`}
         </span>
 
         {erro ? <p style={{ ...texto, color: 'var(--state-error)' }}>{erro}</p> : null}
         <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-          <Button size="lg" disabled={!preenchida || salvando} onClick={() => criar(false)}>
-            {salvando && !deixandoPronta ? 'Criando…' : 'Criar e abrir agora'}
-          </Button>
-          <Button size="lg" variant="secondary" disabled={!preenchida || salvando} onClick={() => criar(true)}>
-            {salvando && deixandoPronta ? 'Criando…' : 'Deixar pronta'}
-          </Button>
+          {editando ? (
+            <>
+              <Button size="lg" disabled={!preenchida || salvando} onClick={salvar}>
+                {salvando ? 'Salvando…' : 'Salvar'}
+              </Button>
+              <Button size="lg" variant="ghost" disabled={salvando} onClick={onFechar}>
+                Cancelar
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button size="lg" disabled={!preenchida || salvando} onClick={() => criar(false)}>
+                {salvando && !deixandoPronta ? 'Criando…' : 'Criar e abrir agora'}
+              </Button>
+              <Button size="lg" variant="secondary" disabled={!preenchida || salvando} onClick={() => criar(true)}>
+                {salvando && deixandoPronta ? 'Criando…' : 'Deixar pronta'}
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </Card>
@@ -1035,7 +1065,8 @@ function AbrirProntas({
 
 /**
  * One question, as the committee sees it: who voted, the result once
- * closed, and what to do next — or, while it's ready, the way to open it.
+ * closed, and what to do next — or, while it's ready, the way to open or
+ * edit it.
  */
 function PerguntaComissao({
   p,
@@ -1051,6 +1082,8 @@ function PerguntaComissao({
   agir: (a: AcaoVotacao) => Promise<string | null>;
 }) {
   const [erro, setErro] = useState<string | null>(null);
+  // Only a ready question can be edited (see FormularioPergunta).
+  const [editando, setEditando] = useState(false);
   const votaram = p.votaram ?? 0;
 
   async function fazer(acao: 'encerrar' | 'liberar' | 'esconder' | 'excluir', confirmacao?: string) {
@@ -1064,6 +1097,10 @@ function PerguntaComissao({
     if (!sim) return;
     setErro(null);
     setErro(await agir({ acao: 'abrir', id: p.id, ...sim }));
+  }
+
+  if (editando && p.pronta) {
+    return <FormularioPergunta editando={p} onFechar={() => setEditando(false)} conferir={conferir} salvando={salvando} agir={agir} />;
   }
 
   return (
@@ -1122,9 +1159,21 @@ function PerguntaComissao({
 
         <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', alignItems: 'center' }}>
           {p.pronta ? (
-            <Button disabled={salvando} onClick={abrir}>
-              Abrir votação
-            </Button>
+            <>
+              <Button disabled={salvando} onClick={abrir}>
+                Abrir votação
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={salvando}
+                onClick={() => {
+                  setErro(null);
+                  setEditando(true);
+                }}
+              >
+                Editar
+              </Button>
+            </>
           ) : (
             <>
               {p.aberta ? (

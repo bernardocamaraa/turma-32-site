@@ -14,10 +14,11 @@
 //     (null), never the same option in two questions (votar_cedula in
 //     votacao.sql). Sees a result once the committee releases it.
 //   - `codigo`: COMMITTEE_CODE. Creates questions (open right away, or
-//     ready to open later), opens, deletes and closes them, shows/hides
-//     the results, and sees and edits each formando's number. Opening
-//     refuses a question that shares a name with one already voted on,
-//     unless `mesmoAssim` (abrir_perguntas in votacao.sql).
+//     ready to open later, and editable until then), opens, deletes and
+//     closes them, shows/hides the results, and sees and edits each
+//     formando's number. Opening refuses a question that shares a name
+//     with one already voted on, unless `mesmoAssim` (abrir_perguntas in
+//     votacao.sql).
 //     Can also turn on the notification for a phone (`avisar`, with the
 //     browser's push subscription): when the last formando votes on a
 //     question, every phone that turned it on is told (Web Push).
@@ -118,6 +119,37 @@ type Pergunta = {
   maximo: number;
   pronta: boolean;
 };
+
+/**
+ * A question as the committee wrote it (to create, or to edit a ready one),
+ * checked and tidied: the options trimmed, without repeats — or the message
+ * to show when something's off.
+ */
+function lerPergunta(
+  texto: unknown,
+  tipo: unknown,
+  opcoes: unknown,
+  maximo: unknown,
+): { erro: string } | Pick<Pergunta, 'pergunta' | 'tipo' | 'opcoes' | 'maximo'> {
+  const pergunta = typeof texto === 'string' ? texto.trim() : '';
+  if (pergunta.length < 3 || pergunta.length > 200) return { erro: 'Escreva a pergunta (de 3 a 200 letras).' };
+  if (tipo !== 'formandos' && tipo !== 'opcoes') return { erro: 'Escolha o tipo de pergunta.' };
+  let lista: string[] = [];
+  if (tipo === 'opcoes') {
+    lista = [...new Set((Array.isArray(opcoes) ? opcoes : []).filter((o): o is string => typeof o === 'string').map((o) => o.trim()).filter(Boolean))];
+    if (lista.length < 2 || lista.length > 20) return { erro: 'Escreva de 2 a 20 opções, uma por linha.' };
+    if (lista.some((o) => o.length > 80)) return { erro: 'Cada opção pode ter no máximo 80 letras.' };
+  }
+  // How many options each formando picks: one, or up to this many.
+  const escolhas = maximo === undefined ? 1 : maximo;
+  if (typeof escolhas !== 'number' || !Number.isInteger(escolhas) || escolhas < 1 || escolhas > 10) {
+    return { erro: 'Cada formando pode fazer de 1 a 10 escolhas.' };
+  }
+  if (tipo === 'opcoes' && escolhas >= lista.length) {
+    return { erro: `Com ${lista.length} opções, dá para deixar escolher no máximo ${lista.length - 1}.` };
+  }
+  return { pergunta, tipo, opcoes: lista, maximo: escolhas };
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -231,25 +263,12 @@ Deno.serve(async (req) => {
     }
 
     if (comissao && acao === 'criar') {
-      const pergunta = typeof texto === 'string' ? texto.trim() : '';
-      if (pergunta.length < 3 || pergunta.length > 200) return recusar('Escreva a pergunta (de 3 a 200 letras).');
-      if (tipo !== 'formandos' && tipo !== 'opcoes') return recusar('Escolha o tipo de pergunta.');
-      let lista: string[] = [];
-      if (tipo === 'opcoes') {
-        lista = [...new Set((Array.isArray(opcoes) ? opcoes : []).filter((o): o is string => typeof o === 'string').map((o) => o.trim()).filter(Boolean))];
-        if (lista.length < 2 || lista.length > 20) return recusar('Escreva de 2 a 20 opções, uma por linha.');
-        if (lista.some((o) => o.length > 80)) return recusar('Cada opção pode ter no máximo 80 letras.');
-      }
-      // How many options each formando picks: one, or up to this many.
-      const escolhas = maximo === undefined ? 1 : maximo;
-      if (!Number.isInteger(escolhas) || escolhas < 1 || escolhas > 10) return recusar('Cada formando pode fazer de 1 a 10 escolhas.');
-      if (tipo === 'opcoes' && escolhas >= lista.length) {
-        return recusar(`Com ${lista.length} opções, dá para deixar escolher no máximo ${lista.length - 1}.`);
-      }
+      const lida = lerPergunta(texto, tipo, opcoes, maximo);
+      if ('erro' in lida) return recusar(lida.erro);
       // `pronta`: written now, opened later (below); the class doesn't see it until then.
       const { data: criada, error } = await supabase
         .from('votacao_perguntas')
-        .insert({ pergunta, tipo, opcoes: lista, maximo: escolhas, pronta: true })
+        .insert({ ...lida, pronta: true })
         .select('id')
         .single();
       if (error) throw error;
@@ -264,6 +283,16 @@ Deno.serve(async (req) => {
           return recusar(recusa);
         }
       }
+    }
+
+    // A ready question can still change, since nobody has seen it. Once
+    // opened it can't: votes would have gone to options that changed.
+    if (comissao && acao === 'editar' && typeof id === 'string') {
+      const lida = lerPergunta(texto, tipo, opcoes, maximo);
+      if ('erro' in lida) return recusar(lida.erro);
+      const { data, error } = await supabase.from('votacao_perguntas').update(lida).eq('id', id).eq('pronta', true).select('id');
+      if (error) throw error;
+      if (data.length === 0) return recusar('Essa pergunta já foi aberta (ou excluída) e não dá mais para editar.');
     }
 
     // Opening a ready question shows it to the class and starts its vote.
