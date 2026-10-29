@@ -2,7 +2,8 @@
 //
 // Backs the class vote (/votacao): one link for the whole class, apart from
 // the table map. Three kinds of caller:
-//   - nobody yet: gets the list of names and the questions.
+//   - nobody yet: gets the list of names and the questions (the opened
+//     ones: a question still `pronta` only shows to the committee).
 //   - `whatsapp`: a formando, recognised by their number — the committee
 //     fills the numbers in, so most formandos never pick a name. A number
 //     not on the list comes back with `voce: null` and the names that still
@@ -12,8 +13,9 @@
 //     every open question one option, up to its `maximo`, or a blank vote
 //     (null), never the same option in two questions (votar_cedula in
 //     votacao.sql). Sees a result once the committee releases it.
-//   - `codigo`: COMMITTEE_CODE. Creates, deletes and closes questions,
-//     shows/hides the results, and sees and edits each formando's number.
+//   - `codigo`: COMMITTEE_CODE. Creates questions (open right away, or
+//     ready to open later), opens, deletes and closes them, shows/hides
+//     the results, and sees and edits each formando's number.
 //     Can also turn on the notification for a phone (`avisar`, with the
 //     browser's push subscription): when the last formando votes on a
 //     question, every phone that turned it on is told (Web Push).
@@ -112,6 +114,7 @@ type Pergunta = {
   aberta: boolean;
   resultado_liberado: boolean;
   maximo: number;
+  pronta: boolean;
 };
 
 Deno.serve(async (req) => {
@@ -120,7 +123,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { codigo, nome, whatsapp, acao, id, votos, texto, tipo, opcoes, maximo, formando, inscricao, endpoint } = await req.json();
+    const { codigo, nome, whatsapp, acao, id, votos, texto, tipo, opcoes, maximo, pronta, formando, inscricao, endpoint } = await req.json();
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -229,7 +232,22 @@ Deno.serve(async (req) => {
       if (tipo === 'opcoes' && escolhas >= lista.length) {
         return recusar(`Com ${lista.length} opções, dá para deixar escolher no máximo ${lista.length - 1}.`);
       }
-      const { error } = await supabase.from('votacao_perguntas').insert({ pergunta, tipo, opcoes: lista, maximo: escolhas });
+      // `pronta`: written now, opened later (below); the class doesn't see it until then.
+      const { error } = await supabase.from('votacao_perguntas').insert({ pergunta, tipo, opcoes: lista, maximo: escolhas, pronta: pronta === true });
+      if (error) throw error;
+    }
+
+    // Opening a ready question shows it to the class and starts its vote.
+    // There's no going back to ready, as there's no reopening.
+    if (comissao && acao === 'abrir' && typeof id === 'string') {
+      const { error } = await supabase.from('votacao_perguntas').update({ pronta: false }).eq('id', id);
+      if (error) throw error;
+    }
+
+    // Every ready question at once, so they land in the same ballot: the
+    // no-repeat rule only covers questions sent together (votar_cedula).
+    if (comissao && acao === 'abrirProntas') {
+      const { error } = await supabase.from('votacao_perguntas').update({ pronta: false }).eq('pronta', true);
       if (error) throw error;
     }
 
@@ -306,7 +324,7 @@ Deno.serve(async (req) => {
     }
 
     const [perguntas, contagem, participacao, formandos, avisos] = await Promise.all([
-      supabase.from('votacao_perguntas').select('id, pergunta, tipo, opcoes, aberta, resultado_liberado, maximo').order('criado_em'),
+      supabase.from('votacao_perguntas').select('id, pergunta, tipo, opcoes, aberta, resultado_liberado, maximo, pronta').order('criado_em'),
       supabase.from('votacao_contagem').select('pergunta_id, opcao, votos'),
       supabase.from('votacao_participacao').select('pergunta_id, formando'),
       // Numbers go only to the committee (see the response below).
@@ -334,7 +352,8 @@ Deno.serve(async (req) => {
       // For a formando whose number isn't on the list: the names they can
       // still pick (the ones with no number yet).
       livres: !comissao && !voce ? lista.filter((f) => !f.whatsapp).map((f) => f.formando) : null,
-      perguntas: (perguntas.data as Pergunta[]).map((p) => {
+      // A question not opened yet is the committee's alone.
+      perguntas: (perguntas.data as Pergunta[]).filter((p) => comissao || !p.pronta).map((p) => {
         const votaram = participacao.data.filter((v) => v.pergunta_id === p.id).map((v) => v.formando as string);
         // The tally: for the class once released; for the committee once
         // the question is closed. Options nobody picked still show (as 0)
@@ -359,6 +378,7 @@ Deno.serve(async (req) => {
           aberta: p.aberta,
           resultadoLiberado: p.resultado_liberado,
           maximo: p.maximo,
+          pronta: p.pronta,
           jaVotou: voce ? votaram.includes(voce) : false,
           // How many voted is fine to show alongside a result, and always to
           // the committee; who is still missing, only to the committee.
