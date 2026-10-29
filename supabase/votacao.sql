@@ -81,6 +81,19 @@ alter table public.votacao_perguntas add column if not exists maximo int not nul
 -- default.
 alter table public.votacao_perguntas add column if not exists pronta boolean not null default false;
 
+-- What the class sees of a released result, as the committee chooses: only
+-- the most voted, revealed on the page; the full count is the committee's
+-- alone. `resultado_primeiros`: how many of the most voted show (a tie at
+-- the last place brings every tied option in), or null for as many as each
+-- formando picks (`maximo`). `resultado_votos`: whether each one's count
+-- shows too. `resultado_totais`: whether the valid and blank votes show.
+-- The Edge Function sends the class only what shows, so nothing hidden can
+-- be read from the page either.
+alter table public.votacao_perguntas add column if not exists resultado_primeiros int
+  check (resultado_primeiros between 1 and 20);
+alter table public.votacao_perguntas add column if not exists resultado_votos boolean not null default false;
+alter table public.votacao_perguntas add column if not exists resultado_totais boolean not null default true;
+
 alter table public.votacao_perguntas enable row level security;
 alter table public.votacao_participacao enable row level security;
 alter table public.votacao_contagem enable row level security;

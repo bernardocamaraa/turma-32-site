@@ -12,13 +12,14 @@
 //     Votes as that formando, the whole ballot at once (`votarTudo`): for
 //     every open question one option, up to its `maximo`, or a blank vote
 //     (null), never the same option in two questions (votar_cedula in
-//     votacao.sql). Sees a result once the committee releases it.
+//     votacao.sql). Sees a result once the committee releases it, and only
+//     the parts the committee chose to show (paraTurma).
 //   - `codigo`: COMMITTEE_CODE. Creates questions (open right away, or
 //     ready to open later, and editable until then), opens, deletes and
-//     closes them, shows/hides the results, and sees and edits each
-//     formando's number. Opening refuses a question that shares a name
-//     with one already voted on, unless `mesmoAssim` (abrir_perguntas in
-//     votacao.sql).
+//     closes them, shows/hides the results and chooses what the class sees
+//     of them (`exibir`), and sees and edits each formando's number.
+//     Opening refuses a question that shares a name with one already voted
+//     on, unless `mesmoAssim` (abrir_perguntas in votacao.sql).
 //     Can also turn on the notification for a phone (`avisar`, with the
 //     browser's push subscription): when the last formando votes on a
 //     question, every phone that turned it on is told (Web Push).
@@ -118,7 +119,26 @@ type Pergunta = {
   resultado_liberado: boolean;
   maximo: number;
   pronta: boolean;
+  resultado_primeiros: number | null;
+  resultado_votos: boolean;
+  resultado_totais: boolean;
 };
+
+type Resultado = { opcao: string; votos: number | null };
+
+/**
+ * A result (most voted first) cut down to what the class sees, as the
+ * committee chose (resultado_* in votacao.sql): only the options with at
+ * least as many votes as the one in place `primeiros` (so a tie there
+ * brings them all), and their counts only if `votos`. The page's preview
+ * for the committee does the same (resultadoDaTurma).
+ */
+function paraTurma(resultado: Resultado[], primeiros: number, votos: boolean): Resultado[] {
+  const corte = resultado[primeiros - 1]?.votos ?? 0;
+  return resultado
+    .filter((r) => (r.votos ?? 0) > 0 && (r.votos ?? 0) >= corte)
+    .map((r) => (votos ? r : { ...r, votos: null }));
+}
 
 /**
  * A question as the committee wrote it (to create, or to edit a ready one),
@@ -157,7 +177,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { codigo, nome, whatsapp, acao, id, votos, texto, tipo, opcoes, maximo, pronta, mesmoAssim, formando, inscricao, endpoint } = await req.json();
+    const { codigo, nome, whatsapp, acao, id, votos, texto, tipo, opcoes, maximo, pronta, mesmoAssim, exibicao, formando, inscricao, endpoint } = await req.json();
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -309,6 +329,19 @@ Deno.serve(async (req) => {
       if (recusa) return recusar(recusa);
     }
 
+    // What the class sees of the result (see paraTurma).
+    if (comissao && acao === 'exibir' && typeof id === 'string') {
+      const { primeiros, votos: comVotos, totais } = exibicao ?? {};
+      const valida =
+        Number.isInteger(primeiros) && primeiros >= 1 && primeiros <= 20 && typeof comVotos === 'boolean' && typeof totais === 'boolean';
+      if (!valida) return recusar('Escolha o que a turma vê do resultado.');
+      const { error } = await supabase
+        .from('votacao_perguntas')
+        .update({ resultado_primeiros: primeiros, resultado_votos: comVotos, resultado_totais: totais })
+        .eq('id', id);
+      if (error) throw error;
+    }
+
     if (comissao && typeof id === 'string' && (acao === 'encerrar' || acao === 'liberar' || acao === 'esconder')) {
       // There is no "reopen": see the note at the top of this file.
       const mudanca =
@@ -382,7 +415,10 @@ Deno.serve(async (req) => {
     }
 
     const [perguntas, contagem, participacao, formandos, avisos] = await Promise.all([
-      supabase.from('votacao_perguntas').select('id, pergunta, tipo, opcoes, aberta, resultado_liberado, maximo, pronta').order('criado_em'),
+      supabase
+        .from('votacao_perguntas')
+        .select('id, pergunta, tipo, opcoes, aberta, resultado_liberado, maximo, pronta, resultado_primeiros, resultado_votos, resultado_totais')
+        .order('criado_em'),
       supabase.from('votacao_contagem').select('pergunta_id, opcao, votos'),
       supabase.from('votacao_participacao').select('pergunta_id, formando'),
       // Numbers go only to the committee (see the response below).
@@ -422,12 +458,17 @@ Deno.serve(async (req) => {
         // Blank votes are counted under '' (votar_opcoes): shown apart, not as an option.
         const brancos = (contados.find((c) => c.opcao === '')?.votos as number | undefined) ?? 0;
         const daPergunta = contados.filter((c) => c.opcao !== '');
-        const resultado = veResultado
+        const completo = veResultado
           ? [
               ...daPergunta.map((c) => ({ opcao: c.opcao as string, votos: c.votos as number })),
               ...(p.tipo === 'opcoes' ? p.opcoes.filter((o) => !daPergunta.some((c) => c.opcao === o)).map((o) => ({ opcao: o, votos: 0 })) : []),
             ].sort((a, b) => b.votos - a.votos || a.opcao.localeCompare(b.opcao, 'pt-BR'))
           : null;
+        // The class gets only what the committee chose to show; the committee, all of it.
+        // Until the committee picks, as many names as each formando picked.
+        const mostra = { primeiros: p.resultado_primeiros ?? p.maximo, votos: p.resultado_votos, totais: p.resultado_totais };
+        const resultado = completo && !comissao ? paraTurma(completo, mostra.primeiros, mostra.votos) : completo;
+        const totais = veResultado && (comissao || mostra.totais);
         return {
           id: p.id,
           pergunta: p.pergunta,
@@ -438,12 +479,15 @@ Deno.serve(async (req) => {
           maximo: p.maximo,
           pronta: p.pronta,
           jaVotou: voce ? votaram.includes(voce) : false,
-          // How many voted is fine to show alongside a result, and always to
-          // the committee; who is still missing, only to the committee.
-          votaram: comissao || veResultado ? votaram.length : null,
+          // How many voted is fine to show alongside a result (unless the
+          // committee hid the totals), and always to the committee; who is
+          // still missing, only to the committee.
+          votaram: comissao || totais ? votaram.length : null,
           faltam: comissao ? nomes.filter((n) => !votaram.includes(n)) : null,
           resultado,
-          brancos: veResultado ? brancos : null,
+          validos: totais ? votaram.length - brancos : null,
+          brancos: totais ? brancos : null,
+          exibicao: mostra,
         };
       }),
     });

@@ -2,7 +2,22 @@ import { chamarFuncao } from './supabase';
 
 export type TipoPergunta = 'formandos' | 'opcoes';
 
-export type Resultado = { opcao: string; votos: number };
+/** An option's votes — null when the committee chose not to show the counts (see Exibicao). */
+export type Resultado = { opcao: string; votos: number | null };
+
+/**
+ * What the class sees of a released result, as the committee chooses: only
+ * the most voted, never the full count, which is the committee's alone
+ * (resultado_* in votacao.sql).
+ */
+export type Exibicao = {
+  /** How many of the most voted show — ties at the last place all come in. */
+  primeiros: number;
+  /** Whether each one's count shows too. */
+  votos: boolean;
+  /** Whether the valid and blank votes show. */
+  totais: boolean;
+};
 
 export type Pergunta = {
   id: string;
@@ -20,14 +35,20 @@ export type Pergunta = {
   maximo: number;
   /** Whether the formando asking already voted on it (always false for the committee). */
   jaVotou: boolean;
-  /** How many voted — sent to the committee always, to formandos with the result. */
+  /** How many voted — sent to the committee always, to formandos with the result and its totals. */
   votaram: number | null;
   /** Who hasn't voted yet — committee only. */
   faltam: string[] | null;
-  /** Votes per option, most voted first — once released, or to the committee once closed. */
+  /**
+   * Votes per option, most voted first — once released, or to the committee
+   * once closed. Formandos get only what `exibicao` shows: the most voted.
+   */
   resultado: Resultado[] | null;
-  /** Blank votes, apart from the options — sent along with `resultado`. */
+  /** Ballots that picked someone (`votaram` minus the blank ones) — sent along with `resultado`, to formandos only with the totals. */
+  validos: number | null;
+  /** Blank votes, apart from the options — like `validos`. */
   brancos: number | null;
+  exibicao: Exibicao;
 };
 
 export type DadosVotacao = {
@@ -60,6 +81,20 @@ export type AcessoVotacao = Record<string, never> | { whatsapp: string; nome?: s
  */
 export function chaveDoNome(nome: string): string {
   return nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * A result (most voted first) cut down to what the class sees: only the
+ * options with at least as many votes as the one in place `primeiros` (so a
+ * tie there brings them all), and their counts only if `votos`. The Edge
+ * Function does the same before sending it (paraTurma); here it's the
+ * committee's preview.
+ */
+export function resultadoDaTurma(resultado: Resultado[], exibicao: Exibicao): Resultado[] {
+  const corte = resultado[exibicao.primeiros - 1]?.votos ?? 0;
+  return resultado
+    .filter((r) => (r.votos ?? 0) > 0 && (r.votos ?? 0) >= corte)
+    .map((r) => (exibicao.votos ? r : { ...r, votos: null }));
 }
 
 /** The names a question offers: the whole class, or the options the committee wrote. */
@@ -124,6 +159,8 @@ export type AcaoVotacao =
   | { acao: 'abrir'; id: string; mesmoAssim?: boolean }
   | { acao: 'abrirProntas'; mesmoAssim?: boolean }
   | { acao: 'encerrar' | 'liberar' | 'esconder' | 'excluir'; id: string }
+  /** Committee: choose what the class sees of a question's result. */
+  | { acao: 'exibir'; id: string; exibicao: Exibicao }
   /** Committee: fill in, fix or (null) clear a formando's number. */
   | { acao: 'definirWhatsapp'; formando: string; whatsapp: string | null }
   /** Committee: tell this phone when everyone has voted (src/lib/avisos.ts); sends a first notification right away. */
