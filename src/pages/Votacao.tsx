@@ -396,8 +396,8 @@ function CabecalhoPergunta({ p, paraComissao, extra }: { p: Pergunta; paraComiss
  * they haven't voted on, and all of it sent together at the end. Sending is
  * blocked until each of those has a choice and no option is picked in two
  * of them; the server checks both again (votar_cedula in votacao.sql).
- * `previa`: the committee trying it out (PreviaDaCedula) — sending only
- * says it would go through.
+ * `previa`: the committee trying it out (PreviaDaCedula) — sending plays
+ * the ballot box and says it would go through, but sends nothing.
  */
 function Cedula({
   perguntas,
@@ -453,14 +453,17 @@ function Cedula({
 
   async function enviar() {
     if (!pronta) return;
-    if (previa) {
-      setEnviariaNaPrevia(true);
-      return;
-    }
     const resumo = pendentes.map((p) => `• ${p.pergunta}\n   ${emBranco(p.id) ? 'Em branco' : de(p.id).join(', ')}`).join('\n');
-    if (!window.confirm(`Confirmar os seus votos?\n\n${resumo}\n\nDepois de enviados, não dá para trocar.`)) return;
+    const aviso = previa ? 'Prévia: nada vai ser enviado.\n\n' : '';
+    if (!window.confirm(`${aviso}Confirmar os seus votos?\n\n${resumo}\n\nDepois de enviados, não dá para trocar.`)) return;
     const votos = Object.fromEntries(pendentes.map((p) => [p.id, emBranco(p.id) ? null : de(p.id)]));
     const cedula = { quantos: pendentes.length, emBranco: pendentes.every((p) => emBranco(p.id)) };
+    // The preview plays it all the same — the ballot box included — and keeps the picks to try again.
+    if (previa) {
+      setEnviariaNaPrevia(true);
+      setNaUrna(cedula);
+      return;
+    }
     const falha = await agir({ acao: 'votarTudo', votos });
     setErro(falha);
     if (!falha) {
@@ -483,6 +486,7 @@ function Cedula({
           usadasEmOutras={outras(p).flatMap((q) => de(q.id).map(chaveDoNome))}
           repetidas={repetidas(p)}
           onEscolher={(opcoes) => escolher(p.id, opcoes)}
+          naUrna={naUrna !== null}
         />
       ))}
 
@@ -574,6 +578,7 @@ function PerguntaFormando({
   usadasEmOutras,
   repetidas,
   onEscolher,
+  naUrna,
 }: {
   p: Pergunta;
   voce: string;
@@ -586,6 +591,8 @@ function PerguntaFormando({
   repetidas: { opcao: string; em: Pergunta }[];
   /** The options now picked, or null for a blank vote. */
   onEscolher: (opcoes: string[] | null) => void;
+  /** The ballot box is still on screen: a result waits for it to go before revealing. */
+  naUrna: boolean;
 }) {
   const [busca, setBusca] = useState('');
   const varias = p.maximo > 1;
@@ -610,7 +617,14 @@ function PerguntaFormando({
         <CabecalhoPergunta p={p} />
 
         {p.resultado ? (
-          <ResultadoTurma resultado={p.resultado} exibicao={p.exibicao} validos={p.validos} brancos={p.brancos} maximo={p.maximo} />
+          <ResultadoTurma
+            resultado={p.resultado}
+            exibicao={p.exibicao}
+            validos={p.validos}
+            brancos={p.brancos}
+            maximo={p.maximo}
+            segurar={naUrna}
+          />
         ) : p.jaVotou ? (
           <Aviso icone>Seu voto foi registrado. O resultado aparece aqui quando a comissão liberar.</Aviso>
         ) : !p.aberta ? (
@@ -769,11 +783,12 @@ function Aviso({ children, icone }: { children: ReactNode; icone?: boolean }) {
 const REVELA = { primeiro: 700, entre: 800, nome: 1100, contagem: 900 };
 
 /**
- * When a result plays its reveal: 'espera' until it scrolls into view,
- * then 'agora'. 'pronto' with reduced motion (or no IntersectionObserver):
+ * When a result plays its reveal: 'espera' until it scrolls into view (and
+ * isn't `segurar` — under the ballot box that just took the votes), then
+ * 'agora'. 'pronto' with reduced motion (or no IntersectionObserver):
  * everything is just there.
  */
-function useRevelacao<T extends HTMLElement>(): [RefObject<T>, 'espera' | 'agora' | 'pronto'] {
+function useRevelacao<T extends HTMLElement>(segurar = false): [RefObject<T>, 'espera' | 'agora' | 'pronto'] {
   const ref = useRef<T>(null);
   const reduzido = usePrefersReducedMotion();
   const [estado, setEstado] = useState<'espera' | 'agora' | 'pronto'>(() =>
@@ -786,7 +801,7 @@ function useRevelacao<T extends HTMLElement>(): [RefObject<T>, 'espera' | 'agora
       return;
     }
     const el = ref.current;
-    if (estado !== 'espera' || !el) return;
+    if (estado !== 'espera' || !el || segurar) return;
     const observer = new IntersectionObserver(
       ([e]) => {
         if (e.isIntersecting) {
@@ -798,7 +813,7 @@ function useRevelacao<T extends HTMLElement>(): [RefObject<T>, 'espera' | 'agora
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [reduzido, estado]);
+  }, [reduzido, estado, segurar]);
 
   return [ref, estado];
 }
@@ -841,7 +856,7 @@ const aos = (ms: number) => ({ '--atraso': `${Math.round(ms)}ms` }) as CSSProper
  * the committee shows them (Exibicao). `resultado` comes already cut down
  * to what shows: by the server for the class, by resultadoDaTurma in the
  * committee's preview. More names than `primeiros` means a tie for the
- * last place.
+ * last place. `segurar`: wait to reveal (see useRevelacao).
  */
 function ResultadoTurma({
   resultado,
@@ -849,14 +864,16 @@ function ResultadoTurma({
   validos,
   brancos,
   maximo,
+  segurar = false,
 }: {
   resultado: Resultado[];
   exibicao: Exibicao;
   validos: number | null;
   brancos: number | null;
   maximo: number;
+  segurar?: boolean;
 }) {
-  const [ref, estado] = useRevelacao<HTMLDivElement>();
+  const [ref, estado] = useRevelacao<HTMLDivElement>(segurar);
   const n = resultado.length;
   const nome = (i: number) => REVELA.primeiro + i * REVELA.entre;
   // The last name is in, all but settling.
@@ -1585,7 +1602,8 @@ function ExibicaoResultado({
             ? 'A turma já está vendo este resultado: cada mudança aqui vale na hora.'
             : 'Vale quando vocês mostrarem o resultado para a turma.'}{' '}
           A turma vê só os mais votados, com os nomes sendo revelados um a um. A contagem completa acima fica só com
-          vocês e nem chega ao celular de ninguém.
+          vocês e nem chega ao celular de ninguém. Quem ainda tem pergunta aberta para votar só vê o resultado depois
+          de enviar os votos.
         </span>
       </div>
 
@@ -1820,25 +1838,16 @@ function Seta({ para, rotulo, disabled, onClick }: { para: 'cima' | 'baixo'; rot
   );
 }
 
-/** A committee's question as a formando who hasn't voted yet will see it — the ready ones as if already open. */
+/** An open (or ready) question as a formando who hasn't voted yet will see it — the ready ones as if already open. */
 function comoATurmaVe(p: Pergunta): Pergunta {
-  const liberado = p.resultadoLiberado && p.resultado !== null;
-  return {
-    ...p,
-    pronta: false,
-    jaVotou: false,
-    votaram: null,
-    faltam: null,
-    resultado: liberado ? resultadoDaTurma(p.resultado!, p.exibicao) : null,
-    validos: liberado && p.exibicao.totais ? p.validos : null,
-    brancos: liberado && p.exibicao.totais ? p.brancos : null,
-  };
+  return { ...p, pronta: false, jaVotou: false, votaram: null, faltam: null, resultado: null, validos: null, brancos: null };
 }
 
 /**
- * The ballot as a formando will see it, every question in its order, to
- * try out before opening: picks, the no-repeat rule, blank votes, released
- * results. Nothing is sent. Over the whole screen; Esc or "Fechar" leaves.
+ * The ballot as a formando will see it, the questions to vote on in their
+ * order (a formando with something to vote on sees nothing else, no earlier
+ * results), to try out before opening: picks, the no-repeat rule, blank
+ * votes. Nothing is sent. Over the whole screen; Esc or "Fechar" leaves.
  */
 function PreviaDaCedula({ perguntas, formandos, onFechar }: { perguntas: Pergunta[]; formandos: string[]; onFechar: () => void }) {
   const fechar = useRef(onFechar);
@@ -1847,7 +1856,8 @@ function PreviaDaCedula({ perguntas, formandos, onFechar }: { perguntas: Pergunt
     const rolagem = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const tecla = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') fechar.current();
+      // With the ballot box up, Esc is the box's: it closes that, not the preview.
+      if (e.key === 'Escape' && !document.querySelector('[data-urna]')) fechar.current();
     };
     window.addEventListener('keydown', tecla);
     return () => {
@@ -1856,11 +1866,13 @@ function PreviaDaCedula({ perguntas, formandos, onFechar }: { perguntas: Pergunt
     };
   }, []);
 
-  const cedula = perguntas.map(comoATurmaVe);
-  const abertas = cedula.filter((p) => p.aberta).length;
+  // Open and ready ones: the closed ones (and their results) wait until the ballot is in.
+  const cedula = perguntas.filter((p) => p.aberta).map(comoATurmaVe);
+  const abertas = cedula.length;
 
   return createPortal(
-    <div role="dialog" aria-modal="true" aria-label="Prévia da cédula" style={{ position: 'fixed', inset: 0, zIndex: 90, overflowY: 'auto', background: 'var(--ink-950)' }}>
+    // Over the menu (40) and the committee's tabs (30), under the ballot box (60) it plays when sending.
+    <div role="dialog" aria-modal="true" aria-label="Prévia da cédula" style={{ position: 'fixed', inset: 0, zIndex: 55, overflowY: 'auto', background: 'var(--ink-950)' }}>
       <div
         style={{
           position: 'sticky',
@@ -1879,7 +1891,7 @@ function PreviaDaCedula({ perguntas, formandos, onFechar }: { perguntas: Pergunt
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
           <span style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-h4)', fontWeight: 600, letterSpacing: '-.015em' }}>Prévia da cédula</span>
-          <span style={pequeno}>Como o formando vê, com as prontas já abertas. Nada é enviado.</span>
+          <span style={pequeno}>Como o formando vê antes de votar, com as prontas já abertas. Nada é enviado.</span>
         </div>
         <Button size="sm" variant="secondary" onClick={onFechar}>
           Fechar
@@ -1902,7 +1914,7 @@ function PreviaDaCedula({ perguntas, formandos, onFechar }: { perguntas: Pergunt
           </p>
         ) : null}
         {cedula.length === 0 ? (
-          <p style={texto}>Nenhuma pergunta ainda.</p>
+          <p style={texto}>Nenhuma pergunta aberta ou pronta para votar.</p>
         ) : (
           <Cedula perguntas={cedula} voce="" formandos={formandos} salvando={false} agir={async () => null} previa />
         )}

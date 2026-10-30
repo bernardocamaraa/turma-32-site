@@ -3,7 +3,8 @@
 // Backs the class vote (/votacao): one link for the whole class, apart from
 // the table map. Three kinds of caller:
 //   - nobody yet: gets the list of names and the questions (the opened
-//     ones: a question still `pronta` only shows to the committee).
+//     ones, without results: a question still `pronta` only shows to the
+//     committee).
 //   - `whatsapp`: a formando, recognised by their number — the committee
 //     fills the numbers in, so most formandos never pick a name. A number
 //     not on the list comes back with `voce: null` and the names that still
@@ -13,7 +14,9 @@
 //     every open question one option, up to its `maximo`, or a blank vote
 //     (null), never the same option in two questions (votar_cedula in
 //     votacao.sql). Sees a result once the committee releases it, and only
-//     the parts the committee chose to show (paraTurma).
+//     the parts the committee chose to show (paraTurma) — and only once
+//     their ballot is in: until then they get just the questions left to
+//     vote on.
 //   - `codigo`: COMMITTEE_CODE. Creates questions (open right away, or
 //     ready to open later, and editable until then), opens, deletes and
 //     closes them, shows/hides the results and chooses what the class sees
@@ -473,6 +476,13 @@ Deno.serve(async (req) => {
 
     const lista = formandos.data as { formando: string; whatsapp: string | null }[];
     const nomes = lista.map((f) => f.formando);
+    const todas = perguntas.data as Pergunta[];
+    const votaramNa = (p: Pergunta) => participacao.data.filter((v) => v.pergunta_id === p.id).map((v) => v.formando as string);
+    // A formando with something left to vote on gets just the ballot: the
+    // questions still to vote on, no earlier results — those come once the
+    // ballot is in. A question not opened yet is the committee's alone.
+    const aVotar = voce ? todas.filter((p) => p.aberta && !p.pronta && !votaramNa(p).includes(voce!)) : [];
+    const visiveis = comissao ? todas : aVotar.length > 0 ? aVotar : todas.filter((p) => !p.pronta);
 
     return json({
       comissao,
@@ -486,14 +496,14 @@ Deno.serve(async (req) => {
       // For a formando whose number isn't on the list: the names they can
       // still pick (the ones with no number yet).
       livres: !comissao && !voce ? lista.filter((f) => !f.whatsapp).map((f) => f.formando) : null,
-      // A question not opened yet is the committee's alone.
-      perguntas: (perguntas.data as Pergunta[]).filter((p) => comissao || !p.pronta).map((p) => {
-        const votaram = participacao.data.filter((v) => v.pergunta_id === p.id).map((v) => v.formando as string);
-        // The tally: for the class once released; for the committee once
-        // the question is closed. Options nobody picked still show (as 0)
-        // when the committee wrote them; for "formandos" questions only
-        // names that got votes are listed.
-        const veResultado = p.resultado_liberado || (comissao && !p.aberta);
+      perguntas: visiveis.map((p) => {
+        const votaram = votaramNa(p);
+        // The tally: for a formando once released (and once their ballot is
+        // in, see `visiveis`); for the committee once the question is
+        // closed. Options nobody picked still show (as 0) when the
+        // committee wrote them; for "formandos" questions only names that
+        // got votes are listed.
+        const veResultado = (p.resultado_liberado && (comissao || voce !== null)) || (comissao && !p.aberta);
         const contados = contagem.data.filter((c) => c.pergunta_id === p.id);
         // Blank votes are counted under '' (votar_opcoes): shown apart, not as an option.
         const brancos = (contados.find((c) => c.opcao === '')?.votos as number | undefined) ?? 0;
