@@ -168,6 +168,21 @@ com ou sem +55, e até sem o 9 da frente. O site acerta o formato sozinho
   para mudar o texto, os nomes (acrescentar ou tirar um candidato) e
   quantas escolhas cada um faz. Depois de aberta, ela não muda mais, porque
   os votos já foram para as opções dela.
+- **Como um editor de formulário:** a aba Votação mostra as perguntas na
+  ordem da cédula (a mesma que a turma vê), numeradas, e o formulário de
+  pergunta nova fica no fim, porque a pergunta nova entra no fim da cédula.
+  - **Ordem da cédula:** a lista de todas as perguntas, com setas para subir
+    e descer cada uma. Vale na hora, para a turma também. Tocar numa
+    pergunta leva até o cartão dela. A ordem fica em
+    `votacao_perguntas.ordem` (`ordenar_perguntas` em `votacao.sql`).
+  - **Duplicar:** todo cartão tem o botão "Duplicar", que faz uma cópia
+    pronta logo abaixo da original, com "(cópia)" no fim do texto para
+    editar. Serve para "Orador (2º voto)" ou para um segundo turno.
+  - **Pré-visualizar a cédula:** mostra a cédula em tela cheia como o
+    formando vai ver, com as prontas já abertas e os resultados liberados.
+    Dá para testar as escolhas, o voto em branco e a regra de não repetir o
+    nome. "Enviar meus votos" só avisa que estaria tudo certo: nada é
+    enviado.
 - **Um voto por formando em cada pergunta.** Como o voto é secreto, ele não
   pode ser trocado depois.
 - **Várias escolhas:** ao criar a pergunta, a comissão diz quantas escolhas

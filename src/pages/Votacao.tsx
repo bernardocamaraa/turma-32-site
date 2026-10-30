@@ -1,5 +1,6 @@
-import { Fragment, useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
-import { Check, CircleX, Search, TriangleAlert } from 'lucide-react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
+import { createPortal } from 'react-dom';
+import { ArrowDown, ArrowUp, Check, CircleX, Eye, Plus, Search, TriangleAlert } from 'lucide-react';
 import { Badge } from '../components/Badge';
 import { BotoesLink } from '../components/BotoesLink';
 import { Button } from '../components/Button';
@@ -182,18 +183,29 @@ export function Votacao({ codigoComissao }: { codigoComissao?: string }) {
             <LinkDaVotacao />
             <AvisoDaVotacao chavePush={dados.chavePush ?? null} aparelhos={dados.aparelhosAvisados ?? null} agir={agir} />
             <EleitoresDaVotacao eleitores={dados.eleitores ?? []} salvando={salvando} agir={agir} />
-            <FormularioPergunta conferir={conferir} salvando={salvando} agir={agir} />
+            {/* Like a form editor: the ballot's outline, then each question in its order, then a new one at the end. */}
+            {dados.perguntas.length > 0 ? (
+              <OrdemDaCedula perguntas={dados.perguntas} formandos={dados.formandos} salvando={salvando} agir={agir} />
+            ) : null}
             {prontas.length > 1 ? <AbrirProntas prontas={prontas} conferir={conferir} salvando={salvando} agir={agir} /> : null}
             {dados.perguntas.length === 0 ? (
               <p style={texto}>Nenhuma votação criada ainda.</p>
             ) : (
-              dados.perguntas
-                .slice()
-                .reverse()
-                .map((p) => (
-                  <PerguntaComissao key={p.id} p={p} total={dados.formandos.length} conferir={conferir} salvando={salvando} agir={agir} />
-                ))
+              dados.perguntas.map((p, i) => (
+                <PerguntaComissao
+                  key={p.id}
+                  p={p}
+                  numero={i + 1}
+                  total={dados.formandos.length}
+                  conferir={conferir}
+                  salvando={salvando}
+                  agir={agir}
+                />
+              ))
             )}
+            <div id="nova-pergunta" style={{ scrollMarginTop: 80 }}>
+              <FormularioPergunta conferir={conferir} salvando={salvando} agir={agir} />
+            </div>
           </>
         )}
       </div>
@@ -384,6 +396,8 @@ function CabecalhoPergunta({ p, paraComissao, extra }: { p: Pergunta; paraComiss
  * they haven't voted on, and all of it sent together at the end. Sending is
  * blocked until each of those has a choice and no option is picked in two
  * of them; the server checks both again (votar_cedula in votacao.sql).
+ * `previa`: the committee trying it out (PreviaDaCedula) — sending only
+ * says it would go through.
  */
 function Cedula({
   perguntas,
@@ -391,16 +405,19 @@ function Cedula({
   formandos,
   salvando,
   agir,
+  previa = false,
 }: {
   perguntas: Pergunta[];
   voce: string;
   formandos: string[];
   salvando: boolean;
   agir: (a: AcaoVotacao) => Promise<string | null>;
+  previa?: boolean;
 }) {
   // The options picked on each question; null means a blank vote.
   const [escolhas, setEscolhas] = useState<Record<string, string[] | null>>({});
   const [erro, setErro] = useState<string | null>(null);
+  const [enviariaNaPrevia, setEnviariaNaPrevia] = useState(false);
   // Set once the server took the ballot in: plays it dropping into the box.
   const [naUrna, setNaUrna] = useState<{ quantos: number; emBranco: boolean } | null>(null);
 
@@ -426,6 +443,7 @@ function Cedula({
 
   function escolher(id: string, opcoes: string[] | null) {
     setErro(null);
+    setEnviariaNaPrevia(false);
     setEscolhas((atual) => ({ ...atual, [id]: opcoes }));
   }
 
@@ -435,6 +453,10 @@ function Cedula({
 
   async function enviar() {
     if (!pronta) return;
+    if (previa) {
+      setEnviariaNaPrevia(true);
+      return;
+    }
     const resumo = pendentes.map((p) => `• ${p.pergunta}\n   ${emBranco(p.id) ? 'Em branco' : de(p.id).join(', ')}`).join('\n');
     if (!window.confirm(`Confirmar os seus votos?\n\n${resumo}\n\nDepois de enviados, não dá para trocar.`)) return;
     const votos = Object.fromEntries(pendentes.map((p) => [p.id, emBranco(p.id) ? null : de(p.id)]));
@@ -488,6 +510,9 @@ function Cedula({
               />
             ) : null}
             {erro ? <p style={{ ...texto, color: 'var(--state-error)' }}>{erro}</p> : null}
+            {enviariaNaPrevia ? (
+              <p style={{ ...texto, color: 'var(--state-ok)' }}>Tudo certo: assim os votos seriam enviados. Como é uma prévia, nada foi enviado.</p>
+            ) : null}
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-5)', flexWrap: 'wrap' }}>
               <Button size="lg" disabled={!pronta} carregando={salvando} onClick={enviar}>
@@ -1333,16 +1358,18 @@ function AbrirProntas({
 /**
  * One question, as the committee sees it: who voted, the result once
  * closed, and what to do next — or, while it's ready, the way to open or
- * edit it.
+ * edit it. `numero`: its place on the ballot.
  */
 function PerguntaComissao({
   p,
+  numero,
   total,
   conferir,
   salvando,
   agir,
 }: {
   p: Pergunta;
+  numero: number;
   total: number;
   conferir: Conferir;
   salvando: boolean;
@@ -1353,7 +1380,7 @@ function PerguntaComissao({
   const [editando, setEditando] = useState(false);
   const votaram = p.votaram ?? 0;
 
-  async function fazer(acao: 'encerrar' | 'liberar' | 'esconder' | 'excluir', confirmacao?: string) {
+  async function fazer(acao: 'encerrar' | 'liberar' | 'esconder' | 'excluir' | 'duplicar', confirmacao?: string) {
     if (confirmacao && !window.confirm(confirmacao)) return;
     setErro(null);
     setErro(await agir({ acao, id: p.id }));
@@ -1367,18 +1394,22 @@ function PerguntaComissao({
   }
 
   if (editando && p.pronta) {
-    return <FormularioPergunta editando={p} onFechar={() => setEditando(false)} conferir={conferir} salvando={salvando} agir={agir} />;
+    return (
+      <div id={`comissao-${p.id}`} style={{ scrollMarginTop: 80 }}>
+        <FormularioPergunta editando={p} onFechar={() => setEditando(false)} conferir={conferir} salvando={salvando} agir={agir} />
+      </div>
+    );
   }
 
   return (
-    <Card padding="clamp(24px, 4vw, 40px)">
+    <Card id={`comissao-${p.id}`} padding="clamp(24px, 4vw, 40px)" style={{ scrollMarginTop: 80 }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
         <CabecalhoPergunta
           p={p}
           paraComissao
           extra={
             <span style={pequeno}>
-              {p.tipo === 'formandos' ? 'Entre os formandos' : plural(p.opcoes.length, 'opção', 'opções')}
+              Pergunta {numero} · {p.tipo === 'formandos' ? 'entre os formandos' : plural(p.opcoes.length, 'opção', 'opções')}
               {p.maximo > 1 ? ` · até ${p.maximo} escolhas por formando` : ''}
             </span>
           }
@@ -1479,6 +1510,9 @@ function PerguntaComissao({
               )}
             </>
           )}
+          <Button variant="ghost" disabled={salvando} onClick={() => fazer('duplicar')}>
+            Duplicar
+          </Button>
           <Button
             variant="ghost"
             disabled={salvando}
@@ -1613,6 +1647,268 @@ function Marcar({
       />
       {children}
     </label>
+  );
+}
+
+/** A question's state in a word, for the ballot's outline. */
+function estadoCurto(p: Pergunta): { texto: string; cor: string } {
+  if (p.pronta) return { texto: 'Pronta', cor: 'var(--text-faint)' };
+  if (p.resultadoLiberado) return { texto: 'Resultado liberado', cor: 'var(--gild-300)' };
+  if (!p.aberta) return { texto: 'Encerrada', cor: 'var(--text-muted)' };
+  return { texto: 'Aberta', cor: 'var(--accent)' };
+}
+
+/**
+ * The ballot at a glance, like a form editor's outline: every question in
+ * the order the class sees them, numbered, with arrows to move each up or
+ * down (saved right away; the rows slide to their new places) and a tap on
+ * one to go to its card. Also where to try the ballot as a formando sees it
+ * (PreviaDaCedula) and to add a question, which goes at the end.
+ */
+function OrdemDaCedula({
+  perguntas,
+  formandos,
+  salvando,
+  agir,
+}: {
+  perguntas: Pergunta[];
+  formandos: string[];
+  salvando: boolean;
+  agir: (a: AcaoVotacao) => Promise<string | null>;
+}) {
+  const mobile = useIsMobile();
+  const salva = perguntas.map((p) => p.id);
+  // Shown at once while it saves; back to the saved order if that fails.
+  const [ordem, setOrdem] = useState(salva);
+  const [erro, setErro] = useState<string | null>(null);
+  const [previa, setPrevia] = useState(false);
+  // Follows what's saved: after saving, the next refresh, another committee phone.
+  useEffect(() => setOrdem(salva), [salva.join()]);
+
+  const porId = new Map(perguntas.map((p) => [p.id, p]));
+  // A question made or deleted on another phone shows as saved until the order catches up.
+  const mesmas = ordem.length === salva.length && ordem.every((id) => porId.has(id));
+  const lista = (mesmas ? ordem : salva).map((id) => porId.get(id)!);
+
+  // Sliding rows (FLIP): where each row was before a move, then from there to where it is.
+  const linhas = useRef(new Map<string, HTMLLIElement>());
+  const antes = useRef(new Map<string, number>());
+  useLayoutEffect(() => {
+    for (const [id, li] of linhas.current) {
+      const de = antes.current.get(id);
+      const dy = de === undefined ? 0 : de - li.getBoundingClientRect().top;
+      if (!dy) continue;
+      li.style.transition = 'none';
+      li.style.transform = `translateY(${dy}px)`;
+      li.getBoundingClientRect();
+      li.style.transition = 'transform 360ms var(--ease-out)';
+      li.style.transform = '';
+    }
+    antes.current = new Map();
+  }, [lista.map((p) => p.id).join()]);
+
+  function reordenar(nova: string[]) {
+    antes.current = new Map([...linhas.current].map(([id, li]) => [id, li.getBoundingClientRect().top]));
+    setOrdem(nova);
+  }
+
+  async function mover(de: number, para: number) {
+    const nova = lista.map((p) => p.id);
+    [nova[de], nova[para]] = [nova[para], nova[de]];
+    reordenar(nova);
+    setErro(null);
+    const falha = await agir({ acao: 'ordenar', ids: nova });
+    if (falha) {
+      setErro(falha);
+      reordenar(salva);
+    }
+  }
+
+  const ir = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  return (
+    <Card padding="var(--space-6) var(--space-7)">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+          <span style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-h3)', fontWeight: 700, letterSpacing: '-.02em' }}>Ordem da cédula</span>
+          <span style={pequeno}>
+            É nessa ordem que as perguntas aparecem para a turma. Use as setas para mudar: vale na hora. Toque numa pergunta
+            para ir até ela.
+          </span>
+        </div>
+
+        <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+          {lista.map((p, i) => {
+            const estado = estadoCurto(p);
+            return (
+              <li
+                key={p.id}
+                ref={(li) => {
+                  if (li) linhas.current.set(p.id, li);
+                  else linhas.current.delete(p.id);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 'var(--space-3)',
+                  padding: 'var(--space-3) 0',
+                  borderTop: i ? '1px solid var(--stroke-hair)' : 'none',
+                }}
+              >
+                <span style={{ width: 24, flex: '0 0 auto', fontWeight: 600, color: 'var(--text-faint)', fontVariantNumeric: 'tabular-nums' }}>{i + 1}</span>
+                <button
+                  type="button"
+                  onClick={() => ir(`comissao-${p.id}`)}
+                  style={{ flex: 1, minWidth: 0, padding: 0, border: 'none', background: 'none', textAlign: 'left', color: 'var(--text-primary)', cursor: 'pointer' }}
+                >
+                  {/* Whole, not cut: the questions tend to start the same ("Quem você quer…"). */}
+                  <span style={{ display: 'block', fontSize: 'var(--fs-body)', lineHeight: 1.3, overflowWrap: 'anywhere' }}>{p.pergunta}</span>
+                  <span style={{ display: 'block', marginTop: 2, fontSize: 'var(--fs-caption)', color: estado.cor }}>{estado.texto}</span>
+                </button>
+                {/* On a phone the arrows stack, leaving the question more room. */}
+                <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: mobile ? 'column' : 'row', gap: 'var(--space-2)' }}>
+                  <Seta para="cima" rotulo={`Subir "${p.pergunta}"`} disabled={i === 0 || salvando} onClick={() => mover(i, i - 1)} />
+                  <Seta para="baixo" rotulo={`Descer "${p.pergunta}"`} disabled={i === lista.length - 1 || salvando} onClick={() => mover(i, i + 1)} />
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+
+        {erro ? <p style={{ ...texto, color: 'var(--state-error)' }}>{erro}</p> : null}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+          <Button variant="secondary" iconLeft={<Eye size={16} strokeWidth={2} aria-hidden />} onClick={() => setPrevia(true)}>
+            Pré-visualizar a cédula
+          </Button>
+          <Button variant="ghost" iconLeft={<Plus size={16} strokeWidth={2} aria-hidden />} onClick={() => ir('nova-pergunta')}>
+            Nova pergunta
+          </Button>
+        </div>
+      </div>
+      {previa ? <PreviaDaCedula perguntas={lista} formandos={formandos} onFechar={() => setPrevia(false)} /> : null}
+    </Card>
+  );
+}
+
+/** An arrow button that moves a question up or down the ballot. */
+function Seta({ para, rotulo, disabled, onClick }: { para: 'cima' | 'baixo'; rotulo: string; disabled: boolean; onClick: () => void }) {
+  const Icone = para === 'cima' ? ArrowUp : ArrowDown;
+  return (
+    <button
+      type="button"
+      aria-label={rotulo}
+      title={para === 'cima' ? 'Subir' : 'Descer'}
+      disabled={disabled}
+      onClick={onClick}
+      style={{
+        flex: '0 0 auto',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 44,
+        height: 44,
+        borderRadius: 'var(--radius-sm)',
+        border: '1px solid var(--stroke-hair)',
+        background: 'transparent',
+        color: 'var(--text-primary)',
+        cursor: disabled ? 'default' : 'pointer',
+        opacity: disabled ? 0.3 : 1,
+      }}
+    >
+      <Icone size={18} strokeWidth={2} aria-hidden />
+    </button>
+  );
+}
+
+/** A committee's question as a formando who hasn't voted yet will see it — the ready ones as if already open. */
+function comoATurmaVe(p: Pergunta): Pergunta {
+  const liberado = p.resultadoLiberado && p.resultado !== null;
+  return {
+    ...p,
+    pronta: false,
+    jaVotou: false,
+    votaram: null,
+    faltam: null,
+    resultado: liberado ? resultadoDaTurma(p.resultado!, p.exibicao) : null,
+    validos: liberado && p.exibicao.totais ? p.validos : null,
+    brancos: liberado && p.exibicao.totais ? p.brancos : null,
+  };
+}
+
+/**
+ * The ballot as a formando will see it, every question in its order, to
+ * try out before opening: picks, the no-repeat rule, blank votes, released
+ * results. Nothing is sent. Over the whole screen; Esc or "Fechar" leaves.
+ */
+function PreviaDaCedula({ perguntas, formandos, onFechar }: { perguntas: Pergunta[]; formandos: string[]; onFechar: () => void }) {
+  const fechar = useRef(onFechar);
+  fechar.current = onFechar;
+  useEffect(() => {
+    const rolagem = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const tecla = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') fechar.current();
+    };
+    window.addEventListener('keydown', tecla);
+    return () => {
+      document.body.style.overflow = rolagem;
+      window.removeEventListener('keydown', tecla);
+    };
+  }, []);
+
+  const cedula = perguntas.map(comoATurmaVe);
+  const abertas = cedula.filter((p) => p.aberta).length;
+
+  return createPortal(
+    <div role="dialog" aria-modal="true" aria-label="Prévia da cédula" style={{ position: 'fixed', inset: 0, zIndex: 90, overflowY: 'auto', background: 'var(--ink-950)' }}>
+      <div
+        style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 'var(--space-4)',
+          padding: 'var(--space-4) var(--gutter-page)',
+          background: 'rgba(0,0,0,.72)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          borderBottom: '1px solid var(--stroke-hair)',
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+          <span style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-h4)', fontWeight: 600, letterSpacing: '-.015em' }}>Prévia da cédula</span>
+          <span style={pequeno}>Como o formando vê, com as prontas já abertas. Nada é enviado.</span>
+        </div>
+        <Button size="sm" variant="secondary" onClick={onFechar}>
+          Fechar
+        </Button>
+      </div>
+      <div
+        style={{
+          maxWidth: 'var(--maxw-page)',
+          margin: '0 auto',
+          padding: 'var(--space-7) var(--gutter-page) var(--space-10)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 'var(--space-7)',
+        }}
+      >
+        {abertas > 1 ? (
+          <p role="note" style={{ ...texto, display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start', color: 'var(--state-warn)' }}>
+            <TriangleAlert size={18} strokeWidth={2} aria-hidden style={{ flex: '0 0 auto', marginTop: 3 }} />
+            <span>Atenção: o voto não pode se repetir. Você não pode escolher a mesma pessoa em duas perguntas.</span>
+          </p>
+        ) : null}
+        {cedula.length === 0 ? (
+          <p style={texto}>Nenhuma pergunta ainda.</p>
+        ) : (
+          <Cedula perguntas={cedula} voce="" formandos={formandos} salvando={false} agir={async () => null} previa />
+        )}
+      </div>
+    </div>,
+    document.body,
   );
 }
 

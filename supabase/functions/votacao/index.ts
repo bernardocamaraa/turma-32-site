@@ -17,7 +17,9 @@
 //   - `codigo`: COMMITTEE_CODE. Creates questions (open right away, or
 //     ready to open later, and editable until then), opens, deletes and
 //     closes them, shows/hides the results and chooses what the class sees
-//     of them (`exibir`), and sees and edits each formando's number.
+//     of them (`exibir`), arranges the ballot's order (`ordenar`) and
+//     duplicates a question (`duplicar`), and sees and edits each
+//     formando's number.
 //     Opening refuses a question that shares a name with one already voted
 //     on, unless `mesmoAssim` (abrir_perguntas in votacao.sql).
 //     Can also turn on the notification for a phone (`avisar`, with the
@@ -126,6 +128,8 @@ type Pergunta = {
 
 type Resultado = { opcao: string; votos: number | null };
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * A result (most voted first) cut down to what the class sees, as the
  * committee chose (resultado_* in votacao.sql): only the options with at
@@ -177,7 +181,8 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { codigo, nome, whatsapp, acao, id, votos, texto, tipo, opcoes, maximo, pronta, mesmoAssim, exibicao, formando, inscricao, endpoint } = await req.json();
+    const { codigo, nome, whatsapp, acao, id, ids, votos, texto, tipo, opcoes, maximo, pronta, mesmoAssim, exibicao, formando, inscricao, endpoint } =
+      await req.json();
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -414,10 +419,45 @@ Deno.serve(async (req) => {
       if (error) throw error;
     }
 
+    // The ballot's order: every question's id, first to last (ordenar_perguntas in votacao.sql).
+    if (comissao && acao === 'ordenar') {
+      const valida = Array.isArray(ids) && ids.length > 0 && ids.every((i) => typeof i === 'string' && UUID.test(i));
+      if (!valida) return recusar('Não deu para mudar a ordem. Recarregue a página.');
+      const { error } = await supabase.rpc('ordenar_perguntas', { p_ids: ids });
+      if (error) throw error;
+    }
+
+    // A copy of a question, ready (to edit and open), right after it on the
+    // ballot: the same names for "Orador (2º voto)", or a runoff.
+    if (comissao && acao === 'duplicar' && typeof id === 'string' && UUID.test(id)) {
+      const { data: original, error } = await supabase.from('votacao_perguntas').select('pergunta, tipo, opcoes, maximo').eq('id', id).maybeSingle();
+      if (error) throw error;
+      if (!original) return recusar('Essa pergunta não existe mais.');
+      const { data: copia, error: erroCopia } = await supabase
+        .from('votacao_perguntas')
+        .insert({ ...original, pergunta: `${original.pergunta.slice(0, 190)} (cópia)`, pronta: true })
+        .select('id')
+        .single();
+      if (erroCopia) throw erroCopia;
+      const { data: todas, error: erroTodas } = await supabase
+        .from('votacao_perguntas')
+        .select('id')
+        .order('ordem', { ascending: true, nullsFirst: false })
+        .order('criado_em');
+      if (erroTodas) throw erroTodas;
+      const ordem = todas.map((p) => p.id as string).filter((i) => i !== copia.id);
+      ordem.splice(ordem.indexOf(id) + 1, 0, copia.id as string);
+      const { error: erroOrdem } = await supabase.rpc('ordenar_perguntas', { p_ids: ordem });
+      if (erroOrdem) throw erroOrdem;
+    }
+
     const [perguntas, contagem, participacao, formandos, avisos] = await Promise.all([
       supabase
         .from('votacao_perguntas')
         .select('id, pergunta, tipo, opcoes, aberta, resultado_liberado, maximo, pronta, resultado_primeiros, resultado_votos, resultado_totais')
+        // The ballot's order: as the committee arranged it, then the
+        // questions made since, by when (`ordem` in votacao.sql).
+        .order('ordem', { ascending: true, nullsFirst: false })
         .order('criado_em'),
       supabase.from('votacao_contagem').select('pergunta_id, opcao, votos'),
       supabase.from('votacao_participacao').select('pergunta_id, formando'),

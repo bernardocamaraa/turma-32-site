@@ -158,7 +158,10 @@ export type AcaoVotacao =
    */
   | { acao: 'abrir'; id: string; mesmoAssim?: boolean }
   | { acao: 'abrirProntas'; mesmoAssim?: boolean }
-  | { acao: 'encerrar' | 'liberar' | 'esconder' | 'excluir'; id: string }
+  /** Committee: `duplicar` makes a ready copy right after it on the ballot. */
+  | { acao: 'encerrar' | 'liberar' | 'esconder' | 'excluir' | 'duplicar'; id: string }
+  /** Committee: the ballot's order, every question's id from first to last. */
+  | { acao: 'ordenar'; ids: string[] }
   /** Committee: choose what the class sees of a question's result. */
   | { acao: 'exibir'; id: string; exibicao: Exibicao }
   /** Committee: fill in, fix or (null) clear a formando's number. */
