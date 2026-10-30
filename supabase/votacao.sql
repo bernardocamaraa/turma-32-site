@@ -94,6 +94,31 @@ alter table public.votacao_perguntas add column if not exists resultado_primeiro
 alter table public.votacao_perguntas add column if not exists resultado_votos boolean not null default false;
 alter table public.votacao_perguntas add column if not exists resultado_totais boolean not null default true;
 
+-- The questions' order on the ballot, as the committee arranges it
+-- (ordenar_perguntas below). Null for a question made after the last
+-- arranging: it goes at the end, by when it was made.
+alter table public.votacao_perguntas add column if not exists ordem int;
+
+-- Puts the questions in the order of `p_ids`. Any not in it (made meanwhile
+-- on another committee phone) keep their place, after those. All in one
+-- statement, so the order never ends up half applied.
+create or replace function public.ordenar_perguntas(p_ids uuid[])
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  update votacao_perguntas p set ordem = o.posicao
+  from (
+    select id, row_number() over (order by array_position(p_ids, id) nulls last, ordem nulls last, criado_em) as posicao
+    from votacao_perguntas
+  ) o
+  where p.id = o.id;
+$$;
+
+revoke all on function public.ordenar_perguntas(uuid[]) from public, anon, authenticated;
+grant execute on function public.ordenar_perguntas(uuid[]) to service_role;
+
 alter table public.votacao_perguntas enable row level security;
 alter table public.votacao_participacao enable row level security;
 alter table public.votacao_contagem enable row level security;
