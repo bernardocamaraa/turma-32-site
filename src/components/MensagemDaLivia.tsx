@@ -9,7 +9,7 @@ import { SectionEyebrowRule } from './SectionHeading';
  */
 const TEXTO = '';
 
-/** Her profile picture: a square crop of her face. Until the file is there, her initials show instead. */
+/** Her profile picture: the whole photo, shown round. Until the file is there, her initials show instead. */
 const FOTO = '/assets/livia-whitaker-perfil.jpg';
 
 /**
