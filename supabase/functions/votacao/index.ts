@@ -3,8 +3,9 @@
 // Backs the class vote (/votacao): one link for the whole class, apart from
 // the table map. Three kinds of caller:
 //   - nobody yet: gets the list of names and the questions (the opened
-//     ones, without results: a question still `pronta` only shows to the
-//     committee).
+//     ones: a question still `pronta` only shows to the committee), with
+//     the released results as the class sees them — what /resultados shows
+//     to whoever has its link, no WhatsApp needed.
 //   - `whatsapp`: a formando, recognised by their number — the committee
 //     fills the numbers in, so most formandos never pick a name. A number
 //     not on the list comes back with `voce: null` and the names that still
@@ -606,12 +607,14 @@ Deno.serve(async (req) => {
       livres: !comissao && !voce ? lista.filter((f) => !f.whatsapp).map((f) => f.formando) : null,
       perguntas: visiveis.map((p) => {
         const votaram = votaramNa(p);
-        // The tally: for a formando once released (and once their ballot is
-        // in, see `visiveis`); for the committee once the question is
-        // closed. Options nobody picked still show (as 0) when the
-        // committee wrote them; for "formandos" questions only names that
-        // got votes are listed.
-        const veResultado = (p.resultado_liberado && (comissao || voce !== null)) || (comissao && !p.aberta);
+        // The tally: for anyone once released (a formando once their ballot
+        // is in, see `visiveis`; a visitor too — the /resultados link is
+        // sent to the class); for the committee once the question is
+        // closed. Releasing closes the question, so no result is out while
+        // anyone can still vote on it. Options nobody picked still show (as
+        // 0) when the committee wrote them; for "formandos" questions only
+        // names that got votes are listed.
+        const veResultado = p.resultado_liberado || (comissao && !p.aberta);
         const contados = contagem.data.filter((c) => c.pergunta_id === p.id);
         // Blank votes are counted under '' (votar_opcoes): shown apart, not as an option.
         const brancos = (contados.find((c) => c.opcao === '')?.votos as number | undefined) ?? 0;

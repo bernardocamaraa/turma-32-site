@@ -41,7 +41,7 @@ const CHAVE_ELEITOR = 'turma32-votacao-eleitor';
 // Remembers who's voting on this phone, so the number isn't retyped on
 // every visit. Storage can be blocked (private mode) — then the page just
 // asks again.
-export function lerEleitor(): { whatsapp: string } | null {
+function lerEleitor(): { whatsapp: string } | null {
   try {
     const salvo = JSON.parse(localStorage.getItem(CHAVE_ELEITOR) ?? 'null');
     return salvo && typeof salvo.whatsapp === 'string' ? { whatsapp: salvo.whatsapp } : null;
@@ -50,7 +50,7 @@ export function lerEleitor(): { whatsapp: string } | null {
   }
 }
 
-export function salvarEleitor(valor: { whatsapp: string } | null) {
+function salvarEleitor(valor: { whatsapp: string } | null) {
   try {
     if (valor) localStorage.setItem(CHAVE_ELEITOR, JSON.stringify(valor));
     else localStorage.removeItem(CHAVE_ELEITOR);
@@ -261,13 +261,6 @@ export function Votacao({ codigoComissao }: { codigoComissao?: string }) {
               </div>
             </div>
           </Card>
-          {dados.perguntas.some((p) => p.resultado) ? (
-            <div style={{ display: 'flex' }}>
-              <Button variant="secondary" as="a" href="/resultados">
-                Ver todos os resultados juntos
-              </Button>
-            </div>
-          ) : null}
           {dados.perguntas.length === 0 ? (
             <p style={texto}>A comissão ainda não abriu nenhuma votação. Volte por aqui mais tarde.</p>
           ) : (
@@ -280,11 +273,11 @@ export function Votacao({ codigoComissao }: { codigoComissao?: string }) {
 }
 
 /**
- * The way in for a formando: their WhatsApp (also on /resultados). When the committee already
+ * The way in for a formando: their WhatsApp. When the committee already
  * has the number, that's all; otherwise they pick their name among the
  * ones with no number yet, and the number gets tied to it.
  */
-export function Identificacao({
+function Identificacao({
   livres,
   entrando,
   erro,
@@ -2416,10 +2409,11 @@ function LinkDaVotacao() {
         </span>
         <span style={{ fontSize: 'var(--fs-body)', color: 'var(--accent)', wordBreak: 'break-all' }}>{`${window.location.origin}/resultados`}</span>
         <span style={pequeno}>
-          Todos os vencedores juntos, cada um no seu púlpito. A turma vê só os resultados que vocês mostrarem; neste aparelho
-          vocês veem a prévia de tudo o que já foi encerrado.
+          Todos os vencedores juntos, cada um no seu púlpito. O link não aparece no site: é só para vocês mandarem. Quem abrir
+          vê os resultados que vocês mostrarem, sem precisar do WhatsApp; neste aparelho vocês veem a prévia de tudo o que já
+          foi encerrado.
         </span>
-        <BotoesLink url={`${window.location.origin}/resultados`} mensagem="Saiu o resultado da votação da turma! Entre com o seu WhatsApp:" />
+        <BotoesLink url={`${window.location.origin}/resultados`} mensagem="Saiu o resultado da votação da turma! Veja aqui:" />
       </div>
     </Card>
   );

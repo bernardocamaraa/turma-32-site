@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { CarregandoSecao } from '../components/CarregandoSecao';
 import { MensagemDaLivia } from '../components/MensagemDaLivia';
 import { PageHeader } from '../components/SectionHeading';
 import { lerCodigo } from '../lib/codigoComissao';
 import { buscarVotacao, resultadoDaTurma, type AcessoVotacao, type DadosVotacao } from '../lib/votacao';
-import { ConfeteDourado, Identificacao, lerEleitor, POLL_MS, Pulpito, REVELA, salvarEleitor, useRevelacao } from './Votacao';
+import { ConfeteDourado, POLL_MS, Pulpito, REVELA, useRevelacao } from './Votacao';
 
 type Lugar = { chave: string; nome: string; votos: number | null; cargo: string };
 
@@ -28,56 +27,33 @@ function lugaresDe(dados: DadosVotacao): Lugar[] {
 /**
  * /resultados: the whole vote's result on one stage — it's one vote with
  * several questions, so every winner stands side by side over their pulpit,
- * the role written on each, revealed one after the other. Seen like the
- * results on /votacao: by a formando (their WhatsApp, remembered from the
- * vote) whose ballot is in, once the committee releases each result. On a
- * committee phone (its code saved by the committee area) it's a preview of
- * every closed question, released or not.
+ * the role written on each, revealed one after the other. Not linked from
+ * the site: the committee sends the link to the class. Whoever opens it
+ * sees each result once the committee releases it, no WhatsApp needed. On
+ * a committee phone (its code saved by the committee area) it's a preview
+ * of every closed question, released or not.
  */
 export function Resultados() {
   const [codigo] = useState(lerCodigo);
-  const [eleitor, setEleitor] = useState(() => (codigo ? null : lerEleitor()));
   const [dados, setDados] = useState<DadosVotacao | null>(null);
-  const [entrando, setEntrando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
-  const acesso: AcessoVotacao = codigo ? { codigo } : eleitor ?? {};
+  const acesso: AcessoVotacao = codigo ? { codigo } : {};
 
-  async function carregar(com: AcessoVotacao): Promise<DadosVotacao | null> {
-    setEntrando(true);
+  async function carregar() {
     setErro(null);
     try {
-      const novo = await buscarVotacao(com);
-      setDados(novo);
-      return novo;
+      setDados(await buscarVotacao(acesso));
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Não foi possível abrir agora.');
-      return null;
-    } finally {
-      setEntrando(false);
     }
   }
 
   useEffect(() => {
-    carregar(acesso).then((novo) => {
-      // A remembered number no longer on the list: ask again.
-      if (novo && eleitor && !novo.voce) {
-        salvarEleitor(null);
-        setEleitor(null);
-      }
-    });
+    carregar();
   }, []);
 
-  async function identificar(whatsapp: string, nome?: string): Promise<boolean | 'semNome'> {
-    const novo = await carregar(nome ? { whatsapp, nome } : { whatsapp });
-    if (!novo) return false;
-    if (!novo.voce) return 'semNome';
-    salvarEleitor({ whatsapp });
-    setEleitor({ whatsapp });
-    return true;
-  }
-
   // Results come out while the page is open: check now and then.
-  const pronto = dados !== null && (dados.comissao || dados.voce !== null);
+  const pronto = dados !== null;
   useEffect(() => {
     if (!pronto) return;
     const id = setInterval(async () => {
@@ -89,10 +65,9 @@ export function Resultados() {
       }
     }, POLL_MS);
     return () => clearInterval(id);
-  }, [pronto, eleitor]);
+  }, [pronto]);
 
   const lugares = dados ? lugaresDe(dados) : [];
-  const faltaVotar = dados?.perguntas.some((p) => p.aberta && !p.pronta && !p.jaVotou) ?? false;
   const naoLiberadas = dados?.comissao ? dados.perguntas.filter((p) => !p.aberta && !p.pronta && !p.resultadoLiberado).length : 0;
 
   return (
@@ -109,9 +84,7 @@ export function Resultados() {
       <PageHeader eyebrow="Turma 32" title="Resultado da votação." />
 
       {!dados ? (
-        <CarregandoSecao erro={erro} onTentar={() => carregar(acesso)} />
-      ) : !dados.comissao && !dados.voce ? (
-        <Identificacao livres={dados.livres ?? []} entrando={entrando} erro={erro} onEntrar={identificar} />
+        <CarregandoSecao erro={erro} onTentar={carregar} />
       ) : (
         <>
           {dados.comissao ? (
@@ -136,20 +109,11 @@ export function Resultados() {
             </>
           ) : (
             <Card padding="var(--space-7)">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', alignItems: 'flex-start' }}>
-                <p style={{ margin: 0, fontSize: 'var(--fs-body-lg)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)' }}>
-                  {faltaVotar
-                    ? 'Você ainda tem votos para enviar. Os resultados aparecem aqui depois que você votar.'
-                    : dados.comissao
-                      ? 'Nenhuma votação foi encerrada ainda.'
-                      : 'Os resultados ainda não saíram. Esta página mostra cada um assim que a comissão liberar.'}
-                </p>
-                {faltaVotar ? (
-                  <Button as="a" href="/votacao">
-                    Ir para a votação
-                  </Button>
-                ) : null}
-              </div>
+              <p style={{ margin: 0, fontSize: 'var(--fs-body-lg)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)' }}>
+                {dados.comissao
+                  ? 'Nenhuma votação foi encerrada ainda.'
+                  : 'Os resultados ainda não saíram. Esta página mostra cada um assim que a comissão liberar.'}
+              </p>
             </Card>
           )}
         </>
