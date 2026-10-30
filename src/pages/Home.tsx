@@ -5,6 +5,7 @@ import { Button } from '../components/Button';
 import { MAPS_LINK } from '../components/MapEmbed';
 import { SectionEyebrowRule } from '../components/SectionHeading';
 import { AvisoConfirmacao } from '../components/AvisoConfirmacao';
+import { TresTurmas } from '../components/TresTurmas';
 import { Bloco, Grande, LinkSeta, MapaInclinado, Pequeno, Revela, Titulo } from '../components/Cena';
 import { baixarEventoDoBaile } from '../lib/calendario';
 import { useCountdown } from '../lib/countdown';
@@ -22,6 +23,7 @@ export function Home() {
     <main className="com-grao">
       <Abertura />
       <TextoQueAcende />
+      <TresTurmas />
       <FaixaDeAssinaturas />
       <Contagem />
       <ANoite />
@@ -260,14 +262,16 @@ function TextoQueAcende() {
 }
 
 /**
- * Scene 3. The class itself: every graduate's signature with their name
- * under it, in two rows running in opposite directions. Pauses under the
+ * Scene 4. The class itself: every graduate's signature, in two rows
+ * running in opposite directions. Pauses under the
  * mouse; with reduced motion the rows stand still and scroll by hand.
  */
 function FaixaDeAssinaturas() {
   const mobile = useIsMobile();
   const linhas = [FORMANDOS.filter((_, i) => i % 2 === 0), FORMANDOS.filter((_, i) => i % 2 === 1)];
 
+  // The name stays as the image's text, for screen readers; one whose
+  // signature hasn't arrived shows it written instead.
   const item = (nome: string) => {
     const assinatura = assinaturaDe(nome);
     return (
@@ -276,23 +280,22 @@ function FaixaDeAssinaturas() {
         style={{
           flex: '0 0 auto',
           display: 'flex',
-          flexDirection: 'column',
           alignItems: 'center',
-          justifyContent: 'flex-end',
-          gap: 'var(--space-3)',
-          width: mobile ? 150 : 200,
-          height: mobile ? 96 : 120,
+          justifyContent: 'center',
+          width: mobile ? 140 : 190,
+          height: mobile ? 72 : 96,
         }}
       >
         {assinatura ? (
           <img
             src={assinatura}
-            alt=""
+            alt={nome}
             loading="lazy"
-            style={{ maxWidth: '100%', maxHeight: mobile ? 52 : 68, objectFit: 'contain', opacity: 0.92 }}
+            style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', opacity: 0.92 }}
           />
-        ) : null}
-        <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-faint)', whiteSpace: 'nowrap' }}>{nome}</span>
+        ) : (
+          <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{nome}</span>
+        )}
       </li>
     );
   };
@@ -312,8 +315,8 @@ function FaixaDeAssinaturas() {
           marginBottom: 'var(--space-8)',
         }}
       >
-        <SectionEyebrowRule>A turma</SectionEyebrowRule>
-        <Titulo>{FORMANDOS.length} formandos. Uma turma.</Titulo>
+        <SectionEyebrowRule>As assinaturas</SectionEyebrowRule>
+        <Titulo>Cada um deixou a sua marca.</Titulo>
       </Revela>
       <Revela style={{ display: 'flex', flexDirection: 'column', gap: mobile ? 'var(--space-5)' : 'var(--space-6)' }}>
         {linhas.map((nomes, i) => (
@@ -334,7 +337,7 @@ function FaixaDeAssinaturas() {
 }
 
 /**
- * Scene 4. How long until the night, filling the screen. Each digit turns
+ * Scene 5. How long until the night, filling the screen. Each digit turns
  * over like a departures board when it changes, and the blue glow behind it
  * grows as it scrolls in — and stronger the closer the date is.
  */
@@ -470,7 +473,7 @@ function MiniCalendario() {
   );
 }
 
-/** Scene 5. The practical facts of the night, as tiles that rise in one after another. */
+/** Scene 6. The practical facts of the night, as tiles that rise in one after another. */
 function ANoite() {
   const mobile = useIsMobile();
   const navigate = useNavigate();
