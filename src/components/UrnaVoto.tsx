@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Check } from 'lucide-react';
+import { precarregarSomDaUrna, tocarSomDaUrna } from '../lib/somDaUrna';
 import { usePrefersReducedMotion } from '../lib/useViewport';
 import { Button } from './Button';
 
@@ -29,9 +30,10 @@ const SAIDA_MS = 200;
 // A small copy of the class's 32 (the original is 1.4 MB), for the box's front.
 const LOGO = '/assets/logo-32-pequena.png';
 
-/** Loads the logo ahead, so the box has it the moment it shows. Call it while the ballot is being filled in. */
+/** Loads the logo and the sound ahead, so the box has them the moment it shows. Call it while the ballot is being filled in. */
 export function precarregarUrna() {
   new Image().src = LOGO;
+  precarregarSomDaUrna();
 }
 
 // Confirmation is green, like "Você já votou" on the page.
@@ -75,12 +77,15 @@ export function UrnaVoto({ quantos, emBranco, onFim }: { quantos: number; emBran
 
   useEffect(() => {
     const auto = setTimeout(fechar, FECHA_SOZINHO_MS);
+    // The electronic ballot box's sound as the paper goes in (right away when nothing moves).
+    const som = setTimeout(() => void tocarSomDaUrna(), reduzido ? 0 : T.engole);
     const tecla = (e: KeyboardEvent) => {
       if (e.key === 'Escape') fechar();
     };
     window.addEventListener('keydown', tecla);
     return () => {
       clearTimeout(auto);
+      clearTimeout(som);
       window.removeEventListener('keydown', tecla);
     };
   }, []);

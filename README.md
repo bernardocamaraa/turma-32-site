@@ -271,6 +271,10 @@ com ou sem +55, e até sem o 9 da frente. O site acerta o formato sozinho
   Depois que ele envia os votos, aparecem as outras perguntas e os
   resultados liberados, revelados quando a urna sai da tela. A prévia da
   cédula da comissão mostra o mesmo: só as abertas e as prontas.
+- **Som da urna:** quando a cédula cai na urna, toca o som de confirmação
+  da urna eletrônica (`public/assets/confirma-urna.mp3`). O navegador só
+  deixa tocar som que começa num toque, então ele é ligado no toque em
+  "Enviar meus votos". No iPhone, não toca com o celular no silencioso.
 
 - **Aviso no celular:** na aba Votação (`/comissao/votacao`), o botão "Me avisar quando
   todos votarem" liga a notificação do próprio navegador (Web Push) naquele
