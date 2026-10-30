@@ -14,7 +14,8 @@
 //     every open question one option, up to its `maximo`, or a blank vote
 //     (null), never the same option in two questions (votar_cedula in
 //     votacao.sql). Sees a result once the committee releases it, and only
-//     the parts the committee chose to show (paraTurma) — and only once
+//     the parts the committee chose to show (paraTurma), without who was
+//     elected in another category (eleger) — and only once
 //     their ballot is in: until then they get just the questions left to
 //     vote on.
 //   - `codigo`: COMMITTEE_CODE. Creates questions (open right away, or
@@ -145,6 +146,52 @@ function paraTurma(resultado: Resultado[], primeiros: number, votos: boolean): R
   return resultado
     .filter((r) => (r.votos ?? 0) > 0 && (r.votos ?? 0) >= corte)
     .map((r) => (votos ? r : { ...r, votos: null }));
+}
+
+/** A name as compared between questions: accents, capitals and extra spaces aside (chave_opcao in votacao.sql). */
+function chave(nome: string): string {
+  return nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Who takes the places across the closed questions: someone among the most
+ * voted in several categories is elected in the one where they got the most
+ * votes, and in the others the place goes to whoever came next. Goes through
+ * every count, most votes first: each name is elected once, and each
+ * question has as many places as votes per ballot (`maximo`). Returns, by
+ * question, the names elected in another one (by `chave`, with that one's
+ * id), and the names with as many votes in two categories that still had
+ * room — a tie the committee decides; here the one first on the ballot wins.
+ */
+function eleger(fechadas: { id: string; maximo: number; votos: { opcao: string; votos: number }[] }[]) {
+  const entradas = fechadas
+    .flatMap((q) => q.votos.filter((v) => v.votos > 0).map((v) => ({ q: q.id, nome: v.opcao, chave: chave(v.opcao), votos: v.votos })))
+    .sort((a, b) => b.votos - a.votos || a.nome.localeCompare(b.nome, 'pt-BR'));
+  const vagas = new Map(fechadas.map((q) => [q.id, q.maximo]));
+  const eleitoEm = new Map<string, string>();
+  const empates = new Map<string, string[]>();
+  for (let i = 0; i < entradas.length; ) {
+    let j = i;
+    while (j < entradas.length && entradas[j].votos === entradas[i].votos) j++;
+    const grupo = entradas.slice(i, j).filter((e) => !eleitoEm.has(e.chave) && (vagas.get(e.q) ?? 0) > 0);
+    for (const e of grupo) {
+      if (grupo.some((o) => o.chave === e.chave && o.q !== e.q)) empates.set(e.q, [...(empates.get(e.q) ?? []), e.nome]);
+    }
+    for (const e of grupo) {
+      if (eleitoEm.has(e.chave) || (vagas.get(e.q) ?? 0) === 0) continue;
+      eleitoEm.set(e.chave, e.q);
+      vagas.set(e.q, vagas.get(e.q)! - 1);
+    }
+    i = j;
+  }
+  const emOutra = new Map<string, Map<string, string>>();
+  for (const e of entradas) {
+    const em = eleitoEm.get(e.chave);
+    if (!em || em === e.q) continue;
+    if (!emOutra.has(e.q)) emOutra.set(e.q, new Map());
+    emOutra.get(e.q)!.set(e.chave, em);
+  }
+  return { emOutra, empates };
 }
 
 /**
@@ -493,6 +540,16 @@ Deno.serve(async (req) => {
     // ballot is in. A question not opened yet is the committee's alone.
     const aVotar = voce ? todas.filter((p) => p.aberta && !p.pronta && !votaramNa(p).includes(voce!)) : [];
     const visiveis = comissao ? todas : aVotar.length > 0 ? aVotar : todas.filter((p) => !p.pronta);
+    // Places across the closed questions (eleger): someone elected in another category leaves this one's.
+    const eleicao = eleger(
+      todas
+        .filter((p) => !p.aberta && !p.pronta)
+        .map((p) => ({
+          id: p.id,
+          maximo: p.maximo,
+          votos: contagem.data.filter((c) => c.pergunta_id === p.id && c.opcao !== '').map((c) => ({ opcao: c.opcao as string, votos: c.votos as number })),
+        })),
+    );
 
     return json({
       comissao,
@@ -527,7 +584,22 @@ Deno.serve(async (req) => {
         // The class gets only what the committee chose to show; the committee, all of it.
         // Until the committee picks, as many names as each formando picked.
         const mostra = { primeiros: p.resultado_primeiros ?? p.maximo, votos: p.resultado_votos, totais: p.resultado_totais };
-        const resultado = completo && !comissao ? paraTurma(completo, mostra.primeiros, mostra.votos) : completo;
+        // Names elected in another category, where they got more votes: off
+        // this one's ranking, so the place goes to whoever came next.
+        // `apareceria`: they'd have shown here otherwise — the class is told
+        // where they went (or just "another category" if that result isn't
+        // out yet). The committee gets them all, for its preview.
+        const emOutra = eleicao.emOutra.get(p.id) ?? new Map<string, string>();
+        const corte = completo?.[mostra.primeiros - 1]?.votos ?? 0;
+        const eleitosEmOutra = (completo ?? [])
+          .filter((r) => emOutra.has(chave(r.opcao)))
+          .map((r) => {
+            const outra = todas.find((q) => q.id === emOutra.get(chave(r.opcao)))!;
+            return { nome: r.opcao, em: comissao || outra.resultado_liberado ? outra.pergunta : null, apareceria: r.votos > 0 && r.votos >= corte };
+          })
+          .filter((e) => comissao || e.apareceria);
+        const restantes = completo?.filter((r) => !emOutra.has(chave(r.opcao))) ?? null;
+        const resultado = completo && !comissao ? paraTurma(restantes!, mostra.primeiros, mostra.votos) : completo;
         const totais = veResultado && (comissao || mostra.totais);
         return {
           id: p.id,
@@ -550,6 +622,9 @@ Deno.serve(async (req) => {
           validos: totais ? daPergunta.reduce((s, c) => s + (c.votos as number), 0) : null,
           brancos: totais ? brancos : null,
           exibicao: mostra,
+          eleitosEmOutra,
+          // Same votes here and in another category: who goes where is the committee's call.
+          empate: comissao && veResultado ? (eleicao.empates.get(p.id) ?? null) : null,
         };
       }),
     });
