@@ -255,6 +255,16 @@ com ou sem +55, e até sem o 9 da frente. O site acerta o formato sozinho
   votos dados a um nome: numa pergunta de 2 votos, válidos e brancos somam
   2 por formando que votou. O que fica escondido nem é enviado ao
   celular da turma (`resultado_*` em `votacao.sql`).
+- **Uma vaga por pessoa:** quando alguém está entre os mais votados de mais
+  de uma categoria, fica com a vaga na que teve mais votos, e nas outras a
+  vaga passa para quem veio depois (e, se essa pessoa também ganhou em
+  outra, para o seguinte). O site faz isso sozinho com as perguntas
+  encerradas, indo do maior número de votos para o menor (`eleger` na
+  função `votacao`). A turma vê os vencedores já assim, com uma nota ("Laís
+  Boldrim ficou com a vaga em "Orador", onde teve mais votos…"); a comissão
+  continua vendo a contagem completa, com a lista de quem saiu de cada
+  categoria. Se a mesma pessoa tiver o mesmo número de votos em duas
+  categorias, a comissão vê um aviso de empate para decidir.
 - **Primeiro a cédula, depois os resultados:** enquanto o formando ainda
   tem pergunta aberta para votar, a página dele é só a cédula, com as
   perguntas que faltam, sem resultados anteriores (a função nem os envia).

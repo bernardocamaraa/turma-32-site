@@ -49,6 +49,15 @@ export type Pergunta = {
   /** Blank votes, apart from the options: whole blank ballots and single votes left blank — like `validos`. */
   brancos: number | null;
   exibicao: Exibicao;
+  /**
+   * Names elected in another (closed) category, where they got more votes:
+   * off this one's ranking, the place goes to whoever came next. `em`: that
+   * category (null for the class while its result isn't out). `apareceria`:
+   * they'd have shown among the most voted here. The class gets only those.
+   */
+  eleitosEmOutra: { nome: string; em: string | null; apareceria: boolean }[];
+  /** Committee: names with as many votes here as in another category — who goes where is theirs to decide. */
+  empate: string[] | null;
 };
 
 export type DadosVotacao = {
@@ -84,13 +93,17 @@ export function chaveDoNome(nome: string): string {
 }
 
 /**
- * A result (most voted first) cut down to what the class sees: only the
- * options with at least as many votes as the one in place `primeiros` (so a
- * tie there brings them all), and their counts only if `votos`. The Edge
+ * A result (most voted first) cut down to what the class sees: without
+ * those elected in another category, only the options with at least as many
+ * votes as the one in place `primeiros` (so a tie there brings them all),
+ * and their counts only if `votos`. The Edge
  * Function does the same before sending it (paraTurma); here it's the
  * committee's preview.
  */
-export function resultadoDaTurma(resultado: Resultado[], exibicao: Exibicao): Resultado[] {
+export function resultadoDaTurma(resultado: Resultado[], exibicao: Exibicao, eleitosEmOutra: { nome: string }[] = []): Resultado[] {
+  // Off the ranking first: who was elected in another category (Pergunta.eleitosEmOutra).
+  const fora = new Set(eleitosEmOutra.map((e) => chaveDoNome(e.nome)));
+  resultado = resultado.filter((r) => !fora.has(chaveDoNome(r.opcao)));
   const corte = resultado[exibicao.primeiros - 1]?.votos ?? 0;
   return resultado
     .filter((r) => (r.votos ?? 0) > 0 && (r.votos ?? 0) >= corte)

@@ -661,6 +661,7 @@ function PerguntaFormando({
             validos={p.validos}
             brancos={p.brancos}
             maximo={p.maximo}
+            eleitosEmOutra={p.eleitosEmOutra}
             segurar={naUrna}
           />
         ) : p.jaVotou ? (
@@ -979,6 +980,7 @@ function ResultadoTurma({
   validos,
   brancos,
   maximo,
+  eleitosEmOutra = [],
   segurar = false,
 }: {
   resultado: Resultado[];
@@ -986,6 +988,8 @@ function ResultadoTurma({
   validos: number | null;
   brancos: number | null;
   maximo: number;
+  /** Who'd have shown here but was elected in another category (Pergunta.eleitosEmOutra). */
+  eleitosEmOutra?: { nome: string; em: string | null }[];
   segurar?: boolean;
 }) {
   const [ref, estado] = useRevelacao<HTMLDivElement>(segurar);
@@ -1018,7 +1022,8 @@ function ResultadoTurma({
       ) : (
         <>
           <span className="revela-parte" style={{ ...aos(0), fontSize: 'var(--fs-body)', fontWeight: 500, color: 'var(--text-muted)' }}>
-            {n === 1 ? 'O mais votado' : `Os ${n} mais votados`}
+            {/* Someone ahead went to another category: these aren't simply the most voted. */}
+            {eleitosEmOutra.length > 0 ? (n === 1 ? 'Fica com a vaga' : 'Ficam com as vagas') : n === 1 ? 'O mais votado' : `Os ${n} mais votados`}
           </span>
           <div style={{ position: 'relative' }}>
             <ol ref={lista} style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexWrap: 'wrap', gap: 'var(--space-5) var(--space-8)' }}>
@@ -1062,6 +1067,12 @@ function ResultadoTurma({
           ) : null}
         </>
       )}
+      {eleitosEmOutra.map((e) => (
+        <span key={e.nome} className="revela-parte" style={{ ...aos(fim), ...pequeno }}>
+          {e.nome} ficou com a vaga {e.em ? `em "${e.em}"` : 'em outra categoria'}, onde teve mais votos, então aqui a vaga passa para
+          quem veio depois.
+        </span>
+      ))}
       {validos !== null && brancos !== null ? (
         <div className="revela-parte" style={aos(fim + 150)}>
           <Totais validos={validos} brancos={brancos} contar={estado !== 'pronto'} comecar={estado === 'agora'} atraso={fim + 150} />
@@ -1653,6 +1664,7 @@ function PerguntaComissao({
               <>
                 <Barras resultado={p.resultado} brancos={p.brancos} />
                 {p.validos !== null && p.brancos !== null ? <Totais validos={p.validos} brancos={p.brancos} /> : null}
+                <EleitosEmOutra p={p} />
                 <ExibicaoResultado p={p} salvando={salvando} agir={agir} />
               </>
             ) : (
@@ -1748,6 +1760,33 @@ function PerguntaComissao({
   );
 }
 
+/**
+ * For the committee, under a closed question's full count: who got votes
+ * here but takes the place in another category, where they got more (the
+ * class sees the next one here instead) — and a tie between categories,
+ * which is theirs to decide.
+ */
+function EleitosEmOutra({ p }: { p: Pergunta }) {
+  if (p.eleitosEmOutra.length === 0 && !p.empate) return null;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+      {p.eleitosEmOutra.length > 0 ? (
+        <span style={pequeno}>
+          Ficam com a vaga em outra categoria, onde tiveram mais votos, e saem desta:{' '}
+          {p.eleitosEmOutra.map((e) => `${e.nome} ("${e.em}")`).join(', ')}. Aqui a vaga passa para quem veio depois (veja a prévia
+          abaixo).
+        </span>
+      ) : null}
+      {p.empate ? (
+        <span role="alert" style={{ ...pequeno, color: 'var(--state-warn)' }}>
+          Empate: {p.empate.join(', ')} {p.empate.length === 1 ? 'teve' : 'tiveram'} o mesmo número de votos aqui e em outra
+          categoria. O site deixou a vaga na que vem primeiro na cédula; decidam vocês onde fica.
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 /** "How many names show", as the committee reads it; position + 1 is the number. */
 const QUANTOS_NOMES = ['Só o mais votado', 'Os 2 mais votados', 'Os 3 mais votados', 'Os 4 mais votados', 'Os 5 mais votados'];
 
@@ -1833,11 +1872,12 @@ function ExibicaoResultado({
         <ResultadoTurma
           // Plays the reveal again on each change, as the class will see it.
           key={JSON.stringify(exibicao)}
-          resultado={resultadoDaTurma(p.resultado ?? [], exibicao)}
+          resultado={resultadoDaTurma(p.resultado ?? [], exibicao, p.eleitosEmOutra)}
           exibicao={exibicao}
           validos={exibicao.totais ? p.validos : null}
           brancos={exibicao.totais ? p.brancos : null}
           maximo={p.maximo}
+          eleitosEmOutra={p.eleitosEmOutra.filter((e) => e.apareceria)}
         />
       </div>
     </div>
