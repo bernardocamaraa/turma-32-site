@@ -238,6 +238,12 @@ com ou sem +55, e até sem o 9 da frente. O site acerta o formato sozinho
   os votos válidos e em branco, com uma prévia. "Votos válidos" são os
   formandos que escolheram alguém. O que fica escondido nem é enviado ao
   celular da turma (`resultado_*` em `votacao.sql`).
+- **Primeiro a cédula, depois os resultados:** enquanto o formando ainda
+  tem pergunta aberta para votar, a página dele é só a cédula, com as
+  perguntas que faltam, sem resultados anteriores (a função nem os envia).
+  Depois que ele envia os votos, aparecem as outras perguntas e os
+  resultados liberados, revelados quando a urna sai da tela. A prévia da
+  cédula da comissão mostra o mesmo: só as abertas e as prontas.
 
 - **Aviso no celular:** na aba Votação (`/comissao/votacao`), o botão "Me avisar quando
   todos votarem" liga a notificação do próprio navegador (Web Push) naquele

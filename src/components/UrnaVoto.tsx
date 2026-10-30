@@ -104,6 +104,8 @@ export function UrnaVoto({ quantos, emBranco, onFim }: { quantos: number; emBran
 
   return createPortal(
     <div
+      // Lets what sits under it know it's up (the ballot preview leaves Esc to it).
+      data-urna=""
       onClick={fechar}
       style={{
         position: 'fixed',
