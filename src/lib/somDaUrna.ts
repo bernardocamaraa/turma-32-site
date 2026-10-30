@@ -1,5 +1,5 @@
-// The sound of the Brazilian electronic ballot box confirming a vote, played
-// as the paper drops into the box (UrnaVoto).
+// The sounds of the Brazilian electronic ballot box, for the one in the vote
+// confirmation (UrnaVoto): its confirmation, and a beep for each key.
 
 const SOM = '/assets/confirma-urna.mp3';
 
@@ -40,13 +40,32 @@ export function prepararSomDaUrna() {
   precarregarSomDaUrna();
 }
 
-/** Plays it, if prepararSomDaUrna got the sound going and it has loaded. */
-export async function tocarSomDaUrna() {
+// A key's beep: one of the confirmation's notes (it alternates two, a tenth
+// of a second each).
+const TECLA = { de: 0.05, segundos: 0.09 };
+
+/**
+ * Plays the whole confirmation, or a key's short beep, if prepararSomDaUrna
+ * got the sound going and it has loaded.
+ */
+export async function tocarSomDaUrna(tipo: 'confirma' | 'tecla') {
   const c = contexto;
   const buffer = await audio;
   if (!c || !buffer || c.state !== 'running') return;
   const som = c.createBufferSource();
   som.buffer = buffer;
-  som.connect(c.destination);
-  som.start();
+  if (tipo === 'confirma') {
+    som.connect(c.destination);
+    som.start();
+    return;
+  }
+  // Faded in and out, so the cut doesn't click.
+  const volume = c.createGain();
+  const agora = c.currentTime;
+  volume.gain.setValueAtTime(0, agora);
+  volume.gain.linearRampToValueAtTime(1, agora + 0.005);
+  volume.gain.setValueAtTime(1, agora + TECLA.segundos - 0.01);
+  volume.gain.linearRampToValueAtTime(0, agora + TECLA.segundos);
+  som.connect(volume).connect(c.destination);
+  som.start(agora, TECLA.de, TECLA.segundos);
 }

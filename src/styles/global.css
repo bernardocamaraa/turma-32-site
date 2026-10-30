@@ -306,14 +306,12 @@ g[role="button"]:focus-visible .mesa-alvo {
   }
 }
 
-/* Vote confirmation (components/UrnaVoto.tsx). The box bounces in; the
-   paper flies up from below to beside the box and floats there while it
-   folds (with its shading), then glides in one smooth arc over the box and
-   down into the slot, leaning a little the way it flies; the box squashes
-   and its lid hops, confetti bursts out, a green glow, and the check rises
-   from the slot as its tick draws. Every element's own style is where it
-   ends (or hidden, for the effects), so with reduced motion (animations
-   off, below) the box and the check simply show. */
+/* Vote confirmation (components/UrnaVoto.tsx): an electronic ballot box.
+   It bounces in; a fingertip taps 3 and 2 (or BRANCO), each key sinking in
+   as the screen fills in like the real one's, then CONFIRMA: the screen says
+   FIM, a green glow and confetti. Every element's own style is where it ends
+   (or hidden, for the effects), so with reduced motion (animations off,
+   below) the box simply shows with FIM on its screen. */
 @keyframes urna-entra {
   0% { opacity: 0; transform: translateY(70px) scale(.9); }
   60% { opacity: 1; transform: translateY(-8px) scale(1.02); }
@@ -321,70 +319,40 @@ g[role="button"]:focus-visible .mesa-alvo {
   100% { transform: none; }
 }
 
-@keyframes urna-engole {
-  0% { transform: none; }
-  22% { transform: scale(1.07, .9); }
-  50% { transform: scale(.97, 1.05); }
-  75% { transform: scale(1.01, .99); }
-  100% { transform: none; }
+@keyframes urna-tecla {
+  0%, 100% { transform: none; }
+  30%, 60% { transform: translateY(1.4px); }
 }
 
-@keyframes urna-tampa {
-  0% { transform: none; }
-  30% { transform: translateY(-8px) rotate(-4deg); }
-  62% { transform: translateY(1px) rotate(1deg); }
-  100% { transform: none; }
+@keyframes urna-tecla-sombra {
+  0%, 100% { opacity: 0; }
+  30%, 60% { opacity: .3; }
 }
 
-/* The paper's trip: x and y animate on two nested elements with their own
-   timing, which makes the arc. 0–20% up from below to beside the box,
-   20–42% floating while it folds, 42–74% across (x) while 42–58% up to the
-   top of the arc (y), then gliding down into the slot. Every segment starts
-   and ends at the speed the next one picks up, so the flight never jerks. */
-@keyframes cedula-voo-x {
-  0%, 42% { transform: translateX(-150px); animation-timing-function: cubic-bezier(.45, 0, .4, 1); }
-  74%, 100% { transform: none; }
+@keyframes urna-toque {
+  0% { opacity: 0; transform: scale(1.8); }
+  35% { opacity: .65; transform: scale(1); }
+  55% { opacity: .5; transform: scale(.85); }
+  100% { opacity: 0; transform: scale(1.4); }
 }
 
-@keyframes cedula-voo-y {
-  0% { opacity: 0; transform: translateY(300px); animation-timing-function: cubic-bezier(.2, .8, .3, 1); }
-  7% { opacity: 1; }
-  20% { transform: translateY(112px); animation-timing-function: ease-in-out; }
-  31% { transform: translateY(124px); animation-timing-function: ease-in-out; }
-  42% { transform: translateY(116px); animation-timing-function: cubic-bezier(.42, 0, .38, 1); }
-  58% { transform: translateY(-50px); animation-timing-function: cubic-bezier(.45, 0, .65, .8); }
-  97% { opacity: 1; }
-  100% { opacity: 0; transform: translateY(120px); }
+@keyframes urna-aparece {
+  from { opacity: 0; }
 }
 
-/* No spin: tilted on the way up, steadying while it folds, then leaning
-   gently into the flight and upright again before it goes in. */
-@keyframes cedula-giro {
-  0% { transform: rotate(-16deg) scale(.9); animation-timing-function: cubic-bezier(.2, .8, .3, 1); }
-  20% { transform: rotate(-4deg) scale(1); animation-timing-function: ease-in-out; }
-  42% { transform: rotate(-2deg) scale(1); animation-timing-function: ease-in-out; }
-  52% { transform: rotate(8deg) scale(1.05); animation-timing-function: ease-in-out; }
-  66% { transform: rotate(4deg) scale(1.04); animation-timing-function: ease-in-out; }
-  80% { transform: rotate(-1deg) scale(1); animation-timing-function: ease-in-out; }
-  88%, 100% { transform: none; }
+@keyframes urna-digito {
+  from { opacity: 0; transform: translateY(2px); }
 }
 
-@keyframes cedula-dobra {
-  to { transform: rotateX(-180deg); }
-}
-
-@keyframes cedula-sombra {
-  to { opacity: 1; }
-}
-
-@keyframes cedula-luz {
+@keyframes urna-some {
   from { opacity: 1; }
   to { opacity: 0; }
 }
 
-@keyframes cedula-sombra-baixo {
-  0%, 100% { opacity: 0; }
-  50% { opacity: .55; }
+@keyframes urna-fim {
+  0% { opacity: 0; transform: scale(.55); }
+  60% { opacity: 1; transform: scale(1.08); }
+  100% { opacity: 1; transform: none; }
 }
 
 @keyframes urna-confete {
@@ -399,23 +367,6 @@ g[role="button"]:focus-visible .mesa-alvo {
   0% { opacity: 0; transform: scale(.5); }
   35% { opacity: 1; transform: scale(1); }
   100% { opacity: 0; transform: scale(1.25); }
-}
-
-@keyframes urna-check {
-  0% { opacity: 0; transform: translateY(66px) scale(.25); animation-timing-function: cubic-bezier(.2, .8, .3, 1.15); }
-  58% { opacity: 1; transform: translateY(-8px) scale(1.12); animation-timing-function: cubic-bezier(.4, 0, .3, 1); }
-  80% { transform: translateY(2px) scale(.97); }
-  100% { opacity: 1; transform: none; }
-}
-
-@keyframes urna-onda {
-  0% { opacity: .7; transform: scale(1); }
-  100% { opacity: 0; transform: scale(2.1); }
-}
-
-@keyframes urna-risco {
-  from { stroke-dashoffset: 22; }
-  to { stroke-dashoffset: 0; }
 }
 
 @keyframes urna-texto {

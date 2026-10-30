@@ -1,33 +1,24 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
-import { Check } from 'lucide-react';
 import { precarregarSomDaUrna, tocarSomDaUrna } from '../lib/somDaUrna';
 import { usePrefersReducedMotion } from '../lib/useViewport';
 import { Button } from './Button';
 
-// The scene, in px. The box is drawn in two layers, its back behind the paper
-// and its front over it, so the paper can fly anywhere and, dropping into
-// the slot (at FENDA), really goes in.
-const CENA = { largura: 220, altura: 248 };
-const URNA = { largura: 168, altura: 128, topo: 116 };
-const FENDA = URNA.topo + 18;
-// Where the paper ends up, right over the slot, before it drops in.
-const PAPEL = { largura: 64, altura: 84, topo: 22 };
+// The scene: an electronic ballot box like the real one (UE2022), seen from
+// the front, drawn in these units (the SVG's viewBox) and scaled to fit.
+const CENA = { largura: 260, altura: 228 };
+// Its screen, where the vote shows as it's typed.
+const TELA = { x: 55, y: 14, largura: 152, altura: 89 };
+const MEIO_DA_TELA = { x: TELA.x + TELA.largura / 2, y: TELA.y + TELA.altura / 2 };
+const FONTE = 'Arial, Helvetica, sans-serif';
 
-// The paper's whole trip, one animation per axis (cedula-voo-x/-y and
-// cedula-giro in global.css, in % of VOO_MS): it flies up from below (where
-// "Enviar" was) to beside the box, floats there while it folds, and glides
-// in one arc over the box and down into the slot. The steps overlap so it
-// never stops: the box squashes as it goes in, its lid hops, confetti bursts
-// out of the slot, and the check rises from it.
-// engole: when the folded paper is all the way in (worked out from the glide's curve).
-const VOO_MS = 2800;
-const DOBRA_MS = 620;
-const T = { aparece: 200, dobra: 200 + 0.2 * VOO_MS, engole: 2670, confete: 2690, check: 2800, texto: 3250 };
+// When each key is pressed: 3 then 2 (or BRANCO), then CONFIRMA, and the
+// screen says FIM. Each key beeps; CONFIRMA plays the whole sound.
+const T = { primeira: 1050, segunda: 1600, confirma: 2500, fim: 2620, texto: 3200 };
 const FECHA_SOZINHO_MS = 7500;
 const SAIDA_MS = 200;
 
-// A small copy of the class's 32 (the original is 1.4 MB), for the box's front.
+// A small copy of the class's 32 (the original is 1.4 MB), for the candidate's photo.
 const LOGO = '/assets/logo-32-pequena.png';
 
 /** Loads the logo and the sound ahead, so the box has them the moment it shows. Call it while the ballot is being filled in. */
@@ -36,11 +27,9 @@ export function precarregarUrna() {
   precarregarSomDaUrna();
 }
 
-// Confirmation is green, like "Você já votou" on the page.
-const VERDE = 'var(--state-ok)';
 const CORES_CONFETE = ['var(--state-ok)', 'var(--ice-300)', 'var(--chalk-050)', 'var(--ice-500)'];
 
-/** The confetti pieces, fixed so every vote looks the same: spread upwards out of the slot. */
+/** The confetti pieces, fixed so every vote looks the same: spread upwards out of the screen. */
 const CONFETE = Array.from({ length: 18 }, (_, i) => {
   const angulo = (-160 + (140 / 17) * i) * (Math.PI / 180);
   const distancia = 80 + ((i * 37) % 70);
@@ -58,12 +47,43 @@ const CONFETE = Array.from({ length: 18 }, (_, i) => {
   };
 });
 
+type Tecla = { rotulo: string; x: number; y: number; largura: number; altura: number; cor: string; tinta: string };
+
+// The keypad as on the real one: black numbers, 0 under the middle column,
+// and BRANCO, CORRIGE and a tall CONFIRMA beside them.
+const NUMEROS: Tecla[] = '1234567890'.split('').map((rotulo, i) => ({
+  rotulo,
+  x: 114 + (rotulo === '0' ? 1 : i % 3) * 22,
+  y: 128 + (rotulo === '0' ? 3 : Math.floor(i / 3)) * 18,
+  largura: 17.5,
+  altura: 12.7,
+  cor: '#1d1d1f',
+  tinta: '#f5f5f7',
+}));
+const BRANCO: Tecla = { rotulo: 'BRANCO', x: 180, y: 128, largura: 26, altura: 12.7, cor: '#f7f7f5', tinta: '#1d1d1f' };
+const CORRIGE: Tecla = { rotulo: 'CORRIGE', x: 180, y: 146, largura: 26, altura: 12.7, cor: '#f26a1b', tinta: '#1d1d1f' };
+const CONFIRMA: Tecla = { rotulo: 'CONFIRMA', x: 180, y: 164.5, largura: 26, altura: 30.5, cor: '#5fae63', tinta: '#0c1a10' };
+
+/** The keys pressed, in order, and when. */
+function apertos(emBranco: boolean): { tecla: Tecla; quando: number }[] {
+  return [
+    ...(emBranco
+      ? [{ tecla: BRANCO, quando: T.primeira }]
+      : [
+          { tecla: NUMEROS[2], quando: T.primeira },
+          { tecla: NUMEROS[1], quando: T.segunda },
+        ]),
+    { tecla: CONFIRMA, quando: T.confirma },
+  ];
+}
+
 /**
- * Confirms a ballot that just went in: the vote turns into a paper ballot
- * that folds and drops into a ballot box, then a green check. A blank vote is
- * a blank paper. Tapping anywhere or Esc closes it right away; it also closes
- * by itself. The vote is already counted when this shows — closing early
- * changes nothing. With reduced motion, the box and the check just appear.
+ * Confirms a ballot that just went in: an electronic ballot box where 3 and 2
+ * are typed (BRANCO, for a blank vote), then CONFIRMA, with the box's own
+ * sounds, and its screen says FIM. Tapping anywhere or Esc closes it right
+ * away; it also closes by itself. The vote is already counted when this
+ * shows — closing early changes nothing. With reduced motion, the box just
+ * shows with FIM on its screen.
  */
 export function UrnaVoto({ quantos, emBranco, onFim }: { quantos: number; emBranco: boolean; onFim: () => void }) {
   const reduzido = usePrefersReducedMotion();
@@ -77,15 +97,17 @@ export function UrnaVoto({ quantos, emBranco, onFim }: { quantos: number; emBran
 
   useEffect(() => {
     const auto = setTimeout(fechar, FECHA_SOZINHO_MS);
-    // The electronic ballot box's sound as the paper goes in (right away when nothing moves).
-    const som = setTimeout(() => void tocarSomDaUrna(), reduzido ? 0 : T.engole);
+    // A beep on each key and the whole sound on CONFIRMA (just that, right away, when nothing moves).
+    const sons = reduzido
+      ? [setTimeout(() => void tocarSomDaUrna('confirma'), 0)]
+      : apertos(emBranco).map(({ tecla, quando }) => setTimeout(() => void tocarSomDaUrna(tecla === CONFIRMA ? 'confirma' : 'tecla'), quando));
     const tecla = (e: KeyboardEvent) => {
       if (e.key === 'Escape') fechar();
     };
     window.addEventListener('keydown', tecla);
     return () => {
       clearTimeout(auto);
-      clearTimeout(som);
+      sons.forEach(clearTimeout);
       window.removeEventListener('keydown', tecla);
     };
   }, []);
@@ -127,8 +149,8 @@ export function UrnaVoto({ quantos, emBranco, onFim }: { quantos: number; emBran
         cursor: 'pointer',
       }}
     >
-      <div role="status" aria-live="polite" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-6)', textAlign: 'center' }}>
-        <Cena reduzido={reduzido} emBranco={emBranco} />
+      <div role="status" aria-live="polite" style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-6)', textAlign: 'center' }}>
+        <Cena emBranco={emBranco} />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', maxWidth: '30ch' }}>
           <span
             style={{
@@ -157,297 +179,259 @@ export function UrnaVoto({ quantos, emBranco, onFim }: { quantos: number; emBran
 
 const absoluto: CSSProperties = { position: 'absolute' };
 
-/** The box, the paper, the confetti and the check. Decorative: the words say it all for a screen reader. */
-function Cena({ reduzido, emBranco }: { reduzido: boolean; emBranco: boolean }) {
-  const centro = CENA.largura / 2;
+/** The box, the glow and the confetti. Decorative: the words say it all for a screen reader. */
+function Cena({ emBranco }: { emBranco: boolean }) {
+  // Where FIM shows, in % of the scene: the glow and the confetti come from there.
+  const meio = { left: `${(MEIO_DA_TELA.x / CENA.largura) * 100}%`, top: `${(MEIO_DA_TELA.y / CENA.altura) * 100}%` };
   return (
-    <div aria-hidden style={{ position: 'relative', width: CENA.largura, height: CENA.altura }}>
-      {/* A green glow behind the box when the paper lands. */}
+    <div aria-hidden style={{ position: 'relative', width: 'min(340px, 100%)' }}>
+      {/* A green glow behind the screen as it says FIM. */}
       <div
         style={{
           ...absoluto,
-          left: centro - 140,
-          top: FENDA - 140,
-          width: 280,
-          height: 280,
+          left: `calc(${meio.left} - 150px)`,
+          top: `calc(${meio.top} - 150px)`,
+          width: 300,
+          height: 300,
           borderRadius: '50%',
           background: 'radial-gradient(circle, rgba(127,185,138,.42) 0%, rgba(127,185,138,0) 62%)',
           opacity: 0,
-          animation: `urna-brilho 1400ms var(--ease-out) ${T.engole}ms both`,
+          animation: `urna-brilho 1400ms var(--ease-out) ${T.fim}ms both`,
         }}
       />
 
-      <Urna camada="tras" />
-
-      {reduzido ? null : (
-        <>
-          <div
-            style={{
-              ...absoluto,
-              left: (CENA.largura - PAPEL.largura) / 2,
-              top: PAPEL.topo,
-              width: PAPEL.largura,
-              height: PAPEL.altura,
-              willChange: 'transform',
-              animation: `cedula-voo-x ${VOO_MS}ms ${T.aparece}ms both`,
-            }}
-          >
-            <div style={{ ...absoluto, inset: 0, willChange: 'transform, opacity', animation: `cedula-voo-y ${VOO_MS}ms ${T.aparece}ms both` }}>
-              {/* Leans around the middle of the folded paper (its bottom half). */}
-              <div
-                style={{
-                  ...absoluto,
-                  inset: 0,
-                  perspective: 300,
-                  transformOrigin: '50% 75%',
-                  willChange: 'transform',
-                  animation: `cedula-giro ${VOO_MS}ms ${T.aparece}ms both`,
-                }}
-              >
-                <Metade parte="baixo" emBranco={emBranco}>
-                  {/* The top half's shadow passing over it as it folds. */}
-                  <Sombra animacao={`cedula-sombra-baixo ${DOBRA_MS}ms var(--ease-in-out) ${T.dobra}ms both`} />
-                </Metade>
-                {/* The top half folds down over the bottom one, showing its back. */}
-                <div
-                  style={{
-                    ...absoluto,
-                    left: 0,
-                    top: 0,
-                    width: '100%',
-                    height: PAPEL.altura / 2,
-                    transformOrigin: '50% 100%',
-                    transformStyle: 'preserve-3d',
-                    willChange: 'transform',
-                    animation: `cedula-dobra ${DOBRA_MS}ms var(--ease-in-out) ${T.dobra}ms both`,
-                  }}
-                >
-                  <Metade parte="cima" emBranco={emBranco}>
-                    {/* Darker as it turns away from the light… */}
-                    <Sombra animacao={`cedula-sombra ${DOBRA_MS / 2}ms ease-in ${T.dobra}ms both`} />
-                  </Metade>
-                  <div
-                    style={{
-                      ...absoluto,
-                      inset: 0,
-                      background: 'linear-gradient(180deg, var(--chalk-100), #d6d6dc)',
-                      borderRadius: '4px 4px 0 0',
-                      transform: 'rotateX(180deg)',
-                      backfaceVisibility: 'hidden',
-                      WebkitBackfaceVisibility: 'hidden',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    {/* …and its back lighter as it lands face up. */}
-                    <Sombra animacao={`cedula-luz ${DOBRA_MS / 2}ms ease-out ${T.dobra + DOBRA_MS / 2}ms both`} />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      <Urna camada="frente" />
-
-      {reduzido ? null : (
-        <>
-          {/* Confetti bursting out of the slot. */}
-          {CONFETE.map((c, i) => (
-            <span
-              key={i}
-              style={
-                {
-                  ...absoluto,
-                  left: centro - c.largura / 2,
-                  top: FENDA - c.altura / 2,
-                  width: c.largura,
-                  height: c.altura,
-                  borderRadius: c.redondo ? '50%' : 2,
-                  background: c.cor,
-                  opacity: 0,
-                  willChange: 'transform, opacity',
-                  '--dx': `${c.dx}px`,
-                  '--dy': `${c.dy}px`,
-                  '--giro': `${c.giro}deg`,
-                  animation: `urna-confete ${c.duracao}ms ${T.confete + c.atraso}ms both`,
-                } as CSSProperties
-              }
-            />
-          ))}
-
-          {/* Rings spreading from the check as it lands. */}
-          {[0, 240].map((atraso) => (
-            <div
-              key={atraso}
-              style={{
-                ...absoluto,
-                left: centro - 28,
-                top: 42,
-                width: 56,
-                height: 56,
-                borderRadius: '50%',
-                border: `2px solid ${VERDE}`,
-                opacity: 0,
-                // forwards, not both: while it waits its turn the ring stays hidden (its first frame is a visible ring).
-                animation: `urna-onda 1200ms var(--ease-out) ${T.check + 380 + atraso}ms forwards`,
-              }}
-            />
-          ))}
-        </>
-      )}
-
-      {/* The check rises out of the slot, and its tick draws itself. */}
-      <div
-        style={{
-          ...absoluto,
-          left: centro - 28,
-          top: 42,
-          width: 56,
-          height: 56,
-          borderRadius: '50%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: VERDE,
-          boxShadow: '0 0 0 8px rgba(127,185,138,.18), 0 12px 32px rgba(127,185,138,.25)',
-          willChange: 'transform, opacity',
-          animation: `urna-check 820ms ${T.check}ms both`,
-        }}
-      >
-        <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
-          <path
-            d="M5 12.5 9.5 17 19 7.5"
-            stroke="#0c1a10"
-            strokeWidth="2.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeDasharray="22"
-            style={{ animation: `urna-risco 440ms var(--ease-out) ${T.check + 360}ms both` }}
-          />
-        </svg>
+      <div style={{ position: 'relative', transformOrigin: '50% 100%', animation: 'urna-entra 820ms cubic-bezier(.2,.8,.3,1) both' }}>
+        <Urna emBranco={emBranco} />
       </div>
+
+      {/* Confetti bursting out of the screen. */}
+      {CONFETE.map((c, i) => (
+        <span
+          key={i}
+          style={
+            {
+              ...absoluto,
+              left: `calc(${meio.left} - ${c.largura / 2}px)`,
+              top: `calc(${meio.top} - ${c.altura / 2}px)`,
+              width: c.largura,
+              height: c.altura,
+              borderRadius: c.redondo ? '50%' : 2,
+              background: c.cor,
+              opacity: 0,
+              willChange: 'transform, opacity',
+              '--dx': `${c.dx}px`,
+              '--dy': `${c.dy}px`,
+              '--giro': `${c.giro}deg`,
+              animation: `urna-confete ${c.duracao}ms ${T.fim + 20 + c.atraso}ms both`,
+            } as CSSProperties
+          }
+        />
+      ))}
     </div>
   );
 }
 
 /**
- * One layer of the ballot box. "tras": the back half of the lid and the top
- * of the slot, behind the paper. "frente": the box's front with the 32, the
- * lid's front edge and the bottom of the slot, over the paper — so what goes
- * past the slot disappears into the box. Both bounce in, squash and hop
- * together: same size, same place, same animations.
+ * The ballot box: a light grey shell, the screen in its black frame on top,
+ * the keypad below, and the class's name where the real one has the
+ * electoral court's. The keys pressed sink in under a fingertip.
  */
-function Urna({ camada }: { camada: 'tras' | 'frente' }) {
-  const contorno = 'rgba(169,211,232,.38)';
-  // The lid hops around the middle of its front edge, in the drawing's own coordinates (both layers alike).
-  const tampa: CSSProperties = { transformBox: 'view-box', transformOrigin: '84px 26px', animation: `urna-tampa 620ms var(--ease-out) ${T.engole}ms` };
+function Urna({ emBranco }: { emBranco: boolean }) {
+  const lista = apertos(emBranco);
+  const quando = (t: Tecla) => lista.find((a) => a.tecla === t)?.quando;
   return (
-    <svg
-      width={URNA.largura}
-      height={URNA.altura}
-      viewBox={`0 0 ${URNA.largura} ${URNA.altura}`}
-      style={{
-        ...absoluto,
-        left: (CENA.largura - URNA.largura) / 2,
-        top: URNA.topo,
-        overflow: 'visible',
-        transformOrigin: '50% 100%',
-        willChange: 'transform',
-        animation: `urna-entra 820ms cubic-bezier(.2,.8,.3,1) both, urna-engole 720ms var(--ease-out) ${T.engole}ms`,
-      }}
-    >
-      {camada === 'tras' ? (
-        // The lid from its back edge to just past the slot's middle line (the front layer covers the overlap).
-        <g style={tampa}>
-          <path d="M16 8 H152 L160.2 18.6 H7.8 Z" fill="var(--wall-500)" />
-          <path d="M8.2 18 L16 8 H152 L159.8 18" fill="none" stroke={contorno} strokeLinejoin="round" />
-          <path d="M50 14 H118 A4 4 0 0 1 122 18 V18.6 H46 V18 A4 4 0 0 1 50 14 Z" fill="var(--ink-950)" />
-        </g>
-      ) : (
-        <>
-          {/* Square on top, where the lid sits on it, rounded only at the bottom:
-              the lid's corners meet the box's exactly. */}
-          <path d="M2 26 H166 V114 A12 12 0 0 1 154 126 H14 A12 12 0 0 1 2 114 Z" fill="var(--ink-800)" stroke={contorno} strokeLinejoin="round" />
-          {/* The class's 32 on the front. */}
-          <image href={LOGO} x="51" y="36" width="66" height="78" preserveAspectRatio="xMidYMid meet" />
-          <g style={tampa}>
-            <path d="M8.2 18 H159.8 L166 26 H2 Z" fill="var(--wall-500)" />
-            <path d="M8.2 18 L2 26 H166 L159.8 18" fill="none" stroke={contorno} strokeLinejoin="round" />
-            <path d="M46 18 H122 A4 4 0 0 1 118 22 H50 A4 4 0 0 1 46 18 Z" fill="var(--ink-950)" />
-          </g>
-        </>
-      )}
+    <svg viewBox={`0 0 ${CENA.largura} ${CENA.altura}`} style={{ display: 'block', width: '100%', height: 'auto', overflow: 'visible' }}>
+      <defs>
+        <linearGradient id="urna-casco" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#eeeff1" />
+          <stop offset="1" stopColor="#d9dadd" />
+        </linearGradient>
+      </defs>
+      {/* Its thickness under the front, and the front. */}
+      <rect x={4} y={9} width={252} height={218} rx={7} fill="#9fa1a6" />
+      <rect x={4} y={4} width={252} height={218} rx={7} fill="url(#urna-casco)" stroke="#c4c6ca" strokeWidth={0.8} />
+      {/* The keypad's face, a step below the screen's. */}
+      <path d="M4 117 H256" stroke="#c4c6ca" strokeWidth={0.8} />
+      <path d="M4 118.2 H256" stroke="#f7f8f9" strokeWidth={0.8} />
+
+      {/* The screen in its frame. */}
+      <rect x={40} y={8} width={182} height={105} rx={2} fill="#141416" />
+      <Tela emBranco={emBranco} />
+
+      {/* Where the real one has the electoral court's mark, the class's — in the plastic. */}
+      <rect x={43} y={149.5} width={60.6} height={29.3} rx={2} fill="none" stroke="#b3b5ba" strokeWidth={0.7} />
+      <text x={73.3} y={164} dy=".36em" textAnchor="middle" fontSize={11} fontWeight={700} fontFamily={FONTE} fill="none" stroke="#a3a5aa" strokeWidth={0.45}>
+        Turma 32
+      </text>
+      <rect x={43} y={181} width={60.6} height={14} rx={2} fill="none" stroke="#b3b5ba" strokeWidth={0.7} />
+      <text x={73.3} y={188} dy=".36em" textAnchor="middle" fontSize={8} fontFamily={FONTE} fill="none" stroke="#a3a5aa" strokeWidth={0.4}>
+        UE2026
+      </text>
+
+      {[...NUMEROS, BRANCO, CORRIGE, CONFIRMA].map((t) => (
+        <Tecla key={t.rotulo} tecla={t} aperta={quando(t)} />
+      ))}
+      {/* The fingertip, over every key. */}
+      {lista.map(({ tecla, quando }) => (
+        <circle
+          key={tecla.rotulo}
+          cx={tecla.x + tecla.largura / 2}
+          cy={tecla.y + tecla.altura / 2}
+          r={10}
+          // Tinted, so it shows on the white key as on the black ones.
+          fill="rgba(132,188,218,.45)"
+          stroke="rgba(169,211,232,.95)"
+          strokeWidth={0.8}
+          opacity={0}
+          style={{ transformBox: 'fill-box', transformOrigin: 'center', animation: `urna-toque 560ms ease-out ${quando - 190}ms both` }}
+        />
+      ))}
+
+      {/* Vents along the bottom. */}
+      {Array.from({ length: 16 }, (_, i) => (
+        <rect key={i} x={31 + i * 13} y={216.5} width={6} height={1.6} rx={0.8} fill="#b9bbbf" />
+      ))}
     </svg>
   );
 }
 
-/** A shade over half of the paper, for the fold. Starts invisible: its animation brings it in. */
-function Sombra({ animacao }: { animacao: string }) {
+/** A key: its side shows under it until it's pressed in at `aperta` (ms). Labels and Braille dots as on the real one. */
+function Tecla({ tecla, aperta }: { tecla: Tecla; aperta?: number }) {
+  const { x, y, largura, altura } = tecla;
+  const numero = tecla.rotulo.length === 1;
+  const apertar = (nome: string) => (aperta === undefined ? undefined : `${nome} 260ms ease-out ${aperta - 70}ms both`);
   return (
-    <div
-      style={{
-        ...absoluto,
-        inset: 0,
-        borderRadius: 'inherit',
-        background: 'linear-gradient(0deg, rgba(0,0,0,.34), rgba(0,0,0,.12))',
-        opacity: 0,
-        pointerEvents: 'none',
-        animation: animacao,
-      }}
-    />
+    <>
+      <rect x={x} y={y + 1.6} width={largura} height={altura} rx={1.6} fill="rgba(0,0,0,.4)" />
+      <g style={{ animation: apertar('urna-tecla') }}>
+        <rect x={x} y={y} width={largura} height={altura} rx={1.6} fill={tecla.cor} />
+        <text
+          x={numero ? x + 5.5 : x + largura / 2}
+          y={numero ? y + altura / 2 : y + 4.4}
+          dy=".36em"
+          textAnchor="middle"
+          fontSize={numero ? 8 : 4.3}
+          fontWeight={700}
+          fontFamily={FONTE}
+          fill={tecla.tinta}
+        >
+          {tecla.rotulo}
+        </text>
+        <Braille
+          x={numero ? x + 10.5 : x + largura / 2 - 3}
+          y={numero ? y + 3.6 : y + 8.2}
+          texto={tecla.rotulo}
+          cor={numero ? 'rgba(255,255,255,.45)' : 'rgba(0,0,0,.35)'}
+        />
+        {aperta === undefined ? null : (
+          <rect x={x} y={y} width={largura} height={altura} rx={1.6} fill="#000" opacity={0} style={{ animation: apertar('urna-tecla-sombra') }} />
+        )}
+      </g>
+    </>
+  );
+}
+
+/** Raised dots like the keys' Braille: a few cells, each from the label's letters (decorative, not real Braille). */
+function Braille({ x, y, texto, cor }: { x: number; y: number; texto: string; cor: string }) {
+  const celulas = texto.length === 1 ? [texto.charCodeAt(0)] : [texto.charCodeAt(0), texto.charCodeAt(1), texto.charCodeAt(2)];
+  return (
+    <>
+      {celulas.flatMap((codigo, c) =>
+        Array.from({ length: 6 }, (_, p) =>
+          (codigo >> p) & 1 || p === 0 ? (
+            <circle key={`${c}-${p}`} cx={x + c * 2.6 + (p % 2) * 1.1} cy={y + Math.floor(p / 2) * 1.1} r={0.36} fill={cor} />
+          ) : null,
+        ),
+      )}
+    </>
   );
 }
 
 /**
- * Half of the paper ballot: a header line on top, then rows with a box each,
- * spaced evenly across the fold (a row every 15px). A blank vote has no box
- * marked.
+ * The screen, as the real one goes: "SEU VOTO PARA" and the number's boxes,
+ * filled as the keys are pressed — then the candidate (the class, with its 32
+ * as the photo) and how to confirm. A blank vote says "VOTO EM BRANCO". Once
+ * confirmed, it all goes and FIM shows.
  */
-function Metade({ parte, emBranco, children }: { parte: 'cima' | 'baixo'; emBranco: boolean; children?: ReactNode }) {
-  const linhas = parte === 'cima' ? [false, true] : [true, false];
+function Tela({ emBranco }: { emBranco: boolean }) {
+  const texto = { fontFamily: FONTE, fill: '#1d1d1f' };
+  const aparece = (quando: number): CSSProperties => ({ animation: `urna-aparece 180ms ease-out ${quando}ms both` });
+  // The candidate and the instructions, once the number is complete (or BRANCO pressed).
+  const completo = (emBranco ? T.primeira : T.segunda) + 160;
+  const esquerda = TELA.x + 5;
   return (
-    <div
-      style={{
-        ...absoluto,
-        left: 0,
-        top: parte === 'cima' ? 0 : PAPEL.altura / 2,
-        width: '100%',
-        height: PAPEL.altura / 2,
-        boxSizing: 'border-box',
-        padding: parte === 'cima' ? '6px 9px 0' : '3px 9px 0',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 6,
-        background: 'var(--chalk-050)',
-        borderRadius: parte === 'cima' ? '4px 4px 0 0' : '0 0 4px 4px',
-        boxShadow: parte === 'baixo' ? '0 10px 24px rgba(0,0,0,.35)' : undefined,
-        backfaceVisibility: 'hidden',
-        WebkitBackfaceVisibility: 'hidden',
-      }}
-    >
-      {parte === 'cima' ? <div style={{ width: 26, height: 3, borderRadius: 2, background: 'var(--ice-500)' }} /> : null}
-      {linhas.map((marcada, i) => (
-        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-          <div
-            style={{
-              width: 9,
-              height: 9,
-              flex: '0 0 auto',
-              borderRadius: 2,
-              border: '1.5px solid rgba(0,0,0,.4)',
-              background: marcada && !emBranco ? 'var(--ink-900)' : 'transparent',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            {marcada && !emBranco ? <Check size={7} strokeWidth={4} color="var(--chalk-050)" /> : null}
-          </div>
-          <div style={{ flex: 1, height: 2, borderRadius: 1, background: 'rgba(0,0,0,.16)' }} />
-        </div>
-      ))}
-      {children}
-    </div>
+    <>
+      <rect x={TELA.x} y={TELA.y} width={TELA.largura} height={TELA.altura} fill="#e6f1f0" />
+      <g opacity={0} style={{ animation: `urna-some 140ms ease-in ${T.confirma + 40}ms both` }}>
+        <text x={esquerda} y={22} fontSize={5} fontWeight={700} {...texto}>
+          SEU VOTO PARA
+        </text>
+        <text x={MEIO_DA_TELA.x - (emBranco ? 0 : 18)} y={33} textAnchor="middle" fontSize={8} fontWeight={700} {...texto}>
+          Formatura
+        </text>
+        {emBranco ? (
+          <text x={MEIO_DA_TELA.x} y={MEIO_DA_TELA.y} dy=".36em" textAnchor="middle" fontSize={11} fontWeight={700} {...texto} style={aparece(T.primeira + 40)}>
+            VOTO EM BRANCO
+          </text>
+        ) : (
+          <>
+            <text x={esquerda} y={50} fontSize={5} {...texto}>
+              Número:
+            </text>
+            {['3', '2'].map((digito, i) => (
+              <g key={digito}>
+                <rect x={82 + i * 12} y={40.5} width={10} height={13} fill="#fff" stroke="#1d1d1f" strokeWidth={0.6} />
+                <text
+                  x={87 + i * 12}
+                  y={47}
+                  dy=".36em"
+                  textAnchor="middle"
+                  fontSize={9}
+                  fontWeight={700}
+                  {...texto}
+                  style={{ animation: `urna-digito 140ms ease-out ${(i ? T.segunda : T.primeira) + 20}ms both` }}
+                >
+                  {digito}
+                </text>
+              </g>
+            ))}
+            <g style={aparece(completo)}>
+              <text x={esquerda} y={66} fontSize={5} {...texto}>
+                Nome:
+              </text>
+              <text x={esquerda + 17} y={66} fontSize={6.5} fontWeight={700} {...texto}>
+                Turma 32
+              </text>
+              <rect x={166} y={21} width={34} height={41} fill="#fff" stroke="#1d1d1f" strokeWidth={0.5} />
+              <image href={LOGO} x={168} y={23} width={30} height={37} preserveAspectRatio="xMidYMid meet" />
+            </g>
+          </>
+        )}
+        <g style={aparece(completo)}>
+          <path d={`M${TELA.x} 78 H${TELA.x + TELA.largura}`} stroke="#1d1d1f" strokeWidth={0.4} />
+          <text x={esquerda} y={85} fontSize={4.2} {...texto}>
+            Aperte a tecla:
+          </text>
+          <text x={esquerda + 4} y={91} fontSize={4.2} {...texto}>
+            <tspan fontWeight={700}>VERDE</tspan> para CONFIRMAR este voto
+          </text>
+          <text x={esquerda + 4} y={97} fontSize={4.2} {...texto}>
+            <tspan fontWeight={700}>LARANJA</tspan> para REINICIAR este voto
+          </text>
+        </g>
+      </g>
+      <text
+        x={MEIO_DA_TELA.x}
+        y={MEIO_DA_TELA.y}
+        dy=".36em"
+        textAnchor="middle"
+        fontSize={36}
+        fontWeight={700}
+        {...texto}
+        style={{ transformBox: 'fill-box', transformOrigin: 'center', animation: `urna-fim 520ms cubic-bezier(.2,.8,.3,1) ${T.fim}ms both` }}
+      >
+        FIM
+      </text>
+    </>
   );
 }

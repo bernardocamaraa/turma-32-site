@@ -710,7 +710,7 @@ function PerguntaFormando({
               </span>
             ) : null}
 
-            {/* A paper ballot, like the one that drops into the box (UrnaVoto): a line per option, a box to mark, and blank at the end. */}
+            {/* A paper ballot: a line per option, a box to mark, and blank at the end. */}
             <div
               style={{
                 position: 'relative',
@@ -787,8 +787,7 @@ function PerguntaFormando({
 
 /**
  * A line of the paper ballot: the box to mark, then the option — the box
- * fills in dark with a check, as on the ballot in UrnaVoto. The whole line
- * is the tap target.
+ * fills in dark with a check. The whole line is the tap target.
  */
 function LinhaDaCedula({
   papel,
