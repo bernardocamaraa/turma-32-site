@@ -11,9 +11,11 @@ import { Turma } from './pages/Turma';
 import { Mesas } from './pages/Mesas';
 
 // Loaded when opened, so they don't weigh on every visitor's first load: the
-// vote is reached through its own link, the committee area is committee only.
+// vote and its results are reached through their own links, the committee
+// area is committee only.
 const Votacao = lazy(() => import('./pages/Votacao').then((m) => ({ default: m.Votacao })));
 const Comissao = lazy(() => import('./pages/Comissao').then((m) => ({ default: m.Comissao })));
+const Resultados = lazy(() => import('./pages/Resultados').then((m) => ({ default: m.Resultados })));
 
 // Where the committee's pages used to be, before they became tabs of the
 // committee area — old links, bookmarks and the vote notification still land
@@ -62,6 +64,14 @@ function AppRoutes() {
           element={
             <Suspense fallback={<Carregando tela />}>
               <Comissao />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/resultados"
+          element={
+            <Suspense fallback={<Carregando tela />}>
+              <Resultados />
             </Suspense>
           }
         />

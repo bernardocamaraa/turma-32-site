@@ -99,6 +99,19 @@ alter table public.votacao_perguntas add column if not exists resultado_totais b
 -- arranging: it goes at the end, by when it was made.
 alter table public.votacao_perguntas add column if not exists ordem int;
 
+-- Names that gave up their place in this category ("abriu mão": chose to
+-- take another one). They stay on the ballot and their votes still count;
+-- only when the places are worked out (eleger in the Edge Function) they're
+-- left out of this category, and the place goes to whoever came next. As
+-- the committee wrote them; compared like every name (chave_opcao).
+alter table public.votacao_perguntas add column if not exists abriram_mao text[] not null default '{}';
+
+-- The role the winners take, short ("Orador", "Juramento final"): the
+-- released result shows each winner over a pulpit with it written on the
+-- front. Null: the result shows as names only.
+alter table public.votacao_perguntas add column if not exists cargo text
+  check (cargo is null or char_length(btrim(cargo)) between 2 and 40);
+
 -- Puts the questions in the order of `p_ids`. Any not in it (made meanwhile
 -- on another committee phone) keep their place, after those. All in one
 -- statement, so the order never ends up half applied.

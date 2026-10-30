@@ -30,7 +30,7 @@ import {
 } from '../lib/votacao';
 import { useIsMobile, usePrefersReducedMotion } from '../lib/useViewport';
 
-const POLL_MS = 20000;
+export const POLL_MS = 20000;
 
 const texto = { fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)', margin: 0 };
 const pequeno = { fontSize: 'var(--fs-body-sm)', color: 'var(--text-faint)' };
@@ -199,6 +199,7 @@ export function Votacao({ codigoComissao }: { codigoComissao?: string }) {
                   p={p}
                   numero={i + 1}
                   total={dados.formandos.length}
+                  formandos={dados.formandos}
                   conferir={conferir}
                   conferirEdicao={conferirEdicao}
                   salvando={salvando}
@@ -665,6 +666,7 @@ function PerguntaFormando({
             brancos={p.brancos}
             maximo={p.maximo}
             eleitosEmOutra={p.eleitosEmOutra}
+            cargo={p.cargo}
             segurar={naUrna}
           />
         ) : p.jaVotou ? (
@@ -898,7 +900,7 @@ function Aviso({ children, icone }: { children: ReactNode; icone?: boolean }) {
 // The reveal of a result, in ms from when it comes into view: the caption
 // first, then each name in turn (each taking `nome` to come out of the
 // blur), and the totals counting up at the end.
-const REVELA = { primeiro: 700, entre: 800, nome: 1100, contagem: 900 };
+export const REVELA = { primeiro: 700, entre: 800, nome: 1100, contagem: 900 };
 
 /**
  * When a result plays its reveal: 'espera' until it scrolls into view (and
@@ -906,7 +908,7 @@ const REVELA = { primeiro: 700, entre: 800, nome: 1100, contagem: 900 };
  * 'agora'. 'pronto' with reduced motion (or no IntersectionObserver):
  * everything is just there.
  */
-function useRevelacao<T extends HTMLElement>(segurar = false): [RefObject<T>, 'espera' | 'agora' | 'pronto'] {
+export function useRevelacao<T extends HTMLElement>(segurar = false): [RefObject<T>, 'espera' | 'agora' | 'pronto'] {
   const ref = useRef<T>(null);
   const reduzido = usePrefersReducedMotion();
   const [estado, setEstado] = useState<'espera' | 'agora' | 'pronto'>(() =>
@@ -974,7 +976,8 @@ const aos = (ms: number) => ({ '--atraso': `${Math.round(ms)}ms` }) as CSSProper
  * the committee shows them (Exibicao). `resultado` comes already cut down
  * to what shows: by the server for the class, by resultadoDaTurma in the
  * committee's preview. More names than `primeiros` means a tie for the
- * last place. `segurar`: wait to reveal (see useRevelacao).
+ * last place. `segurar`: wait to reveal (see useRevelacao). With a `cargo`,
+ * each name comes out over a pulpit with the role on it (Pulpito).
  */
 function ResultadoTurma({
   resultado,
@@ -983,6 +986,7 @@ function ResultadoTurma({
   brancos,
   maximo,
   eleitosEmOutra = [],
+  cargo = null,
   segurar = false,
 }: {
   resultado: Resultado[];
@@ -990,8 +994,9 @@ function ResultadoTurma({
   validos: number | null;
   brancos: number | null;
   maximo: number;
-  /** Who'd have shown here but was elected in another category (Pergunta.eleitosEmOutra). */
-  eleitosEmOutra?: { nome: string; em: string | null }[];
+  /** Who'd have shown here but was elected in another category, or gave the place up (Pergunta.eleitosEmOutra). */
+  eleitosEmOutra?: { nome: string; em: string | null; abriuMao?: boolean }[];
+  cargo?: string | null;
   segurar?: boolean;
 }) {
   const [ref, estado] = useRevelacao<HTMLDivElement>(segurar);
@@ -1001,17 +1006,20 @@ function ResultadoTurma({
   const fim = nome(Math.max(n - 1, 0)) + REVELA.nome * 0.6;
 
   // Where the confetti bursts from: the middle of the names, which may
-  // fill only part of the row.
+  // fill only part of the row — and, over pulpits, their height too.
   const lista = useRef<HTMLOListElement>(null);
   const [meio, setMeio] = useState<number | null>(null);
+  const [altura, setAltura] = useState<number | undefined>(undefined);
   useEffect(() => {
     const ol = lista.current;
     if (estado !== 'agora' || !ol || ol.children.length === 0) return;
-    const nomes = [...ol.children].map((li) => li.getBoundingClientRect());
+    const nomes = [...ol.querySelectorAll('[data-nome]')].map((el) => el.getBoundingClientRect());
     const esquerda = Math.min(...nomes.map((r) => r.left));
     const direita = Math.max(...nomes.map((r) => r.right));
-    setMeio((esquerda + direita) / 2 - ol.getBoundingClientRect().left);
-  }, [estado]);
+    const caixa = ol.getBoundingClientRect();
+    setMeio((esquerda + direita) / 2 - caixa.left);
+    if (cargo) setAltura((Math.min(...nomes.map((r) => r.top)) + Math.max(...nomes.map((r) => r.bottom))) / 2 - caixa.top);
+  }, [estado, cargo]);
 
   return (
     <div
@@ -1023,38 +1031,63 @@ function ResultadoTurma({
         <Aviso>{brancos ? 'Todos os votos foram em branco.' : 'Nenhuma opção recebeu voto.'}</Aviso>
       ) : (
         <>
-          <span className="revela-parte" style={{ ...aos(0), fontSize: 'var(--fs-body)', fontWeight: 500, color: 'var(--text-muted)' }}>
-            {/* Someone ahead went to another category: these aren't simply the most voted. */}
-            {eleitosEmOutra.length > 0 ? (n === 1 ? 'Fica com a vaga' : 'Ficam com as vagas') : n === 1 ? 'O mais votado' : `Os ${n} mais votados`}
-          </span>
-          <div style={{ position: 'relative' }}>
-            <ol ref={lista} style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexWrap: 'wrap', gap: 'var(--space-5) var(--space-8)' }}>
-              {resultado.map((r, i) => (
-                <li key={r.opcao} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <span
-                    className="revela-parte revela-nome"
-                    style={{
-                      ...aos(nome(i)),
-                      display: 'block',
-                      fontFamily: 'var(--font-display)',
-                      fontSize: 'var(--fs-display-3)',
-                      fontWeight: 700,
-                      letterSpacing: '-.035em',
-                      lineHeight: 1.05,
-                      textWrap: 'balance' as never,
-                    }}
-                  >
-                    {r.opcao}
-                  </span>
-                  {r.votos !== null ? (
-                    <span className="revela-parte" style={{ ...aos(nome(i) + 600), fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
-                      {plural(r.votos, 'voto', 'votos')}
+          {/* Over pulpits the role says it all; a list of names says what it is. */}
+          {cargo ? null : (
+            <span className="revela-parte" style={{ ...aos(0), fontSize: 'var(--fs-body)', fontWeight: 500, color: 'var(--text-muted)' }}>
+              {/* Someone ahead went to another category: these aren't simply the most voted. */}
+              {eleitosEmOutra.length > 0 ? (n === 1 ? 'Fica com a vaga' : 'Ficam com as vagas') : n === 1 ? 'O mais votado' : `Os ${n} mais votados`}
+            </span>
+          )}
+          {/* The pulpits' lights spread past the outer ones: cut at the sides, so a phone doesn't scroll sideways. */}
+          <div style={{ position: 'relative', overflowX: cargo ? 'clip' : undefined }}>
+            {cargo ? (
+              <ol
+                ref={lista}
+                style={{
+                  listStyle: 'none',
+                  margin: 0,
+                  padding: 'var(--space-8) 0 0',
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  justifyContent: 'center',
+                  alignItems: 'flex-end',
+                  gap: 'var(--space-7) var(--space-5)',
+                }}
+              >
+                {resultado.map((r, i) => (
+                  <Pulpito key={r.opcao} nome={r.opcao} votos={r.votos} cargo={cargo} atraso={nome(i)} lado={n > 1} />
+                ))}
+              </ol>
+            ) : (
+              <ol ref={lista} style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexWrap: 'wrap', gap: 'var(--space-5) var(--space-8)' }}>
+                {resultado.map((r, i) => (
+                  <li key={r.opcao} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span
+                      data-nome
+                      className="revela-parte revela-nome"
+                      style={{
+                        ...aos(nome(i)),
+                        display: 'block',
+                        fontFamily: 'var(--font-display)',
+                        fontSize: 'var(--fs-display-3)',
+                        fontWeight: 700,
+                        letterSpacing: '-.035em',
+                        lineHeight: 1.05,
+                        textWrap: 'balance' as never,
+                      }}
+                    >
+                      {r.opcao}
                     </span>
-                  ) : null}
-                </li>
-              ))}
-            </ol>
-            {estado === 'agora' && meio !== null ? <ConfeteDourado meio={meio} atraso={fim - 80} /> : null}
+                    {r.votos !== null ? (
+                      <span className="revela-parte" style={{ ...aos(nome(i) + 600), fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>
+                        {plural(r.votos, 'voto', 'votos')}
+                      </span>
+                    ) : null}
+                  </li>
+                ))}
+              </ol>
+            )}
+            {estado === 'agora' && meio !== null ? <ConfeteDourado meio={meio} altura={altura} atraso={fim - 80} /> : null}
           </div>
           {n > exibicao.primeiros ? (
             <span className="revela-parte" style={{ ...aos(fim), ...pequeno }}>
@@ -1071,8 +1104,11 @@ function ResultadoTurma({
       )}
       {eleitosEmOutra.map((e) => (
         <span key={e.nome} className="revela-parte" style={{ ...aos(fim), ...pequeno }}>
-          {e.nome} ficou com a vaga {e.em ? `em "${e.em}"` : 'em outra categoria'}, onde teve mais votos, então aqui a vaga passa para
-          quem veio depois.
+          {e.abriuMao
+            ? e.em
+              ? `${e.nome} preferiu ficar com a vaga em "${e.em}", então aqui a vaga passa para quem veio depois.`
+              : `${e.nome} abriu mão desta vaga, então ela passa para quem veio depois.`
+            : `${e.nome} ficou com a vaga ${e.em ? `em "${e.em}"` : 'em outra categoria'}, onde teve mais votos, então aqui a vaga passa para quem veio depois.`}
         </span>
       ))}
       {validos !== null && brancos !== null ? (
@@ -1081,6 +1117,58 @@ function ResultadoTurma({
         </div>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * A winner over their pulpit, as if about to speak: the pulpit with the role
+ * on its front comes up first, then a warm light comes on over it, then the
+ * name comes out of the blur like in the list of names. `lado`: one of
+ * several side by side (two speakers), so two fit across a phone.
+ */
+export function Pulpito({ nome, votos, cargo, atraso, lado }: { nome: string; votos: number | null; cargo: string; atraso: number; lado: boolean }) {
+  return (
+    <li className="pulpito" style={{ width: lado ? 'min(250px, calc(50% - 10px))' : 'min(290px, 100%)' }}>
+      <span aria-hidden className="revela-parte pulpito-luz" style={aos(atraso - 400)} />
+      <span
+        data-nome
+        className="revela-parte revela-nome"
+        style={{
+          ...aos(atraso),
+          position: 'relative',
+          display: 'block',
+          textAlign: 'center',
+          fontFamily: 'var(--font-display)',
+          fontSize: lado ? 'clamp(22px, 3.2vw, 36px)' : 'clamp(26px, 3.8vw, 42px)',
+          fontWeight: 700,
+          letterSpacing: '-.03em',
+          lineHeight: 1.08,
+          textWrap: 'balance' as never,
+        }}
+      >
+        {nome}
+      </span>
+      {votos !== null ? (
+        <span className="revela-parte" style={{ ...aos(atraso + 600), position: 'relative', marginTop: 6, fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>
+          {plural(votos, 'voto', 'votos')}
+        </span>
+      ) : null}
+      <div className="revela-parte pulpito-movel" style={aos(0)}>
+        {/* The microphone on its gooseneck, leaning toward whoever speaks. */}
+        <svg aria-hidden width="44" height="46" viewBox="0 0 44 46" style={{ display: 'block', marginBottom: -2 }}>
+          <path d="M22 46 C22 32 22 25 29 15" fill="none" stroke="#5c5c61" strokeWidth="2.5" strokeLinecap="round" />
+          <rect x="25.5" y="2" width="10" height="16" rx="5" transform="rotate(30 30.5 10)" fill="#2c2c2e" stroke="#7a7a80" strokeWidth="1.2" />
+        </svg>
+        <div className="pulpito-tampo" />
+        <div className="pulpito-corpo">
+          <div className="pulpito-placa">
+            <img src="/assets/logo-32-pequena.png" alt="" />
+            <span>{cargo}</span>
+          </div>
+        </div>
+        <div className="pulpito-base" />
+      </div>
+    </li>
   );
 }
 
@@ -1106,11 +1194,11 @@ const PECAS_DOURADAS = Array.from({ length: 26 }, (_, i) => {
 
 /**
  * Gold confetti bursting from the names (`meio`: px from the left of the
- * list), `atraso` ms after it mounts — the urna's confetti (urna-confete in
- * global.css), in gold. Its own clipped layer, so no piece widens the page
- * on a phone.
+ * list; `altura`: from its top, else just under its middle), `atraso` ms
+ * after it mounts — the urna's confetti (urna-confete in global.css), in
+ * gold. Its own clipped layer, so no piece widens the page on a phone.
  */
-function ConfeteDourado({ meio, atraso }: { meio: number; atraso: number }) {
+export function ConfeteDourado({ meio, altura, atraso }: { meio: number; altura?: number; atraso: number }) {
   return (
     <div aria-hidden style={{ position: 'absolute', inset: '-80px -8px -40px', overflow: 'hidden', pointerEvents: 'none' }}>
       {PECAS_DOURADAS.map((c, i) => (
@@ -1121,7 +1209,7 @@ function ConfeteDourado({ meio, atraso }: { meio: number; atraso: number }) {
               position: 'absolute',
               // The layer reaches 8px past the list on each side, 80px above it and 40px below.
               left: meio + 8 - c.largura / 2,
-              top: `calc(50% + 20px - ${c.altura / 2}px)`,
+              top: altura === undefined ? `calc(50% + 20px - ${c.altura / 2}px)` : 80 + altura - c.altura / 2,
               width: c.largura,
               height: c.altura,
               borderRadius: c.redondo ? '50%' : 2,
@@ -1574,6 +1662,7 @@ function PerguntaComissao({
   p,
   numero,
   total,
+  formandos,
   conferir,
   conferirEdicao,
   salvando,
@@ -1582,6 +1671,7 @@ function PerguntaComissao({
   p: Pergunta;
   numero: number;
   total: number;
+  formandos: string[];
   conferir: Conferir;
   conferirEdicao: ConferirEdicao;
   salvando: boolean;
@@ -1678,6 +1768,8 @@ function PerguntaComissao({
           </>
         )}
 
+        <CargoEVagas p={p} formandos={formandos} salvando={salvando} agir={agir} />
+
         {erro ? <p style={{ ...texto, color: 'var(--state-error)' }}>{erro}</p> : null}
 
         <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -1769,14 +1861,23 @@ function PerguntaComissao({
  * which is theirs to decide.
  */
 function EleitosEmOutra({ p }: { p: Pergunta }) {
+  const emOutra = p.eleitosEmOutra.filter((e) => !e.abriuMao);
+  const abriram = p.eleitosEmOutra.filter((e) => e.abriuMao);
   if (p.eleitosEmOutra.length === 0 && !p.empate) return null;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-      {p.eleitosEmOutra.length > 0 ? (
+      {emOutra.length > 0 ? (
         <span style={pequeno}>
           Ficam com a vaga em outra categoria, onde tiveram mais votos, e saem desta:{' '}
-          {p.eleitosEmOutra.map((e) => `${e.nome} ("${e.em}")`).join(', ')}. Aqui a vaga passa para quem veio depois (veja a prévia
+          {emOutra.map((e) => `${e.nome} ("${e.em}")`).join(', ')}. Aqui a vaga passa para quem veio depois (veja a prévia
           abaixo).
+        </span>
+      ) : null}
+      {abriram.length > 0 ? (
+        <span style={pequeno}>
+          Abriram mão desta vaga:{' '}
+          {abriram.map((e) => (e.em ? `${e.nome} (fica com "${e.em}")` : `${e.nome} (sem vaga em outra categoria)`)).join(', ')}. Aqui a vaga
+          passa para quem veio depois (veja a prévia abaixo).
         </span>
       ) : null}
       {p.empate ? (
@@ -1785,6 +1886,131 @@ function EleitosEmOutra({ p }: { p: Pergunta }) {
           categoria. O site deixou a vaga na que vem primeiro na cédula; decidam vocês onde fica.
         </span>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * For the committee: the role written on the result's pulpits, and who gave
+ * up their place in this category. Someone who gave it up stays on the
+ * ballot and their votes still count — only the places skip them here, and
+ * go to whoever came next. Both can change at any time, even with the vote
+ * open, and neither shows anything to the class before the result is out.
+ */
+function CargoEVagas({
+  p,
+  formandos,
+  salvando,
+  agir,
+}: {
+  p: Pergunta;
+  formandos: string[];
+  salvando: boolean;
+  agir: (a: AcaoVotacao) => Promise<string | null>;
+}) {
+  const [cargo, setCargo] = useState(p.cargo ?? '');
+  // Catches up with what's saved (another committee phone, the next refresh).
+  useEffect(() => setCargo(p.cargo ?? ''), [p.cargo]);
+  const [quem, setQuem] = useState('');
+  const [erro, setErro] = useState<string | null>(null);
+  const abriram = p.abriramMao ?? [];
+  const podem = nomesDaPergunta(p, formandos).filter((n) => !abriram.some((a) => chaveDoNome(a) === chaveDoNome(n)));
+  const mudouCargo = cargo.trim() !== (p.cargo ?? '');
+
+  async function salvarCargo() {
+    setErro(null);
+    setErro(await agir({ acao: 'cargo', id: p.id, cargo }));
+  }
+
+  async function abrirMao(opcao: string, sim: boolean) {
+    setErro(null);
+    const falha = await agir({ acao: 'abrirMao', id: p.id, opcao, sim });
+    setErro(falha);
+    if (!falha && sim) setQuem('');
+  }
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 'var(--space-5)',
+        padding: 'clamp(16px, 3vw, 24px)',
+        borderRadius: 'var(--radius-md)',
+        border: '1px solid var(--stroke-hair)',
+        background: 'rgba(245,245,247,.03)',
+      }}
+    >
+      <span style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-h4)', fontWeight: 600, letterSpacing: '-.015em' }}>Cargo e vagas</span>
+
+      <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <Input
+          label="Cargo"
+          hint="Aparece no púlpito de quem ganhar, no resultado. Em branco, o resultado mostra só os nomes."
+          value={cargo}
+          maxLength={40}
+          placeholder="Ex.: Orador"
+          disabled={salvando}
+          onChange={(e) => setCargo(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && mudouCargo) salvarCargo();
+          }}
+          style={{ flex: '1 1 240px', maxWidth: 360 }}
+        />
+        {mudouCargo ? (
+          <Button disabled={salvando} onClick={salvarCargo} style={{ marginBottom: 22 }}>
+            Salvar cargo
+          </Button>
+        ) : null}
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+        <span style={{ ...pequeno, fontWeight: 600 }}>Quem abriu mão da vaga nesta categoria</span>
+        <span style={pequeno}>
+          Continua na cédula e os votos continuam contando. Só a vaga daqui pula essa pessoa e vai para quem veio depois. A
+          turma só fica sabendo quando o resultado for mostrado.
+        </span>
+        {abriram.length > 0 ? (
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+            {abriram.map((nome) => (
+              <li
+                key={nome}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 'var(--space-3)',
+                  padding: '4px 4px 4px 14px',
+                  borderRadius: 'var(--radius-pill)',
+                  background: 'rgba(245,245,247,.08)',
+                  fontSize: 'var(--fs-body)',
+                }}
+              >
+                {nome}
+                <Button variant="ghost" size="sm" disabled={salvando} onClick={() => abrirMao(nome, false)}>
+                  Desfazer
+                </Button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 240px', maxWidth: 360 }}>
+            <Select
+              aria-label="Quem abriu mão da vaga"
+              options={podem}
+              placeholder="Escolha um nome"
+              value={quem}
+              disabled={salvando}
+              onChange={(e) => setQuem(e.target.value)}
+            />
+          </div>
+          <Button variant="secondary" disabled={salvando || !quem} onClick={() => abrirMao(quem, true)}>
+            Abriu mão
+          </Button>
+        </div>
+      </div>
+
+      {erro ? <p style={{ ...texto, color: 'var(--state-error)' }}>{erro}</p> : null}
     </div>
   );
 }
@@ -1880,6 +2106,7 @@ function ExibicaoResultado({
           brancos={exibicao.totais ? p.brancos : null}
           maximo={p.maximo}
           eleitosEmOutra={p.eleitosEmOutra.filter((e) => e.apareceria)}
+          cargo={p.cargo}
         />
       </div>
     </div>
@@ -2177,6 +2404,16 @@ function LinkDaVotacao() {
         <span style={{ fontSize: 'var(--fs-body)', color: 'var(--accent)', wordBreak: 'break-all' }}>{urlDaVotacao()}</span>
         <span style={pequeno}>É o mesmo para a turma toda: cada formando entra com o próprio WhatsApp.</span>
         <BotoesLink url={urlDaVotacao()} mensagem="A votação da turma está aberta! Entre com o seu WhatsApp. O voto é secreto:" />
+        <span style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-h4)', fontWeight: 600, letterSpacing: '-.015em', marginTop: 'var(--space-5)' }}>
+          Link dos resultados
+        </span>
+        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--accent)', wordBreak: 'break-all' }}>{`${window.location.origin}/resultados`}</span>
+        <span style={pequeno}>
+          Todos os vencedores juntos, cada um no seu púlpito. O link não aparece no site: é só para vocês mandarem. Quem abrir
+          vê os resultados que vocês mostrarem, sem precisar do WhatsApp; neste aparelho vocês veem a prévia de tudo o que já
+          foi encerrado.
+        </span>
+        <BotoesLink url={`${window.location.origin}/resultados`} mensagem="Saiu o resultado da votação da turma! Veja aqui:" />
       </div>
     </Card>
   );

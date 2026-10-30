@@ -54,10 +54,19 @@ export type Pergunta = {
    * off this one's ranking, the place goes to whoever came next. `em`: that
    * category (null for the class while its result isn't out). `apareceria`:
    * they'd have shown among the most voted here. The class gets only those.
+   * `abriuMao`: they gave up the place here themselves (`abriramMao`) — `em`
+   * is then where they were elected instead, if anywhere.
    */
-  eleitosEmOutra: { nome: string; em: string | null; apareceria: boolean }[];
+  eleitosEmOutra: { nome: string; em: string | null; apareceria: boolean; abriuMao: boolean }[];
   /** Committee: names with as many votes here as in another category — who goes where is theirs to decide. */
   empate: string[] | null;
+  /** The role the winners take ("Orador"): the released result shows each one over a pulpit with it. Null: just the names. */
+  cargo: string | null;
+  /**
+   * Committee: who gave up their place in this category. They stay on the
+   * ballot and their votes count; only the places skip them here.
+   */
+  abriramMao: string[] | null;
 };
 
 export type DadosVotacao = {
@@ -181,6 +190,10 @@ export type AcaoVotacao =
   | { acao: 'ordenar'; ids: string[] }
   /** Committee: choose what the class sees of a question's result. */
   | { acao: 'exibir'; id: string; exibicao: Exibicao }
+  /** Committee: the role written on the result's pulpits; '' clears it. */
+  | { acao: 'cargo'; id: string; cargo: string }
+  /** Committee: `opcao` gives up (`sim`) or takes back their place in the question's category. */
+  | { acao: 'abrirMao'; id: string; opcao: string; sim: boolean }
   /** Committee: fill in, fix or (null) clear a formando's number. */
   | { acao: 'definirWhatsapp'; formando: string; whatsapp: string | null }
   /** Committee: tell this phone when everyone has voted (src/lib/avisos.ts); sends a first notification right away. */
