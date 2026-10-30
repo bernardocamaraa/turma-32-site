@@ -482,6 +482,210 @@ g[role="button"]:focus-visible .mesa-alvo {
   }
 }
 
+/* Home page (pages/Home.tsx) and the tiles shared with the night's page
+   (components/Cena.tsx). Registered so they can be animated smoothly: an
+   unregistered custom property can only flip from one value to the next. */
+@property --spray {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 160%;
+}
+
+@property --luz-x {
+  syntax: '<length-percentage>';
+  inherits: true;
+  initial-value: 50%;
+}
+
+@property --luz-y {
+  syntax: '<length-percentage>';
+  inherits: true;
+  initial-value: 50%;
+}
+
+/* The class logo appears as if sprayed on the wall: a soft-edged circle of
+   paint spreading from its lower left, out of focus until it settles. Its
+   resting state is fully painted, so with reduced motion it's just there. */
+.logo-spray {
+  -webkit-mask-image: radial-gradient(circle at 22% 78%, #000 calc(var(--spray) - 30%), transparent var(--spray));
+  mask-image: radial-gradient(circle at 22% 78%, #000 calc(var(--spray) - 30%), transparent var(--spray));
+  animation: logo-spray 1700ms var(--ease-out) 150ms both;
+}
+
+@keyframes logo-spray {
+  from { --spray: 0%; filter: blur(10px); }
+  to { --spray: 160%; filter: blur(0); }
+}
+
+/* Then its glow switches on like a neon sign: two flickers, then steady. */
+.logo-neon {
+  filter: drop-shadow(0 0 60px rgba(169, 211, 232, .3));
+  animation: logo-neon 1600ms linear 1300ms both;
+}
+
+@keyframes logo-neon {
+  0% { filter: drop-shadow(0 0 0 rgba(169, 211, 232, 0)); }
+  10% { filter: drop-shadow(0 0 50px rgba(169, 211, 232, .55)); }
+  16% { filter: drop-shadow(0 0 0 rgba(169, 211, 232, 0)); }
+  26% { filter: drop-shadow(0 0 64px rgba(169, 211, 232, .6)); }
+  32% { filter: drop-shadow(0 0 12px rgba(169, 211, 232, .1)); }
+  100% { filter: drop-shadow(0 0 60px rgba(169, 211, 232, .3)); }
+}
+
+/* The flashlight over the wall of signatures: only a circle around
+   (--luz-x, --luz-y) shows the bright copy of the wall. It follows the mouse;
+   without one (a phone), it wanders on its own. */
+.lanterna {
+  -webkit-mask-image: radial-gradient(circle var(--luz-r, 240px) at var(--luz-x) var(--luz-y), #000 0%, rgba(0, 0, 0, .55) 40%, transparent 100%);
+  mask-image: radial-gradient(circle var(--luz-r, 240px) at var(--luz-x) var(--luz-y), #000 0%, rgba(0, 0, 0, .55) 40%, transparent 100%);
+}
+
+.lanterna-auto {
+  animation: lanterna-passeia 16s var(--ease-in-out) infinite alternate;
+}
+
+@keyframes lanterna-passeia {
+  0% { --luz-x: 28%; --luz-y: 34%; }
+  30% { --luz-x: 72%; --luz-y: 30%; }
+  65% { --luz-x: 66%; --luz-y: 70%; }
+  100% { --luz-x: 30%; --luz-y: 66%; }
+}
+
+@keyframes dica-rolar {
+  0%, 100% { transform: translateY(0); opacity: .5; }
+  50% { transform: translateY(8px); opacity: 1; }
+}
+
+/* The signatures of the class, running sideways in two rows. Each track
+   holds the row twice and moves by half its width, so it loops seamlessly. */
+.faixa {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+}
+
+.faixa-trilho {
+  display: flex;
+  width: max-content;
+  animation: faixa-corre var(--faixa-dur, 90s) linear infinite;
+}
+
+.faixa-trilho.ao-contrario {
+  animation-direction: reverse;
+}
+
+@media (hover: hover) {
+  .faixa:hover .faixa-trilho {
+    animation-play-state: paused;
+  }
+}
+
+@keyframes faixa-corre {
+  to { transform: translateX(-50%); }
+}
+
+/* A countdown digit turns over like a flap on a departures board whenever
+   it changes (each one is remounted with its new value). */
+.digito {
+  display: inline-block;
+  animation: digito-vira 650ms var(--ease-snap) both;
+}
+
+@keyframes digito-vira {
+  from { transform: perspective(500px) rotateX(-90deg); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+/* Tiles lean toward the mouse, and their border lights up where it is. */
+.bloco-vivo {
+  position: relative;
+  transform: perspective(1000px) rotateX(var(--inc-x, 0deg)) rotateY(var(--inc-y, 0deg));
+  transition: transform 700ms var(--ease-out);
+}
+
+.bloco-vivo::before,
+.bloco-vivo::after {
+  content: "";
+  position: absolute;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 400ms var(--ease-out);
+}
+
+.bloco-vivo::before {
+  inset: -1px;
+  padding: 1px;
+  background: radial-gradient(280px circle at var(--luz-x) var(--luz-y), rgba(169, 211, 232, .75), transparent 70%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+
+.bloco-vivo::after {
+  inset: 0;
+  background: radial-gradient(420px circle at var(--luz-x) var(--luz-y), rgba(245, 245, 247, .05), transparent 65%);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .bloco-vivo:hover {
+    transition-duration: 160ms;
+  }
+
+  .bloco-vivo:hover::before,
+  .bloco-vivo:hover::after {
+    opacity: 1;
+  }
+}
+
+/* The close of the home page is the one place the night turns gold. */
+.texto-ouro {
+  background: linear-gradient(180deg, #fff8e6 15%, var(--gild-300) 60%, var(--gild-500) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.brilho {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--gild-200);
+  box-shadow: 0 0 10px 2px rgba(220, 196, 140, .55);
+  opacity: .5;
+  animation: brilho-pisca var(--dur-brilho, 3s) var(--ease-in-out) var(--atraso-brilho, 0s) infinite;
+}
+
+@keyframes brilho-pisca {
+  0%, 100% { opacity: 0; transform: scale(.3); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+/* Film grain over the whole home page, so the black reads as a surface
+   rather than an empty screen. */
+.com-grao::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: .045;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The rows stand still; they scroll by hand instead, and without the
+     second copy that only exists to make the loop seamless. */
+  .faixa {
+    overflow-x: auto;
+  }
+
+  .faixa-copia {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation: none !important;

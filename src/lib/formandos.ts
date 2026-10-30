@@ -39,3 +39,35 @@ export const FORMANDOS: string[] = [
   'Suellen Bazillio',
   'Susana Liu',
 ];
+
+/**
+ * Nomes viram o slug dos arquivos em /assets/assinaturas (ex.: "Maria Luiza
+ * Pires" → "maria-luiza-pires.png"). Quem não estiver em COM_ASSINATURA
+ * simplesmente não tem o arquivo, e a lista mostra só o nome nesse caso.
+ */
+function slugAssinatura(nome: string): string {
+  return nome
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+const COM_ASSINATURA = new Set([
+  'anna-carolina-russo', 'anna-clara-ribeiro', 'arthur-caetano', 'arthur-oliveira',
+  'bernardo-camara', 'bernardo-ignacio', 'caio-bezerra', 'carolina-warrak',
+  'enzo-louro', 'geovanna-russo', 'guilherme-warrak', 'isabella-guimaraes',
+  'isabella-monteiro', 'joao-pedro-jardim', 'lais-boldrim', 'laura-viana',
+  'livia-whitaker', 'lorenzo-nunes', 'lucas-loyola', 'lucas-varejao',
+  'luiza-goes', 'maian-costa', 'maria-clara-bispo', 'maria-eduarda-barroso',
+  'maria-clara-franca', 'maria-luiza-pires', 'matheus-veiga', 'pietra-machado',
+  'sophia-afonso', 'suellen-bazillio', 'susana-liu',
+]);
+
+/** The signature image of a graduate, or null while theirs hasn't arrived. */
+export function assinaturaDe(nome: string): string | null {
+  const slug = slugAssinatura(nome);
+  return COM_ASSINATURA.has(slug) ? `/assets/assinaturas/${slug}.png` : null;
+}
+
