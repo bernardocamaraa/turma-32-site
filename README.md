@@ -164,10 +164,15 @@ com ou sem +55, e até sem o 9 da frente. O site acerta o formato sozinho
   turma não vê nem vota nela (o banco também recusa o voto) até a comissão
   tocar em "Abrir votação". Com duas ou mais prontas, aparece "Abrir as N
   agora", que abre todas juntas. Abrir não tem volta.
-- **Editar:** enquanto está pronta, a pergunta tem o botão "Editar": dá
-  para mudar o texto, os nomes (acrescentar ou tirar um candidato) e
-  quantas escolhas cada um faz. Depois de aberta, ela não muda mais, porque
-  os votos já foram para as opções dela.
+- **Editar:** até ser encerrada, a pergunta tem o botão "Editar". Pronta,
+  ou aberta sem ninguém ter votado, muda tudo: o texto, os nomes
+  (acrescentar ou tirar um candidato), o tipo e quantas escolhas cada um
+  faz. Aberta com votos, dá para corrigir o texto e acrescentar opções
+  (só quem ainda não votou vê); as que já estavam, o tipo e o número de
+  escolhas não mudam mais, porque os votos são contados por eles. Um nome
+  acrescentado que está numa pergunta em que alguém já votou sem ter votado
+  nesta pede confirmação, porque a pessoa poderia repetir o nome
+  (`editar_pergunta` em `votacao.sql`).
 - **Como um editor de formulário:** a aba Votação mostra as perguntas na
   ordem da cédula (a mesma que a turma vê), numeradas, e o formulário de
   pergunta nova fica no fim, porque a pergunta nova entra no fim da cédula.
@@ -193,11 +198,17 @@ com ou sem +55, e até sem o 9 da frente. O site acerta o formato sozinho
   envia tudo junto no fim da página. O botão "Enviar meus votos" só libera
   quando todas têm uma escolha, e o servidor confere de novo
   (`votar_cedula` em `votacao.sql`).
-- **Voto em branco:** toda pergunta tem o botão "Votar em branco", que conta
-  como resposta. No resultado, os brancos aparecem à parte ("3 votos em
-  branco"), fora das barras e das porcentagens, que são só dos votos dados a
-  uma opção. No banco, o branco é contado na opção `''` (vazia), que nunca é
-  uma opção de verdade.
+- **A cédula:** as opções de cada pergunta aparecem como uma cédula de
+  papel, igual à que cai na urna na animação: um nome por linha, com um
+  quadradinho que fica preto com ✓ ao ser marcado. A linha inteira é o
+  toque. Um nome já escolhido em outra pergunta ganha um risco vermelho de
+  caneta por cima, e o voto em branco desenha um X gigante na cédula
+  daquela pergunta.
+- **Voto em branco:** toda pergunta tem, na última linha da cédula,
+  "Votar em branco", que conta como resposta. No resultado, os brancos
+  aparecem à parte ("1 voto em branco"), fora das barras e das
+  porcentagens, que são só dos votos dados a uma opção. No banco, o branco
+  é contado na opção `''` (vazia), que nunca é uma opção de verdade.
 - **O voto não se repete:** ninguém pode escolher a mesma opção (a mesma
   pessoa) em duas perguntas, de nenhuma categoria (orador 1º e 2º voto,
   juramento, homenagens…). A página avisa no topo, marca como "já

@@ -469,6 +469,68 @@ g[role="button"]:focus-visible .mesa-alvo {
   to { background-position: 0 0; }
 }
 
+/* The paper ballot (LinhaDaCedula in pages/Votacao.tsx): the check pops
+   into a box as it's marked, a name already picked in another question
+   gets a red pen stroke drawn across it, a blank vote crosses the whole
+   ballot out with a big X drawn stroke by stroke, and a line lights up
+   under a mouse. */
+@keyframes cedula-marca {
+  from { opacity: 0; transform: scale(.3) rotate(-12deg); }
+  to { opacity: 1; transform: none; }
+}
+
+.cedula-risco {
+  position: absolute;
+  left: -4px;
+  right: -4px;
+  top: calc(50% - 1px);
+  height: 2.5px;
+  border-radius: 2px;
+  background: #d6312b;
+  transform: rotate(-2.5deg);
+  transform-origin: left center;
+  animation: cedula-risco 320ms var(--ease-out) both;
+}
+
+@keyframes cedula-risco {
+  from { transform: rotate(-2.5deg) scaleX(0); }
+  to { transform: rotate(-2.5deg) scaleX(1); }
+}
+
+.cedula-x {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.cedula-x line {
+  stroke: var(--ink-900);
+  stroke-width: 6px;
+  stroke-linecap: round;
+  opacity: .82;
+  transform-box: fill-box;
+  transform-origin: 0 0;
+  animation: cedula-x-traco 300ms cubic-bezier(.55, 0, .25, 1) both;
+}
+
+.cedula-x line:last-child {
+  transform-origin: 100% 0;
+  animation-delay: 240ms;
+}
+
+@keyframes cedula-x-traco {
+  from { transform: scale(0); }
+  to { transform: none; }
+}
+
+@media (hover: hover) {
+  .linha-cedula:hover:not([aria-checked="true"]):not([aria-disabled="true"]) {
+    background: rgba(0, 0, 0, .04);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation: none !important;

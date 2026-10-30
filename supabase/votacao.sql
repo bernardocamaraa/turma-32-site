@@ -418,6 +418,85 @@ $$;
 revoke all on function public.abrir_perguntas(uuid[], boolean) from public, anon, authenticated;
 grant execute on function public.abrir_perguntas(uuid[], boolean) to service_role;
 
+-- Changes a question that isn't closed (the Edge Function has already
+-- checked what was written). Ready, or open with nobody voted yet:
+-- anything. Open with votes in: the text, and options added — votes are
+-- counted under each option's name, so none of those already there can go
+-- or change, and the kind and the number of picks stay as the votes in
+-- were cast. A name added that's also in another question someone voted on
+-- without having voted on this one is refused, as in abrir_perguntas —
+-- they could pick it twice — unless `p_mesmo_assim`. The question's row is
+-- locked meanwhile, so a vote on it goes in before or after, never halfway.
+create or replace function public.editar_pergunta(
+  p_id uuid, p_pergunta text, p_tipo text, p_opcoes text[], p_maximo int, p_mesmo_assim boolean default false
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_atual votacao_perguntas%rowtype;
+  v_conflito record;
+begin
+  -- As in abrir_perguntas: ballots going in now finish first.
+  perform pg_advisory_xact_lock(hashtext('votacao_abrir'));
+  select * into v_atual from votacao_perguntas where id = p_id for update;
+  if not found then
+    raise exception 'Essa pergunta não existe mais.';
+  end if;
+  if not v_atual.pronta and not v_atual.aberta then
+    raise exception 'Essa votação já foi encerrada e não dá mais para editar.';
+  end if;
+
+  if not v_atual.pronta then
+    if exists (select 1 from votacao_participacao where pergunta_id = p_id) then
+      if p_tipo <> v_atual.tipo or p_maximo <> v_atual.maximo then
+        raise exception 'Já tem gente que votou nessa pergunta, então o tipo e o número de escolhas não mudam mais. Dá para corrigir o texto e acrescentar opções.';
+      end if;
+      if exists (select 1 from unnest(v_atual.opcoes) o where not (o = any (p_opcoes))) then
+        raise exception 'Já tem gente que votou nessa pergunta, então as opções que já estavam não podem sair nem mudar: os votos são contados pelo nome. Dá para corrigir o texto e acrescentar opções.';
+      end if;
+    end if;
+
+    if not coalesce(p_mesmo_assim, false) then
+      with novos as (
+        select o as nome, chave_opcao(o) as chave
+        from unnest(case when p_tipo = 'formandos' then array(select formando from convidados_formando) else p_opcoes end) o
+        where chave_opcao(o) not in (
+          select chave_opcao(a)
+          from unnest(case when v_atual.tipo = 'formandos' then array(select formando from convidados_formando) else v_atual.opcoes end) a
+        )
+      )
+      select n.nome, b.pergunta as votada into v_conflito
+      from novos n
+      join votacao_perguntas b on b.id <> p_id and not b.pronta
+      where exists (
+          select 1 from unnest(case when b.tipo = 'formandos' then array(select formando from convidados_formando) else b.opcoes end) o
+          where chave_opcao(o) = n.chave
+        )
+        and exists (
+          select 1 from votacao_participacao vb
+          where vb.pergunta_id = b.id
+            and not exists (select 1 from votacao_participacao va where va.pergunta_id = p_id and va.formando = vb.formando)
+        )
+      order by b.ordem nulls last, b.criado_em
+      limit 1;
+      if found then
+        raise exception '"%" também está em "%". Tem gente que já votou lá e ainda vai votar nesta, e o site não teria como conferir se a pessoa repetiu o nome.',
+          v_conflito.nome, v_conflito.votada;
+      end if;
+    end if;
+  end if;
+
+  update votacao_perguntas set pergunta = p_pergunta, tipo = p_tipo, opcoes = p_opcoes, maximo = p_maximo
+  where id = p_id;
+end;
+$$;
+
+revoke all on function public.editar_pergunta(uuid, text, text, text[], int, boolean) from public, anon, authenticated;
+grant execute on function public.editar_pergunta(uuid, text, text, text[], int, boolean) to service_role;
+
 -- Notifying the committee: the browser's own notifications (Web Push). A
 -- committee phone that turns them on (in /votacao/comissao) gets one the
 -- moment every formando has voted on an open question, instead of checking

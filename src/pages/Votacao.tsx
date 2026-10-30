@@ -174,6 +174,7 @@ export function Votacao({ codigoComissao }: { codigoComissao?: string }) {
   if (paraComissao) {
     const prontas = dados?.perguntas.filter((p) => p.pronta) ?? [];
     const conferir: Conferir = (abrindo, ids) => conferirAbertura(abrindo, ids, dados!);
+    const conferirEdicao: ConferirEdicao = (p, nova) => conferirMudanca(p, nova, dados!);
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' }}>
         {!dados ? (
@@ -198,6 +199,7 @@ export function Votacao({ codigoComissao }: { codigoComissao?: string }) {
                   numero={i + 1}
                   total={dados.formandos.length}
                   conferir={conferir}
+                  conferirEdicao={conferirEdicao}
                   salvando={salvando}
                   agir={agir}
                 />
@@ -425,7 +427,12 @@ function Cedula({
     precarregarUrna();
   }, []);
 
-  const de = (id: string) => escolhas[id] ?? [];
+  // A pick the committee has since taken out of the question (an edit before anyone voted) no longer counts.
+  const de = (id: string) => {
+    const p = perguntas.find((q) => q.id === id);
+    const feitas = escolhas[id] ?? [];
+    return p ? feitas.filter((o) => (p.tipo === 'formandos' ? formandos : p.opcoes).includes(o)) : feitas;
+  };
   const emBranco = (id: string) => escolhas[id] === null;
   const pendentes = perguntas.filter((p) => p.aberta && !p.jaVotou);
   const faltam = pendentes.filter((p) => !emBranco(p.id) && de(p.id).length === 0);
@@ -666,73 +673,57 @@ function PerguntaFormando({
               </span>
             ) : null}
 
-            <div role={varias ? 'group' : 'radiogroup'} aria-label={p.pergunta} style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-              {visiveis.map((o) => {
-                const ativa = escolhidas.includes(o);
-                // Picked in another question: still clickable (the error below
-                // explains why it can't stay), but marked so it's seen first.
-                const usada = !ativa && usadasEmOutras.includes(chaveDoNome(o));
-                const bloqueada = cheia && !ativa;
-                return (
-                  <button
-                    key={o}
-                    type="button"
-                    role={varias ? 'checkbox' : 'radio'}
-                    aria-checked={ativa}
-                    aria-disabled={bloqueada || undefined}
-                    onClick={() => alternar(o)}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      minHeight: 44,
-                      padding: '0 18px',
-                      borderRadius: 'var(--radius-pill)',
-                      border: '1px solid ' + (ativa ? 'var(--chalk-050)' : 'var(--stroke-hair)'),
-                      background: ativa ? 'var(--chalk-050)' : 'rgba(245,245,247,.06)',
-                      color: ativa ? '#000' : usada ? 'var(--text-faint)' : 'var(--text-primary)',
-                      fontSize: 'var(--fs-body)',
-                      fontWeight: 500,
-                      cursor: bloqueada ? 'not-allowed' : 'pointer',
+            {/* A paper ballot, like the one that drops into the box (UrnaVoto): a line per option, a box to mark, and blank at the end. */}
+            <div
+              style={{
+                position: 'relative',
+                maxWidth: 560,
+                borderRadius: 10,
+                background: 'var(--chalk-050)',
+                color: 'var(--ink-900)',
+                boxShadow: '0 14px 40px rgba(0,0,0,.35)',
+                overflow: 'hidden',
+              }}
+            >
+              <div aria-hidden style={{ width: 36, height: 4, margin: '16px 20px 8px', borderRadius: 2, background: 'var(--ice-500)' }} />
+              <div role={varias ? 'group' : 'radiogroup'} aria-label={p.pergunta}>
+                {visiveis.map((o) => {
+                  const ativa = escolhidas.includes(o);
+                  // Picked in another question: still markable (the error below
+                  // explains why it can't stay), but marked so it's seen first.
+                  const usada = !ativa && usadasEmOutras.includes(chaveDoNome(o));
+                  return (
+                    <LinhaDaCedula
+                      key={o}
+                      papel={varias ? 'checkbox' : 'radio'}
+                      marcada={ativa}
                       // With a blank vote the names fade, but a tap still picks one.
-                      opacity: bloqueada ? 0.4 : emBranco ? 0.55 : 1,
-                      transition: 'background var(--dur) var(--ease-out), color var(--dur) var(--ease-out), transform var(--dur-fast) var(--ease-out), opacity var(--dur) var(--ease-out)',
-                      transform: ativa ? 'scale(1.03)' : 'none',
-                    }}
-                  >
-                    {ativa ? <Check size={16} strokeWidth={2.4} aria-hidden /> : null}
-                    {o}
-                    {usada ? <span style={{ fontSize: 'var(--fs-caption)' }}>· já escolhido</span> : null}
-                  </button>
-                );
-              })}
-              {visiveis.length === 0 ? <span style={pequeno}>Nenhum nome encontrado.</span> : null}
-            </div>
-
-            <div>
-              <button
-                type="button"
-                aria-pressed={emBranco}
-                onClick={() => onEscolher(emBranco ? [] : null)}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  minHeight: 44,
-                  padding: '0 18px',
-                  borderRadius: 'var(--radius-pill)',
-                  border: emBranco ? '1px solid var(--chalk-050)' : '1px dashed var(--stroke-muted)',
-                  background: emBranco ? 'var(--chalk-050)' : 'transparent',
-                  color: emBranco ? '#000' : 'var(--text-muted)',
-                  fontSize: 'var(--fs-body)',
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                  transition: 'background var(--dur) var(--ease-out), color var(--dur) var(--ease-out)',
-                }}
-              >
-                {emBranco ? <Check size={16} strokeWidth={2.4} aria-hidden /> : null}
-                {emBranco ? 'Em branco' : 'Votar em branco'}
-              </button>
+                      apagada={usada || emBranco}
+                      riscada={usada}
+                      bloqueada={cheia && !ativa}
+                      nota={usada ? 'já escolhido' : undefined}
+                      onClick={() => alternar(o)}
+                    >
+                      {o}
+                    </LinhaDaCedula>
+                  );
+                })}
+                {visiveis.length === 0 ? (
+                  <span style={{ display: 'block', padding: '14px 20px', borderTop: '1px solid rgba(0,0,0,.1)', color: 'rgba(0,0,0,.5)' }}>
+                    Nenhum nome encontrado.
+                  </span>
+                ) : null}
+              </div>
+              <LinhaDaCedula papel="checkbox" marcada={emBranco} tracejada onClick={() => onEscolher(emBranco ? [] : null)}>
+                Votar em branco
+              </LinhaDaCedula>
+              {/* A blank vote crosses the whole ballot out with a big pen X, drawn stroke by stroke; the lines stay tappable under it. */}
+              {emBranco ? (
+                <svg aria-hidden className="cedula-x" viewBox="0 0 100 100" preserveAspectRatio="none">
+                  <line x1="5" y1="6" x2="95" y2="94" vectorEffect="non-scaling-stroke" />
+                  <line x1="95" y1="6" x2="5" y2="94" vectorEffect="non-scaling-stroke" />
+                </svg>
+              ) : null}
             </div>
 
             {repetidas.length > 0 ? (
@@ -748,6 +739,91 @@ function PerguntaFormando({
         )}
       </div>
     </Card>
+  );
+}
+
+/**
+ * A line of the paper ballot: the box to mark, then the option — the box
+ * fills in dark with a check, as on the ballot in UrnaVoto. The whole line
+ * is the tap target.
+ */
+function LinhaDaCedula({
+  papel,
+  marcada,
+  apagada = false,
+  riscada = false,
+  bloqueada = false,
+  tracejada = false,
+  nota,
+  onClick,
+  children,
+}: {
+  papel: 'radio' | 'checkbox';
+  marcada: boolean;
+  /** Faded: picked elsewhere, or a blank vote is marked. */
+  apagada?: boolean;
+  /** Struck through in red pen: picked in another question already. */
+  riscada?: boolean;
+  /** The question's limit is reached: unmark one first. */
+  bloqueada?: boolean;
+  /** Set apart from the names by a dashed line (the blank vote). */
+  tracejada?: boolean;
+  nota?: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role={papel}
+      aria-checked={marcada}
+      aria-disabled={bloqueada || undefined}
+      onClick={onClick}
+      className="linha-cedula"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 14,
+        width: '100%',
+        minHeight: 52,
+        padding: '10px 20px',
+        border: 'none',
+        borderTop: tracejada ? '1px dashed rgba(0,0,0,.25)' : '1px solid rgba(0,0,0,.1)',
+        background: marcada ? 'rgba(0,0,0,.05)' : undefined,
+        color: apagada && !marcada ? 'rgba(0,0,0,.42)' : 'var(--ink-900)',
+        fontSize: 'var(--fs-body)',
+        fontWeight: marcada ? 600 : 500,
+        textAlign: 'left',
+        cursor: bloqueada ? 'not-allowed' : 'pointer',
+        opacity: bloqueada ? 0.4 : 1,
+        transition: 'background var(--dur) var(--ease-out), color var(--dur) var(--ease-out)',
+      }}
+    >
+      <span
+        aria-hidden
+        style={{
+          flex: '0 0 auto',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 24,
+          height: 24,
+          borderRadius: 5,
+          border: `2px solid ${marcada ? 'var(--ink-900)' : 'rgba(0,0,0,.4)'}`,
+          background: marcada ? 'var(--ink-900)' : 'transparent',
+          transition: 'background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out)',
+        }}
+      >
+        {marcada ? <Check size={16} strokeWidth={3.2} color="var(--chalk-050)" style={{ animation: 'cedula-marca 220ms var(--ease-out) both' }} /> : null}
+      </span>
+      <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>
+        <span style={{ position: 'relative', display: 'inline-block', maxWidth: '100%' }}>
+          {children}
+          {riscada ? <span aria-hidden className="cedula-risco" /> : null}
+        </span>
+      </span>
+      {nota ? <span style={{ flex: '0 0 auto', fontSize: 'var(--fs-caption)', fontWeight: 500, color: 'rgba(0,0,0,.45)' }}>{nota}</span> : null}
+    </button>
   );
 }
 
@@ -1110,12 +1186,14 @@ function FormularioPergunta({
   editando,
   onFechar,
   conferir,
+  conferirEdicao,
   salvando,
   agir,
 }: {
   editando?: Pergunta;
   onFechar?: () => void;
   conferir: Conferir;
+  conferirEdicao?: ConferirEdicao;
   salvando: boolean;
   agir: (a: AcaoVotacao) => Promise<string | null>;
 }) {
@@ -1131,7 +1209,14 @@ function FormularioPergunta({
   const lista = opcoes.split('\n').map((o) => o.trim()).filter(Boolean);
   // Picking every option would count for nobody in particular.
   const opcoesDemais = tipo === 'opcoes' && lista.length >= 2 && maximo >= lista.length;
-  const preenchida = pergunta.trim().length >= 3 && (tipo === 'formandos' || lista.length >= 2) && !opcoesDemais;
+  // An open question with votes in: only the text and new options can
+  // change — votes are counted under each option's name (editar_pergunta
+  // in votacao.sql).
+  const aberta = editando !== undefined && !editando.pronta;
+  const votaram = aberta ? (editando.votaram ?? 0) : 0;
+  const travada = votaram > 0;
+  const tiradas = travada && editando?.tipo === 'opcoes' ? editando.opcoes.filter((o) => !lista.includes(o)) : [];
+  const preenchida = pergunta.trim().length >= 3 && (tipo === 'formandos' || lista.length >= 2) && !opcoesDemais && tiradas.length === 0;
 
   /** `pronta`: leave it for later — the class doesn't see it until it's opened. */
   async function criar(pronta: boolean) {
@@ -1155,8 +1240,24 @@ function FormularioPergunta({
 
   async function salvar() {
     if (!editando) return;
+    // An open one only asks when the change reaches past those who voted already.
+    let mesmoAssim = false;
+    if (aberta) {
+      const novas = tipo === 'opcoes' ? lista.filter((o) => !editando.opcoes.includes(o)) : [];
+      const repete = conferirEdicao?.(editando, { tipo, opcoes: lista }) ?? null;
+      const avisos = [
+        travada && novas.length > 0
+          ? `${plural(votaram, 'formando já votou', 'formandos já votaram')} sem ${novas.length === 1 ? 'essa opção' : 'essas opções'}: ${novas.join(', ')}. Só quem ainda não votou vai ver.`
+          : null,
+        repete
+          ? `Atenção: "${repete.nome}" também está em "${repete.em.pergunta}". Tem gente que já votou lá e ainda vai votar nesta, e o site não tem como conferir se a pessoa repetiu o nome.`
+          : null,
+      ].filter((a): a is string => a !== null);
+      if (avisos.length > 0 && !window.confirm([...avisos, 'Salvar mesmo assim?'].join('\n\n'))) return;
+      mesmoAssim = repete !== null;
+    }
     setErro(null);
-    const falha = await agir({ acao: 'editar', id: editando.id, texto: pergunta, tipo, opcoes: lista, maximo });
+    const falha = await agir({ acao: 'editar', id: editando.id, texto: pergunta, tipo, opcoes: lista, maximo, mesmoAssim });
     setErro(falha);
     if (!falha) onFechar?.();
   }
@@ -1165,7 +1266,7 @@ function FormularioPergunta({
     <Card padding={mobile ? 'var(--space-6)' : 'var(--space-7)'}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxWidth: '40rem' }}>
         <span style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-h3)', fontWeight: 700, letterSpacing: '-.02em' }}>
-          {editando ? 'Editar pergunta pronta' : 'Nova votação'}
+          {!editando ? 'Nova votação' : aberta ? 'Editar pergunta aberta' : 'Editar pergunta pronta'}
         </span>
         <Input label="Pergunta" placeholder="Ex.: Quem vai ficar rico primeiro?" value={pergunta} maxLength={200} onChange={(e) => setPergunta(e.target.value)} />
 
@@ -1187,6 +1288,7 @@ function FormularioPergunta({
                 type="button"
                 role="radio"
                 aria-checked={tipo === valor}
+                disabled={travada && tipo !== valor}
                 onClick={() => setTipo(valor)}
                 style={{
                   padding: '8px 18px',
@@ -1194,9 +1296,10 @@ function FormularioPergunta({
                   border: 'none',
                   fontSize: 'var(--fs-body-sm)',
                   fontWeight: 500,
-                  cursor: 'pointer',
+                  cursor: travada ? 'default' : 'pointer',
                   color: tipo === valor ? '#000' : 'var(--text-muted)',
                   background: tipo === valor ? 'var(--chalk-050)' : 'transparent',
+                  opacity: travada && tipo !== valor ? 0.4 : 1,
                 }}
               >
                 {rotulo}
@@ -1228,6 +1331,12 @@ function FormularioPergunta({
               <span style={pequeno}>
                 {lista.length < 2 ? 'Escreva pelo menos 2 opções, uma por linha.' : `${lista.length} opções.`}
               </span>
+              {tiradas.length > 0 ? (
+                <span role="alert" style={{ ...pequeno, color: 'var(--state-error)' }}>
+                  Já tem votos nessa pergunta, então {tiradas.length === 1 ? 'essa opção não pode sair nem mudar' : 'essas opções não podem sair nem mudar'}:{' '}
+                  {tiradas.join(', ')}. Escreva de novo como estava.
+                </span>
+              ) : null}
             </>
           )}
         </div>
@@ -1237,6 +1346,7 @@ function FormularioPergunta({
             label="Quantas escolhas cada formando faz"
             options={QUANTAS_ESCOLHAS}
             value={QUANTAS_ESCOLHAS[maximo - 1]}
+            disabled={travada}
             onChange={(e) => setMaximo(QUANTAS_ESCOLHAS.indexOf(e.target.value) + 1)}
           />
         </div>
@@ -1249,9 +1359,13 @@ function FormularioPergunta({
         ) : null}
 
         <span style={pequeno}>
-          {editando
-            ? 'A turma ainda não vê essa pergunta, então dá para mudar tudo. Depois de aberta, ela não muda mais. Escreva cada nome igual nas outras perguntas (acento e maiúscula não contam), para o site saber que é a mesma pessoa.'
-            : `"Deixar pronta" guarda a pergunta aqui: a turma não vê nem vota até vocês abrirem, e dá para editar até lá. O formando não pode escolher o mesmo nome em duas perguntas (acento e maiúscula não contam), e o site confere isso nas perguntas que ele envia juntas. Então perguntas com nomes em comum precisam abrir juntas, antes de a turma votar: depois, o site não abre outra com algum desses nomes, a não ser que vocês confirmem abrir mesmo assim.`}
+          {travada
+            ? `A votação está aberta e ${plural(votaram, 'formando já votou', 'formandos já votaram')}. Dá para corrigir o texto e acrescentar opções, que só quem ainda não votou vai ver. As opções que já estavam, o tipo e o número de escolhas não mudam mais, porque os votos são contados por eles.`
+            : aberta
+              ? 'A votação está aberta, mas ninguém votou ainda, então dá para mudar tudo. Quem estiver com a página aberta vê a mudança em alguns segundos.'
+              : editando
+                ? 'A turma ainda não vê essa pergunta, então dá para mudar tudo. Escreva cada nome igual nas outras perguntas (acento e maiúscula não contam), para o site saber que é a mesma pessoa.'
+                : `"Deixar pronta" guarda a pergunta aqui: a turma não vê nem vota até vocês abrirem, e dá para editar até lá. O formando não pode escolher o mesmo nome em duas perguntas (acento e maiúscula não contam), e o site confere isso nas perguntas que ele envia juntas. Então perguntas com nomes em comum precisam abrir juntas, antes de a turma votar: depois, o site não abre outra com algum desses nomes, a não ser que vocês confirmem abrir mesmo assim.`}
         </span>
 
         {erro ? <p style={{ ...texto, color: 'var(--state-error)' }}>{erro}</p> : null}
@@ -1306,6 +1420,30 @@ function conferirAbertura(abrindo: Pick<Pergunta, 'tipo' | 'opcoes'>[], ids: str
     repete: votada ? { nome: nomes.get(emComum(votada)!)!, em: votada } : null,
     juntas: outras.filter((p) => p.pronta),
   };
+}
+
+/** conferirMudanca with the committee's current data. */
+type ConferirEdicao = (p: Pergunta, nova: Pick<Pergunta, 'tipo' | 'opcoes'>) => { nome: string; em: Pergunta } | null;
+
+/**
+ * A name an open question `p` gains in `nova` that's also in another
+ * question someone voted on without having voted on `p` yet: they could
+ * pick it twice, so the server refuses it unless told to (editar_pergunta
+ * in votacao.sql). Who voted where comes from each question's `faltam`.
+ */
+function conferirMudanca(p: Pergunta, nova: Pick<Pergunta, 'tipo' | 'opcoes'>, dados: DadosVotacao): { nome: string; em: Pergunta } | null {
+  const antes = new Set(nomesDaPergunta(p, dados.formandos).map(chaveDoNome));
+  const novos = nomesDaPergunta(nova, dados.formandos).filter((n) => !antes.has(chaveDoNome(n)));
+  const faltamAqui = new Set(p.faltam ?? []);
+  for (const q of dados.perguntas) {
+    if (q.id === p.id || q.pronta) continue;
+    const faltamLa = new Set(q.faltam ?? dados.formandos);
+    if (!dados.formandos.some((f) => !faltamLa.has(f) && faltamAqui.has(f))) continue;
+    const la = new Set(nomesDaPergunta(q, dados.formandos).map(chaveDoNome));
+    const nome = novos.find((n) => la.has(chaveDoNome(n)));
+    if (nome) return { nome, em: q };
+  }
+  return null;
 }
 
 /**
@@ -1374,14 +1512,15 @@ function AbrirProntas({
 
 /**
  * One question, as the committee sees it: who voted, the result once
- * closed, and what to do next — or, while it's ready, the way to open or
- * edit it. `numero`: its place on the ballot.
+ * closed, and what to do next — or, while it's ready, the way to open it.
+ * Editable until closed. `numero`: its place on the ballot.
  */
 function PerguntaComissao({
   p,
   numero,
   total,
   conferir,
+  conferirEdicao,
   salvando,
   agir,
 }: {
@@ -1389,11 +1528,12 @@ function PerguntaComissao({
   numero: number;
   total: number;
   conferir: Conferir;
+  conferirEdicao: ConferirEdicao;
   salvando: boolean;
   agir: (a: AcaoVotacao) => Promise<string | null>;
 }) {
   const [erro, setErro] = useState<string | null>(null);
-  // Only a ready question can be edited (see FormularioPergunta).
+  // A ready or open question can be edited; how far, see FormularioPergunta.
   const [editando, setEditando] = useState(false);
   const votaram = p.votaram ?? 0;
 
@@ -1410,10 +1550,18 @@ function PerguntaComissao({
     setErro(await agir({ acao: 'abrir', id: p.id, ...sim }));
   }
 
-  if (editando && p.pronta) {
+  // Editable until it's closed (see FormularioPergunta).
+  if (editando && (p.pronta || p.aberta)) {
     return (
       <div id={`comissao-${p.id}`} style={{ scrollMarginTop: 80 }}>
-        <FormularioPergunta editando={p} onFechar={() => setEditando(false)} conferir={conferir} salvando={salvando} agir={agir} />
+        <FormularioPergunta
+          editando={p}
+          onFechar={() => setEditando(false)}
+          conferir={conferir}
+          conferirEdicao={conferirEdicao}
+          salvando={salvando}
+          agir={agir}
+        />
       </div>
     );
   }
@@ -1527,6 +1675,18 @@ function PerguntaComissao({
               )}
             </>
           )}
+          {!p.pronta && p.aberta ? (
+            <Button
+              variant="ghost"
+              disabled={salvando}
+              onClick={() => {
+                setErro(null);
+                setEditando(true);
+              }}
+            >
+              Editar
+            </Button>
+          ) : null}
           <Button variant="ghost" disabled={salvando} onClick={() => fazer('duplicar')}>
             Duplicar
           </Button>
