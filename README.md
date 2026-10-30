@@ -204,11 +204,10 @@ com ou sem +55, e até sem o 9 da frente. O site acerta o formato sozinho
   quando todas têm uma escolha, e o servidor confere de novo
   (`votar_cedula` em `votacao.sql`).
 - **A cédula:** as opções de cada pergunta aparecem como uma cédula de
-  papel, igual à que cai na urna na animação: um nome por linha, com um
-  quadradinho que fica preto com ✓ ao ser marcado. A linha inteira é o
-  toque. Um nome já escolhido em outra pergunta ganha um risco vermelho de
-  caneta por cima, e o voto em branco desenha um X gigante na cédula
-  daquela pergunta.
+  papel: um nome por linha, com um quadradinho que fica preto com ✓ ao
+  ser marcado. A linha inteira é o toque. Um nome já escolhido em outra
+  pergunta ganha um risco vermelho de caneta por cima, e o voto em branco
+  desenha um X gigante na cédula daquela pergunta.
 - **Voto em branco:** toda pergunta tem, na última linha da cédula,
   "Votar em branco", que conta como resposta. No resultado, os brancos
   aparecem à parte ("1 voto em branco"), fora das barras e das
@@ -271,10 +270,14 @@ com ou sem +55, e até sem o 9 da frente. O site acerta o formato sozinho
   Depois que ele envia os votos, aparecem as outras perguntas e os
   resultados liberados, revelados quando a urna sai da tela. A prévia da
   cédula da comissão mostra o mesmo: só as abertas e as prontas.
-- **Som da urna:** quando a cédula cai na urna, toca o som de confirmação
-  da urna eletrônica (`public/assets/confirma-urna.mp3`). O navegador só
-  deixa tocar som que começa num toque, então ele é ligado no toque em
-  "Enviar meus votos". No iPhone, não toca com o celular no silencioso.
+- **A urna eletrônica:** depois de enviar, aparece uma urna eletrônica
+  como a de verdade: um dedo digita 3 e 2 (ou BRANCO, no voto em branco),
+  a tela mostra o número e a Turma 32 como candidata, e o CONFIRMA leva ao
+  FIM, com confete. Cada tecla apita e o CONFIRMA toca o som de confirmação
+  da urna (`public/assets/confirma-urna.mp3`; o apito das teclas é uma nota
+  desse mesmo som). O navegador só deixa tocar som que começa num toque,
+  então ele é ligado no toque em "Enviar meus votos". No iPhone, não toca
+  com o celular no silencioso.
 
 - **Aviso no celular:** na aba Votação (`/comissao/votacao`), o botão "Me avisar quando
   todos votarem" liga a notificação do próprio navegador (Web Push) naquele
