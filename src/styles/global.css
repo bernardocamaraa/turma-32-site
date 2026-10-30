@@ -469,6 +469,19 @@ g[role="button"]:focus-visible .mesa-alvo {
   to { background-position: 0 0; }
 }
 
+/* The paper ballot (LinhaDaCedula in pages/Votacao.tsx): the check pops
+   into a box as it's marked, and a line lights up under a mouse. */
+@keyframes cedula-marca {
+  from { opacity: 0; transform: scale(.3) rotate(-12deg); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (hover: hover) {
+  .linha-cedula:hover:not([aria-checked="true"]):not([aria-disabled="true"]) {
+    background: rgba(0, 0, 0, .04);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation: none !important;

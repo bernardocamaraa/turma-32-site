@@ -198,11 +198,15 @@ com ou sem +55, e até sem o 9 da frente. O site acerta o formato sozinho
   envia tudo junto no fim da página. O botão "Enviar meus votos" só libera
   quando todas têm uma escolha, e o servidor confere de novo
   (`votar_cedula` em `votacao.sql`).
-- **Voto em branco:** toda pergunta tem o botão "Votar em branco", que conta
-  como resposta. No resultado, os brancos aparecem à parte ("3 votos em
-  branco"), fora das barras e das porcentagens, que são só dos votos dados a
-  uma opção. No banco, o branco é contado na opção `''` (vazia), que nunca é
-  uma opção de verdade.
+- **A cédula:** as opções de cada pergunta aparecem como uma cédula de
+  papel, igual à que cai na urna na animação: um nome por linha, com um
+  quadradinho que fica preto com ✓ ao ser marcado. A linha inteira é o
+  toque.
+- **Voto em branco:** toda pergunta tem, na última linha da cédula,
+  "Votar em branco", que conta como resposta. No resultado, os brancos
+  aparecem à parte ("1 voto em branco"), fora das barras e das
+  porcentagens, que são só dos votos dados a uma opção. No banco, o branco
+  é contado na opção `''` (vazia), que nunca é uma opção de verdade.
 - **O voto não se repete:** ninguém pode escolher a mesma opção (a mesma
   pessoa) em duas perguntas, de nenhuma categoria (orador 1º e 2º voto,
   juramento, homenagens…). A página avisa no topo, marca como "já

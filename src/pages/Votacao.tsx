@@ -673,73 +673,48 @@ function PerguntaFormando({
               </span>
             ) : null}
 
-            <div role={varias ? 'group' : 'radiogroup'} aria-label={p.pergunta} style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-              {visiveis.map((o) => {
-                const ativa = escolhidas.includes(o);
-                // Picked in another question: still clickable (the error below
-                // explains why it can't stay), but marked so it's seen first.
-                const usada = !ativa && usadasEmOutras.includes(chaveDoNome(o));
-                const bloqueada = cheia && !ativa;
-                return (
-                  <button
-                    key={o}
-                    type="button"
-                    role={varias ? 'checkbox' : 'radio'}
-                    aria-checked={ativa}
-                    aria-disabled={bloqueada || undefined}
-                    onClick={() => alternar(o)}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      minHeight: 44,
-                      padding: '0 18px',
-                      borderRadius: 'var(--radius-pill)',
-                      border: '1px solid ' + (ativa ? 'var(--chalk-050)' : 'var(--stroke-hair)'),
-                      background: ativa ? 'var(--chalk-050)' : 'rgba(245,245,247,.06)',
-                      color: ativa ? '#000' : usada ? 'var(--text-faint)' : 'var(--text-primary)',
-                      fontSize: 'var(--fs-body)',
-                      fontWeight: 500,
-                      cursor: bloqueada ? 'not-allowed' : 'pointer',
+            {/* A paper ballot, like the one that drops into the box (UrnaVoto): a line per option, a box to mark, and blank at the end. */}
+            <div
+              style={{
+                maxWidth: 560,
+                borderRadius: 10,
+                background: 'var(--chalk-050)',
+                color: 'var(--ink-900)',
+                boxShadow: '0 14px 40px rgba(0,0,0,.35)',
+                overflow: 'hidden',
+              }}
+            >
+              <div aria-hidden style={{ width: 36, height: 4, margin: '16px 20px 8px', borderRadius: 2, background: 'var(--ice-500)' }} />
+              <div role={varias ? 'group' : 'radiogroup'} aria-label={p.pergunta}>
+                {visiveis.map((o) => {
+                  const ativa = escolhidas.includes(o);
+                  // Picked in another question: still markable (the error below
+                  // explains why it can't stay), but marked so it's seen first.
+                  const usada = !ativa && usadasEmOutras.includes(chaveDoNome(o));
+                  return (
+                    <LinhaDaCedula
+                      key={o}
+                      papel={varias ? 'checkbox' : 'radio'}
+                      marcada={ativa}
                       // With a blank vote the names fade, but a tap still picks one.
-                      opacity: bloqueada ? 0.4 : emBranco ? 0.55 : 1,
-                      transition: 'background var(--dur) var(--ease-out), color var(--dur) var(--ease-out), transform var(--dur-fast) var(--ease-out), opacity var(--dur) var(--ease-out)',
-                      transform: ativa ? 'scale(1.03)' : 'none',
-                    }}
-                  >
-                    {ativa ? <Check size={16} strokeWidth={2.4} aria-hidden /> : null}
-                    {o}
-                    {usada ? <span style={{ fontSize: 'var(--fs-caption)' }}>· já escolhido</span> : null}
-                  </button>
-                );
-              })}
-              {visiveis.length === 0 ? <span style={pequeno}>Nenhum nome encontrado.</span> : null}
-            </div>
-
-            <div>
-              <button
-                type="button"
-                aria-pressed={emBranco}
-                onClick={() => onEscolher(emBranco ? [] : null)}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  minHeight: 44,
-                  padding: '0 18px',
-                  borderRadius: 'var(--radius-pill)',
-                  border: emBranco ? '1px solid var(--chalk-050)' : '1px dashed var(--stroke-muted)',
-                  background: emBranco ? 'var(--chalk-050)' : 'transparent',
-                  color: emBranco ? '#000' : 'var(--text-muted)',
-                  fontSize: 'var(--fs-body)',
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                  transition: 'background var(--dur) var(--ease-out), color var(--dur) var(--ease-out)',
-                }}
-              >
-                {emBranco ? <Check size={16} strokeWidth={2.4} aria-hidden /> : null}
-                {emBranco ? 'Em branco' : 'Votar em branco'}
-              </button>
+                      apagada={usada || emBranco}
+                      bloqueada={cheia && !ativa}
+                      nota={usada ? 'já escolhido' : undefined}
+                      onClick={() => alternar(o)}
+                    >
+                      {o}
+                    </LinhaDaCedula>
+                  );
+                })}
+                {visiveis.length === 0 ? (
+                  <span style={{ display: 'block', padding: '14px 20px', borderTop: '1px solid rgba(0,0,0,.1)', color: 'rgba(0,0,0,.5)' }}>
+                    Nenhum nome encontrado.
+                  </span>
+                ) : null}
+              </div>
+              <LinhaDaCedula papel="checkbox" marcada={emBranco} tracejada onClick={() => onEscolher(emBranco ? [] : null)}>
+                Votar em branco
+              </LinhaDaCedula>
             </div>
 
             {repetidas.length > 0 ? (
@@ -755,6 +730,83 @@ function PerguntaFormando({
         )}
       </div>
     </Card>
+  );
+}
+
+/**
+ * A line of the paper ballot: the box to mark, then the option — the box
+ * fills in dark with a check, as on the ballot in UrnaVoto. The whole line
+ * is the tap target.
+ */
+function LinhaDaCedula({
+  papel,
+  marcada,
+  apagada = false,
+  bloqueada = false,
+  tracejada = false,
+  nota,
+  onClick,
+  children,
+}: {
+  papel: 'radio' | 'checkbox';
+  marcada: boolean;
+  /** Faded: picked elsewhere, or a blank vote is marked. */
+  apagada?: boolean;
+  /** The question's limit is reached: unmark one first. */
+  bloqueada?: boolean;
+  /** Set apart from the names by a dashed line (the blank vote). */
+  tracejada?: boolean;
+  nota?: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role={papel}
+      aria-checked={marcada}
+      aria-disabled={bloqueada || undefined}
+      onClick={onClick}
+      className="linha-cedula"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 14,
+        width: '100%',
+        minHeight: 52,
+        padding: '10px 20px',
+        border: 'none',
+        borderTop: tracejada ? '1px dashed rgba(0,0,0,.25)' : '1px solid rgba(0,0,0,.1)',
+        background: marcada ? 'rgba(0,0,0,.05)' : undefined,
+        color: apagada && !marcada ? 'rgba(0,0,0,.42)' : 'var(--ink-900)',
+        fontSize: 'var(--fs-body)',
+        fontWeight: marcada ? 600 : 500,
+        textAlign: 'left',
+        cursor: bloqueada ? 'not-allowed' : 'pointer',
+        opacity: bloqueada ? 0.4 : 1,
+        transition: 'background var(--dur) var(--ease-out), color var(--dur) var(--ease-out)',
+      }}
+    >
+      <span
+        aria-hidden
+        style={{
+          flex: '0 0 auto',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 24,
+          height: 24,
+          borderRadius: 5,
+          border: `2px solid ${marcada ? 'var(--ink-900)' : 'rgba(0,0,0,.4)'}`,
+          background: marcada ? 'var(--ink-900)' : 'transparent',
+          transition: 'background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out)',
+        }}
+      >
+        {marcada ? <Check size={16} strokeWidth={3.2} color="var(--chalk-050)" style={{ animation: 'cedula-marca 220ms var(--ease-out) both' }} /> : null}
+      </span>
+      <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{children}</span>
+      {nota ? <span style={{ flex: '0 0 auto', fontSize: 'var(--fs-caption)', fontWeight: 500, color: 'rgba(0,0,0,.45)' }}>{nota}</span> : null}
+    </button>
   );
 }
 
