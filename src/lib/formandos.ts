@@ -73,12 +73,23 @@ export function assinaturaDe(nome: string): string | null {
 
 
 /**
+ * Names the class goes by that aren't their name on the list: Arthur
+ * Caetano Mota Machado is "Arthur Machado" on the vote.
+ */
+const CONHECIDOS_COMO: Record<string, string> = {
+  'arthur-machado': 'Arthur Caetano',
+};
+
+/**
  * The signature of a name as the committee wrote it on a vote's options,
  * which isn't always the full name ("João Pedro", "Maian"): the graduate
- * with that exact name, or else the only one whose name starts with it.
- * Null when it matches no one, or more than one.
+ * with that exact name (or known by it, CONHECIDOS_COMO), or else the only
+ * one whose name starts with it. Null when it matches no one, or more than
+ * one.
  */
 export function assinaturaDoCandidato(nome: string): string | null {
+  const conhecido = CONHECIDOS_COMO[slugAssinatura(nome)];
+  if (conhecido) return assinaturaDe(conhecido);
   const chave = slugAssinatura(nome);
   if (!chave) return null;
   const exato = FORMANDOS.find((f) => slugAssinatura(f) === chave);
