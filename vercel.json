@@ -1,4 +1,10 @@
 {
+  "headers": [
+    {
+      "source": "/baile-turma-32.ics",
+      "headers": [{ "key": "Content-Type", "value": "text/calendar; charset=utf-8" }]
+    }
+  ],
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]

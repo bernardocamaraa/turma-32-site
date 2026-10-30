@@ -6,7 +6,7 @@ import { MAPS_LINK } from '../components/MapEmbed';
 import { SectionEyebrowRule } from '../components/SectionHeading';
 import { AvisoConfirmacao } from '../components/AvisoConfirmacao';
 import { Bloco, Grande, LinkSeta, MapaInclinado, Pequeno, Revela, Titulo } from '../components/Cena';
-import { baixarEventoDoBaile } from '../lib/calendario';
+import { EVENTO_ICS, LINK_GOOGLE_AGENDA } from '../lib/calendario';
 import { useCountdown } from '../lib/countdown';
 import { assinaturaDe, FORMANDOS } from '../lib/formandos';
 import { trecho, useProgressoRolagem } from '../lib/motion';
@@ -203,12 +203,10 @@ function Abertura() {
 
 const FRASE =
   'Três turmas diferentes em um lugar só, uma mistura que tinha tudo pra dar errado mas deu muito certo. Agora, vamos celebrar essa união e fim de ciclo da melhor maneira possível!';
-const DESTAQUE = 'deu muito certo.';
 
 /**
  * Scene 2. A paragraph that lights up word by word as you scroll through
- * it — Apple's way of making you read one sentence slowly. The turn of the
- * sentence ("deu muito certo") lights up in ice blue.
+ * it — Apple's way of making you read one sentence slowly.
  */
 function TextoQueAcende() {
   const mobile = useIsMobile();
@@ -216,8 +214,6 @@ function TextoQueAcende() {
   const { ref, progresso } = useProgressoRolagem<HTMLElement>('fixo');
   const palavras = FRASE.split(' ');
   const acesas = Math.round(trecho(progresso, 0.05, 0.85) * palavras.length);
-  const inicioDestaque = FRASE.slice(0, FRASE.indexOf(DESTAQUE)).split(' ').length - 1;
-  const fimDestaque = inicioDestaque + DESTAQUE.split(' ').length;
 
   return (
     <section ref={ref} style={{ height: reduzido ? 'auto' : mobile ? '170vh' : '190vh', position: 'relative' }}>
@@ -237,22 +233,17 @@ function TextoQueAcende() {
             letterSpacing: '-.03em',
           }}
         >
-          {palavras.map((palavra, i) => {
-            const acesa = i < acesas;
-            const destaque = acesa && i >= inicioDestaque && i < fimDestaque;
-            return (
-              <span
-                key={i}
-                className={destaque ? 'texto-gelo' : undefined}
-                style={{
-                  color: destaque ? 'transparent' : acesa ? 'var(--chalk-050)' : '#2c2c2e',
-                  transition: 'color 400ms var(--ease-out)',
-                }}
-              >
-                {palavra}{' '}
-              </span>
-            );
-          })}
+          {palavras.map((palavra, i) => (
+            <span
+              key={i}
+              style={{
+                color: i < acesas ? 'var(--chalk-050)' : '#2c2c2e',
+                transition: 'color 400ms var(--ease-out)',
+              }}
+            >
+              {palavra}{' '}
+            </span>
+          ))}
         </p>
       </div>
     </section>
@@ -373,11 +364,31 @@ function Contagem() {
         <p style={{ margin: 0, fontSize: 'var(--fs-body-lg)', color: 'var(--text-muted)' }}>
           Quinta-feira, 10 de dezembro, às 19h.
         </p>
-        <Button variant="secondary" size="lg" iconLeft={<CalendarPlus size={18} strokeWidth={1.8} aria-hidden />} onClick={baixarEventoDoBaile}>
-          Adicionar ao calendário
-        </Button>
+        <AdicionarAoCalendario />
       </Revela>
     </section>
+  );
+}
+
+/**
+ * Saving the night in the guest's calendar: Google Calendar opens with the
+ * event filled in; the Apple button opens the .ics file, which an iPhone or
+ * Mac shows as "add to calendar" (and Outlook understands too).
+ */
+function AdicionarAoCalendario() {
+  const icone = <CalendarPlus size={18} strokeWidth={1.8} aria-hidden />;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-4)' }}>
+      <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-faint)' }}>Salve a data na sua agenda</span>
+      <div style={{ display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap', justifyContent: 'center' }}>
+        <Button variant="secondary" size="lg" iconLeft={icone} as="a" href={LINK_GOOGLE_AGENDA} target="_blank" rel="noopener noreferrer">
+          Google Agenda
+        </Button>
+        <Button variant="secondary" size="lg" iconLeft={icone} as="a" href={EVENTO_ICS}>
+          Calendário da Apple
+        </Button>
+      </div>
+    </div>
   );
 }
 
