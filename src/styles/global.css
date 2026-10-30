@@ -420,6 +420,89 @@ g[role="button"]:focus-visible .mesa-alvo {
   to { background-position: 0 0; }
 }
 
+/* A winner over their pulpit (Pulpito in pages/Votacao.tsx): dark wood-ish
+   panels with a thin gold plate for the role, and a cone of warm light from
+   above. Nothing here sets `transform`: the reveal animation owns it. */
+.pulpito {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+}
+
+.pulpito-luz {
+  position: absolute;
+  left: -30%;
+  right: -30%;
+  top: -48px;
+  bottom: 30%;
+  background: linear-gradient(180deg, rgba(255, 242, 210, .22) 0%, rgba(255, 242, 210, .06) 55%, rgba(255, 242, 210, 0) 90%);
+  clip-path: polygon(43% 0, 57% 0, 100% 100%, 0 100%);
+  pointer-events: none;
+}
+
+.pulpito-movel {
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  filter: drop-shadow(0 22px 30px rgba(0, 0, 0, .55));
+}
+
+.pulpito-tampo {
+  width: 100%;
+  height: 16px;
+  border-radius: 6px 6px 3px 3px;
+  background: linear-gradient(180deg, #4b4b50 0%, #2b2b2e 55%, #1b1b1d 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .2);
+}
+
+.pulpito-corpo {
+  width: 88%;
+  padding: 16px 14px 22px;
+  clip-path: polygon(0 0, 100% 0, 95% 100%, 5% 100%);
+  background: linear-gradient(180deg, #27272b 0%, #141416 100%);
+}
+
+.pulpito-placa {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 116px;
+  padding: 14px 10px;
+  border: 1px solid rgba(220, 196, 140, .45);
+  border-radius: 8px;
+  background: radial-gradient(120% 90% at 50% 0%, rgba(220, 196, 140, .12), rgba(220, 196, 140, 0) 70%);
+}
+
+.pulpito-placa img {
+  height: 32px;
+  width: auto;
+  opacity: .9;
+}
+
+.pulpito-placa span {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  text-align: center;
+  text-wrap: balance;
+  color: var(--gild-300);
+}
+
+.pulpito-base {
+  width: 104%;
+  height: 12px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #2f2f33 0%, #121214 100%);
+}
+
 /* The paper ballot (LinhaDaCedula in pages/Votacao.tsx): the check pops
    into a box as it's marked, a name already picked in another question
    gets a red pen stroke drawn across it, a blank vote crosses the whole

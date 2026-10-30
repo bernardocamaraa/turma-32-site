@@ -21,9 +21,10 @@
 //   - `codigo`: COMMITTEE_CODE. Creates questions (open right away, or
 //     ready to open later; editable until closed), opens, deletes and
 //     closes them, shows/hides the results and chooses what the class sees
-//     of them (`exibir`), arranges the ballot's order (`ordenar`) and
-//     duplicates a question (`duplicar`), and sees and edits each
-//     formando's number.
+//     of them (`exibir`), names the role on the result's pulpits (`cargo`),
+//     records who gave up their place in a category (`abrirMao`), arranges
+//     the ballot's order (`ordenar`) and duplicates a question
+//     (`duplicar`), and sees and edits each formando's number.
 //     Opening refuses a question that shares a name with one already voted
 //     on, unless `mesmoAssim` (abrir_perguntas in votacao.sql).
 //     Can also turn on the notification for a phone (`avisar`, with the
@@ -128,6 +129,8 @@ type Pergunta = {
   resultado_primeiros: number | null;
   resultado_votos: boolean;
   resultado_totais: boolean;
+  abriram_mao: string[];
+  cargo: string | null;
 };
 
 type Resultado = { opcao: string; votos: number | null };
@@ -162,10 +165,17 @@ function chave(nome: string): string {
  * question, the names elected in another one (by `chave`, with that one's
  * id), and the names with as many votes in two categories that still had
  * room — a tie the committee decides; here the one first on the ballot wins.
+ * A name that gave up its place in a category (`abriramMao`, by `chave`)
+ * doesn't compete there at all, whatever its votes. `eleitoEm`: where each
+ * name was elected.
  */
-function eleger(fechadas: { id: string; maximo: number; votos: { opcao: string; votos: number }[] }[]) {
+function eleger(fechadas: { id: string; maximo: number; abriramMao: string[]; votos: { opcao: string; votos: number }[] }[]) {
   const entradas = fechadas
-    .flatMap((q) => q.votos.filter((v) => v.votos > 0).map((v) => ({ q: q.id, nome: v.opcao, chave: chave(v.opcao), votos: v.votos })))
+    .flatMap((q) =>
+      q.votos
+        .filter((v) => v.votos > 0 && !q.abriramMao.includes(chave(v.opcao)))
+        .map((v) => ({ q: q.id, nome: v.opcao, chave: chave(v.opcao), votos: v.votos })),
+    )
     .sort((a, b) => b.votos - a.votos || a.nome.localeCompare(b.nome, 'pt-BR'));
   const vagas = new Map(fechadas.map((q) => [q.id, q.maximo]));
   const eleitoEm = new Map<string, string>();
@@ -191,7 +201,7 @@ function eleger(fechadas: { id: string; maximo: number; votos: { opcao: string; 
     if (!emOutra.has(e.q)) emOutra.set(e.q, new Map());
     emOutra.get(e.q)!.set(e.chave, em);
   }
-  return { emOutra, empates };
+  return { emOutra, empates, eleitoEm };
 }
 
 /**
@@ -231,8 +241,10 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { codigo, nome, whatsapp, acao, id, ids, votos, texto, tipo, opcoes, maximo, pronta, mesmoAssim, exibicao, formando, inscricao, endpoint } =
-      await req.json();
+    const {
+      codigo, nome, whatsapp, acao, id, ids, votos, texto, tipo, opcoes, maximo, pronta, mesmoAssim, exibicao, formando, inscricao, endpoint,
+      opcao, sim, cargo,
+    } = await req.json();
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -407,6 +419,34 @@ Deno.serve(async (req) => {
       if (error) throw error;
     }
 
+    // The role written on the result's pulpits (`cargo` in votacao.sql); empty clears it.
+    if (comissao && acao === 'cargo' && typeof id === 'string' && UUID.test(id) && typeof cargo === 'string') {
+      const limpo = cargo.trim().replace(/\s+/g, ' ');
+      if (limpo && (limpo.length < 2 || limpo.length > 40)) return recusar('O cargo pode ter de 2 a 40 letras.');
+      const { error } = await supabase.from('votacao_perguntas').update({ cargo: limpo || null }).eq('id', id);
+      if (error) throw error;
+    }
+
+    // Someone gives up (or takes back, `sim: false`) their place in a
+    // category — at any time, even with the vote open: the ballot and the
+    // votes stay as they are, only the places change (eleger).
+    if (comissao && acao === 'abrirMao' && typeof id === 'string' && UUID.test(id) && typeof opcao === 'string' && typeof sim === 'boolean') {
+      const { data: q, error } = await supabase.from('votacao_perguntas').select('tipo, opcoes, abriram_mao').eq('id', id).maybeSingle();
+      if (error) throw error;
+      if (!q) return recusar('Essa pergunta não existe mais.');
+      const { data: turma, error: erroTurma } = await supabase.from('convidados_formando').select('formando');
+      if (erroTurma) throw erroTurma;
+      const candidatos = q.tipo === 'formandos' ? turma.map((f) => f.formando as string) : (q.opcoes as string[]);
+      const nomeCerto = candidatos.find((c) => chave(c) === chave(opcao));
+      if (!nomeCerto) return recusar('Escolha um nome dessa pergunta.');
+      const antes = (q.abriram_mao as string[]).filter((n) => chave(n) !== chave(nomeCerto));
+      const { error: erroMudar } = await supabase
+        .from('votacao_perguntas')
+        .update({ abriram_mao: sim ? [...antes, nomeCerto] : antes })
+        .eq('id', id);
+      if (erroMudar) throw erroMudar;
+    }
+
     if (comissao && typeof id === 'string' && (acao === 'encerrar' || acao === 'liberar' || acao === 'esconder')) {
       // There is no "reopen": see the note at the top of this file.
       const mudanca =
@@ -514,7 +554,7 @@ Deno.serve(async (req) => {
     const [perguntas, contagem, participacao, formandos, avisos] = await Promise.all([
       supabase
         .from('votacao_perguntas')
-        .select('id, pergunta, tipo, opcoes, aberta, resultado_liberado, maximo, pronta, resultado_primeiros, resultado_votos, resultado_totais')
+        .select('id, pergunta, tipo, opcoes, aberta, resultado_liberado, maximo, pronta, resultado_primeiros, resultado_votos, resultado_totais, abriram_mao, cargo')
         // The ballot's order: as the committee arranged it, then the
         // questions made since, by when (`ordem` in votacao.sql).
         .order('ordem', { ascending: true, nullsFirst: false })
@@ -547,6 +587,7 @@ Deno.serve(async (req) => {
         .map((p) => ({
           id: p.id,
           maximo: p.maximo,
+          abriramMao: (p.abriram_mao ?? []).map(chave),
           votos: contagem.data.filter((c) => c.pergunta_id === p.id && c.opcao !== '').map((c) => ({ opcao: c.opcao as string, votos: c.votos as number })),
         })),
     );
@@ -590,15 +631,27 @@ Deno.serve(async (req) => {
         // where they went (or just "another category" if that result isn't
         // out yet). The committee gets them all, for its preview.
         const emOutra = eleicao.emOutra.get(p.id) ?? new Map<string, string>();
+        // Who gave up the place here (`abriuMao`): off the ranking too, and
+        // the class is told where they went instead — if that's out yet.
+        const abriramMao = new Set((p.abriram_mao ?? []).map(chave));
+        const fora = (r: { opcao: string }) => emOutra.has(chave(r.opcao)) || abriramMao.has(chave(r.opcao));
         const corte = completo?.[mostra.primeiros - 1]?.votos ?? 0;
         const eleitosEmOutra = (completo ?? [])
-          .filter((r) => emOutra.has(chave(r.opcao)))
+          .filter((r) => fora(r) && (r.votos > 0 || !abriramMao.has(chave(r.opcao))))
           .map((r) => {
-            const outra = todas.find((q) => q.id === emOutra.get(chave(r.opcao)))!;
-            return { nome: r.opcao, em: comissao || outra.resultado_liberado ? outra.pergunta : null, apareceria: r.votos > 0 && r.votos >= corte };
+            const abriuMao = abriramMao.has(chave(r.opcao));
+            const idOutra = abriuMao ? eleicao.eleitoEm.get(chave(r.opcao)) : emOutra.get(chave(r.opcao));
+            const outra = idOutra ? todas.find((q) => q.id === idOutra) : undefined;
+            return {
+              nome: r.opcao,
+              // Named by its role when it has one ("Homenagem aos mestres"), else by the question.
+              em: outra && (comissao || outra.resultado_liberado) ? (outra.cargo ?? outra.pergunta) : null,
+              apareceria: r.votos > 0 && r.votos >= corte,
+              abriuMao,
+            };
           })
           .filter((e) => comissao || e.apareceria);
-        const restantes = completo?.filter((r) => !emOutra.has(chave(r.opcao))) ?? null;
+        const restantes = completo?.filter((r) => !fora(r)) ?? null;
         const resultado = completo && !comissao ? paraTurma(restantes!, mostra.primeiros, mostra.votos) : completo;
         const totais = veResultado && (comissao || mostra.totais);
         return {
@@ -622,6 +675,9 @@ Deno.serve(async (req) => {
           validos: totais ? daPergunta.reduce((s, c) => s + (c.votos as number), 0) : null,
           brancos: totais ? brancos : null,
           exibicao: mostra,
+          cargo: p.cargo,
+          // Who gave up the place here, as the committee wrote them — committee only.
+          abriramMao: comissao ? (p.abriram_mao ?? []) : null,
           eleitosEmOutra,
           // Same votes here and in another category: who goes where is the committee's call.
           empate: comissao && veResultado ? (eleicao.empates.get(p.id) ?? null) : null,
