@@ -545,7 +545,9 @@ Deno.serve(async (req) => {
           votaram: comissao || totais ? votaram.length : null,
           faltam: comissao ? nomes.filter((n) => !votaram.includes(n)) : null,
           resultado,
-          validos: totais ? votaram.length - brancos : null,
+          // Votes given to a name; with `brancos`, every vote cast (2 per
+          // ballot on a 2-vote question).
+          validos: totais ? daPergunta.reduce((s, c) => s + (c.votos as number), 0) : null,
           brancos: totais ? brancos : null,
           exibicao: mostra,
         };

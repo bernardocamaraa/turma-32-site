@@ -190,10 +190,15 @@ com ou sem +55, e até sem o 9 da frente. O site acerta o formato sozinho
     enviado.
 - **Um voto por formando em cada pergunta.** Como o voto é secreto, ele não
   pode ser trocado depois.
-- **Várias escolhas:** ao criar a pergunta, a comissão diz quantas escolhas
-  cada formando faz ("Só uma", "Até 2"… "Até 5"). Numa pergunta "até 3", o
-  formando marca de 1 a 3 opções, e cada uma ganha um voto. Precisa sobrar
-  pelo menos uma opção sem marcar (com 4 opções, no máximo 3 escolhas).
+- **Vários votos:** ao criar a pergunta, a comissão diz quantos votos cada
+  formando tem ("1 voto", "2 votos"… "5 votos"), como no orador, que é uma
+  pergunta só de 2 votos. Cada voto vai para um nome diferente. Quem quiser
+  votar em menos marca os nomes e toca em "Anular o 2º voto" (ou "Anular os
+  outros N votos"): cada voto anulado conta como um voto em branco, e o
+  branco inteiro conta tantos brancos quantos votos a pergunta tem. Assim a
+  contagem é a mesma de quando eram duas perguntas ("1º voto" e "2º voto").
+  Precisa sobrar pelo menos uma opção sem marcar (com 4 opções, no máximo 3
+  votos).
 - **Tudo de uma vez:** o formando escolhe em todas as perguntas abertas e
   envia tudo junto no fim da página. O botão "Enviar meus votos" só libera
   quando todas têm uma escolha, e o servidor confere de novo
@@ -207,7 +212,7 @@ com ou sem +55, e até sem o 9 da frente. O site acerta o formato sozinho
 - **Voto em branco:** toda pergunta tem, na última linha da cédula,
   "Votar em branco", que conta como resposta. No resultado, os brancos
   aparecem à parte ("1 voto em branco"), fora das barras e das
-  porcentagens, que são só dos votos dados a uma opção. No banco, o branco
+  porcentagens, que são só dos votos dados a uma opção ("votos válidos"). No banco, o branco
   é contado na opção `''` (vazia), que nunca é uma opção de verdade.
 - **O voto não se repete:** ninguém pode escolher a mesma opção (a mesma
   pessoa) em duas perguntas, de nenhuma categoria (orador 1º e 2º voto,
@@ -244,10 +249,11 @@ com ou sem +55, e até sem o 9 da frente. O site acerta o formato sozinho
   dourado e os votos válidos e em branco sobem contando (com movimento
   reduzido no aparelho, tudo aparece de uma vez). Em cada pergunta
   encerrada, o quadro "O que a turma vê do resultado" escolhe quantos nomes
-  aparecem (no começo, quantas escolhas a pergunta tinha; empate na última
+  aparecem (no começo, quantos votos a pergunta tinha; empate na última
   vaga traz todos os empatados), se mostra os votos de cada um e se mostra
   os votos válidos e em branco, com uma prévia. "Votos válidos" são os
-  formandos que escolheram alguém. O que fica escondido nem é enviado ao
+  votos dados a um nome: numa pergunta de 2 votos, válidos e brancos somam
+  2 por formando que votou. O que fica escondido nem é enviado ao
   celular da turma (`resultado_*` em `votacao.sql`).
 - **Primeiro a cédula, depois os resultados:** enquanto o formando ainda
   tem pergunta aberta para votar, a página dele é só a cédula, com as
