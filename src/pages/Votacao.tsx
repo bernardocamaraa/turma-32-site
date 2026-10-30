@@ -30,7 +30,7 @@ import {
 } from '../lib/votacao';
 import { useIsMobile, usePrefersReducedMotion } from '../lib/useViewport';
 
-const POLL_MS = 20000;
+export const POLL_MS = 20000;
 
 const texto = { fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)', margin: 0 };
 const pequeno = { fontSize: 'var(--fs-body-sm)', color: 'var(--text-faint)' };
@@ -41,7 +41,7 @@ const CHAVE_ELEITOR = 'turma32-votacao-eleitor';
 // Remembers who's voting on this phone, so the number isn't retyped on
 // every visit. Storage can be blocked (private mode) — then the page just
 // asks again.
-function lerEleitor(): { whatsapp: string } | null {
+export function lerEleitor(): { whatsapp: string } | null {
   try {
     const salvo = JSON.parse(localStorage.getItem(CHAVE_ELEITOR) ?? 'null');
     return salvo && typeof salvo.whatsapp === 'string' ? { whatsapp: salvo.whatsapp } : null;
@@ -50,7 +50,7 @@ function lerEleitor(): { whatsapp: string } | null {
   }
 }
 
-function salvarEleitor(valor: { whatsapp: string } | null) {
+export function salvarEleitor(valor: { whatsapp: string } | null) {
   try {
     if (valor) localStorage.setItem(CHAVE_ELEITOR, JSON.stringify(valor));
     else localStorage.removeItem(CHAVE_ELEITOR);
@@ -261,6 +261,13 @@ export function Votacao({ codigoComissao }: { codigoComissao?: string }) {
               </div>
             </div>
           </Card>
+          {dados.perguntas.some((p) => p.resultado) ? (
+            <div style={{ display: 'flex' }}>
+              <Button variant="secondary" as="a" href="/resultados">
+                Ver todos os resultados juntos
+              </Button>
+            </div>
+          ) : null}
           {dados.perguntas.length === 0 ? (
             <p style={texto}>A comissão ainda não abriu nenhuma votação. Volte por aqui mais tarde.</p>
           ) : (
@@ -273,11 +280,11 @@ export function Votacao({ codigoComissao }: { codigoComissao?: string }) {
 }
 
 /**
- * The way in for a formando: their WhatsApp. When the committee already
+ * The way in for a formando: their WhatsApp (also on /resultados). When the committee already
  * has the number, that's all; otherwise they pick their name among the
  * ones with no number yet, and the number gets tied to it.
  */
-function Identificacao({
+export function Identificacao({
   livres,
   entrando,
   erro,
@@ -900,7 +907,7 @@ function Aviso({ children, icone }: { children: ReactNode; icone?: boolean }) {
 // The reveal of a result, in ms from when it comes into view: the caption
 // first, then each name in turn (each taking `nome` to come out of the
 // blur), and the totals counting up at the end.
-const REVELA = { primeiro: 700, entre: 800, nome: 1100, contagem: 900 };
+export const REVELA = { primeiro: 700, entre: 800, nome: 1100, contagem: 900 };
 
 /**
  * When a result plays its reveal: 'espera' until it scrolls into view (and
@@ -908,7 +915,7 @@ const REVELA = { primeiro: 700, entre: 800, nome: 1100, contagem: 900 };
  * 'agora'. 'pronto' with reduced motion (or no IntersectionObserver):
  * everything is just there.
  */
-function useRevelacao<T extends HTMLElement>(segurar = false): [RefObject<T>, 'espera' | 'agora' | 'pronto'] {
+export function useRevelacao<T extends HTMLElement>(segurar = false): [RefObject<T>, 'espera' | 'agora' | 'pronto'] {
   const ref = useRef<T>(null);
   const reduzido = usePrefersReducedMotion();
   const [estado, setEstado] = useState<'espera' | 'agora' | 'pronto'>(() =>
@@ -1038,7 +1045,8 @@ function ResultadoTurma({
               {eleitosEmOutra.length > 0 ? (n === 1 ? 'Fica com a vaga' : 'Ficam com as vagas') : n === 1 ? 'O mais votado' : `Os ${n} mais votados`}
             </span>
           )}
-          <div style={{ position: 'relative' }}>
+          {/* The pulpits' lights spread past the outer ones: cut at the sides, so a phone doesn't scroll sideways. */}
+          <div style={{ position: 'relative', overflowX: cargo ? 'clip' : undefined }}>
             {cargo ? (
               <ol
                 ref={lista}
@@ -1125,7 +1133,7 @@ function ResultadoTurma({
  * name comes out of the blur like in the list of names. `lado`: one of
  * several side by side (two speakers), so two fit across a phone.
  */
-function Pulpito({ nome, votos, cargo, atraso, lado }: { nome: string; votos: number | null; cargo: string; atraso: number; lado: boolean }) {
+export function Pulpito({ nome, votos, cargo, atraso, lado }: { nome: string; votos: number | null; cargo: string; atraso: number; lado: boolean }) {
   return (
     <li className="pulpito" style={{ width: lado ? 'min(250px, calc(50% - 10px))' : 'min(290px, 100%)' }}>
       <span aria-hidden className="revela-parte pulpito-luz" style={aos(atraso - 400)} />
@@ -1197,7 +1205,7 @@ const PECAS_DOURADAS = Array.from({ length: 26 }, (_, i) => {
  * after it mounts — the urna's confetti (urna-confete in global.css), in
  * gold. Its own clipped layer, so no piece widens the page on a phone.
  */
-function ConfeteDourado({ meio, altura, atraso }: { meio: number; altura?: number; atraso: number }) {
+export function ConfeteDourado({ meio, altura, atraso }: { meio: number; altura?: number; atraso: number }) {
   return (
     <div aria-hidden style={{ position: 'absolute', inset: '-80px -8px -40px', overflow: 'hidden', pointerEvents: 'none' }}>
       {PECAS_DOURADAS.map((c, i) => (
@@ -2403,6 +2411,15 @@ function LinkDaVotacao() {
         <span style={{ fontSize: 'var(--fs-body)', color: 'var(--accent)', wordBreak: 'break-all' }}>{urlDaVotacao()}</span>
         <span style={pequeno}>É o mesmo para a turma toda: cada formando entra com o próprio WhatsApp.</span>
         <BotoesLink url={urlDaVotacao()} mensagem="A votação da turma está aberta! Entre com o seu WhatsApp. O voto é secreto:" />
+        <span style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-h4)', fontWeight: 600, letterSpacing: '-.015em', marginTop: 'var(--space-5)' }}>
+          Link dos resultados
+        </span>
+        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--accent)', wordBreak: 'break-all' }}>{`${window.location.origin}/resultados`}</span>
+        <span style={pequeno}>
+          Todos os vencedores juntos, cada um no seu púlpito. A turma vê só os resultados que vocês mostrarem; neste aparelho
+          vocês veem a prévia de tudo o que já foi encerrado.
+        </span>
+        <BotoesLink url={`${window.location.origin}/resultados`} mensagem="Saiu o resultado da votação da turma! Entre com o seu WhatsApp:" />
       </div>
     </Card>
   );
