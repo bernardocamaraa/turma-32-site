@@ -1,33 +1,7 @@
 import { Card } from '../components/Card';
 import { PageHeader } from '../components/SectionHeading';
-import { FORMANDOS } from '../lib/formandos';
+import { assinaturaDe, FORMANDOS } from '../lib/formandos';
 import { useIsMobile } from '../lib/useViewport';
-
-/**
- * Nomes viram o slug dos arquivos em /assets/assinaturas (ex.: "Maria Luiza
- * Pires" → "maria-luiza-pires.png"). Só 29 dos 31 formandos têm assinatura
- * cadastrada até agora — os que faltam simplesmente não têm o arquivo, e a
- * lista mostra só o nome nesse caso.
- */
-function slugAssinatura(nome: string): string {
-  return nome
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
-}
-
-const COM_ASSINATURA = new Set([
-  'anna-carolina-russo', 'anna-clara-ribeiro', 'arthur-caetano', 'arthur-oliveira',
-  'bernardo-camara', 'bernardo-ignacio', 'caio-bezerra', 'carolina-warrak',
-  'enzo-louro', 'geovanna-russo', 'guilherme-warrak', 'isabella-guimaraes',
-  'isabella-monteiro', 'joao-pedro-jardim', 'lais-boldrim', 'laura-viana',
-  'livia-whitaker', 'lorenzo-nunes', 'lucas-loyola', 'lucas-varejao',
-  'luiza-goes', 'maian-costa', 'maria-clara-bispo', 'maria-eduarda-barroso',
-  'maria-luiza-pires', 'matheus-veiga', 'pietra-machado', 'sophia-afonso',
-  'susana-liu',
-]);
 
 export function Turma() {
   const mobile = useIsMobile();
@@ -74,8 +48,7 @@ export function Turma() {
           }}
         >
           {FORMANDOS.map((nome, i) => {
-            const slug = slugAssinatura(nome);
-            const temAssinatura = COM_ASSINATURA.has(slug);
+            const assinatura = assinaturaDe(nome);
             return (
               <li
                 key={nome}
@@ -94,9 +67,9 @@ export function Turma() {
                   </span>
                   <span style={{ fontFamily: 'var(--font-display)', fontWeight: 400, fontSize: 'var(--fs-h4)', lineHeight: 'var(--lh-snug)' }}>{nome}</span>
                 </span>
-                {temAssinatura ? (
+                {assinatura ? (
                   <img
-                    src={`/assets/assinaturas/${slug}.png`}
+                    src={assinatura}
                     alt={`Assinatura de ${nome}`}
                     style={{ flex: '0 0 auto', maxWidth: 110, maxHeight: 32, objectFit: 'contain' }}
                   />

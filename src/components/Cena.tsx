@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react';
+import type { CSSProperties, PointerEvent, ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { Button } from './Button';
 import { MapEmbed, MAPS_LINK } from './MapEmbed';
@@ -18,7 +18,12 @@ export function Revela({ children, style, atraso = 0 }: { children: ReactNode; s
   );
 }
 
-/** A tile of the "the night, in short" grid: small line, big fact, small line. */
+/**
+ * A tile of the "the night, in short" grid: small line, big fact, small line.
+ * Under a mouse it leans toward the pointer and its border lights up there
+ * (`.bloco-vivo`); the lean lives on an inner element because the reveal
+ * animation would otherwise override its transform.
+ */
 export function Bloco({
   children,
   coluna,
@@ -30,25 +35,48 @@ export function Bloco({
   atraso?: number;
   destaque?: boolean;
 }) {
+  const reduzido = usePrefersReducedMotion();
+
+  const inclinar = (e: PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== 'mouse') return;
+    const el = e.currentTarget;
+    const r = el.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width;
+    const y = (e.clientY - r.top) / r.height;
+    el.style.setProperty('--luz-x', `${(x * 100).toFixed(1)}%`);
+    el.style.setProperty('--luz-y', `${(y * 100).toFixed(1)}%`);
+    if (reduzido) return;
+    el.style.setProperty('--inc-x', `${((0.5 - y) * 5).toFixed(2)}deg`);
+    el.style.setProperty('--inc-y', `${((x - 0.5) * 5).toFixed(2)}deg`);
+  };
+  const endireitar = (e: PointerEvent<HTMLDivElement>) => {
+    e.currentTarget.style.setProperty('--inc-x', '0deg');
+    e.currentTarget.style.setProperty('--inc-y', '0deg');
+  };
+
   return (
-    <Revela
-      atraso={atraso}
-      style={{
-        gridColumn: coluna,
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'flex-end',
-        gap: 'var(--space-3)',
-        minHeight: 'clamp(150px, 22vw, 240px)',
-        padding: 'clamp(28px, 4vw, 44px)',
-        borderRadius: 'var(--radius-lg)',
-        background: destaque
-          ? 'radial-gradient(120% 140% at 0% 0%, rgba(169,211,232,.16) 0%, rgba(169,211,232,0) 55%), var(--ink-850)'
-          : 'var(--ink-850)',
-        border: '1px solid var(--stroke-hair)',
-      }}
-    >
-      {children}
+    <Revela atraso={atraso} style={{ gridColumn: coluna, display: 'flex' }}>
+      <div
+        className="bloco-vivo"
+        onPointerMove={inclinar}
+        onPointerLeave={endireitar}
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'flex-end',
+          gap: 'var(--space-3)',
+          minHeight: 'clamp(150px, 22vw, 240px)',
+          padding: 'clamp(28px, 4vw, 44px)',
+          borderRadius: 'var(--radius-lg)',
+          background: destaque
+            ? 'radial-gradient(120% 140% at 0% 0%, rgba(169,211,232,.16) 0%, rgba(169,211,232,0) 55%), var(--ink-850)'
+            : 'var(--ink-850)',
+          border: '1px solid var(--stroke-hair)',
+        }}
+      >
+        {children}
+      </div>
     </Revela>
   );
 }
