@@ -5,7 +5,6 @@ import { Button } from '../components/Button';
 import { MAPS_LINK } from '../components/MapEmbed';
 import { SectionEyebrowRule } from '../components/SectionHeading';
 import { AvisoConfirmacao } from '../components/AvisoConfirmacao';
-import { TresTurmas } from '../components/TresTurmas';
 import { Bloco, Grande, LinkSeta, MapaInclinado, Pequeno, Revela, Titulo } from '../components/Cena';
 import { baixarEventoDoBaile } from '../lib/calendario';
 import { useCountdown } from '../lib/countdown';
@@ -23,7 +22,6 @@ export function Home() {
     <main className="com-grao">
       <Abertura />
       <TextoQueAcende />
-      <TresTurmas />
       <FaixaDeAssinaturas />
       <Contagem />
       <ANoite />
@@ -262,8 +260,8 @@ function TextoQueAcende() {
 }
 
 /**
- * Scene 4. The class itself: every graduate's signature, in two rows
- * running in opposite directions. Pauses under the
+ * Scene 3. A break between the opening and the night's facts: every
+ * graduate's signature, in two rows running in opposite directions. Pauses under the
  * mouse; with reduced motion the rows stand still and scroll by hand.
  */
 function FaixaDeAssinaturas() {
@@ -303,21 +301,7 @@ function FaixaDeAssinaturas() {
   const lista: CSSProperties = { display: 'flex', gap: mobile ? 24 : 40, margin: 0, padding: 0, paddingRight: mobile ? 24 : 40, listStyle: 'none' };
 
   return (
-    <section style={{ padding: 'var(--space-9) 0 var(--space-10)' }}>
-      <Revela
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: 'var(--space-4)',
-          textAlign: 'center',
-          padding: '0 var(--gutter-page)',
-          marginBottom: 'var(--space-8)',
-        }}
-      >
-        <SectionEyebrowRule>As assinaturas</SectionEyebrowRule>
-        <Titulo>Cada um deixou a sua marca.</Titulo>
-      </Revela>
+    <section style={{ padding: 'var(--space-8) 0' }}>
       <Revela style={{ display: 'flex', flexDirection: 'column', gap: mobile ? 'var(--space-5)' : 'var(--space-6)' }}>
         {linhas.map((nomes, i) => (
           <div key={i} className="faixa">
@@ -337,7 +321,7 @@ function FaixaDeAssinaturas() {
 }
 
 /**
- * Scene 5. How long until the night, filling the screen. Each digit turns
+ * Scene 4. How long until the night, filling the screen. Each digit turns
  * over like a departures board when it changes, and the blue glow behind it
  * grows as it scrolls in — and stronger the closer the date is.
  */
@@ -473,7 +457,7 @@ function MiniCalendario() {
   );
 }
 
-/** Scene 6. The practical facts of the night, as tiles that rise in one after another. */
+/** Scene 5. The practical facts of the night, as tiles that rise in one after another. */
 function ANoite() {
   const mobile = useIsMobile();
   const navigate = useNavigate();

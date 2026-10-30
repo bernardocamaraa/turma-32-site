@@ -71,27 +71,3 @@ export function assinaturaDe(nome: string): string | null {
   return COM_ASSINATURA.has(slug) ? `/assets/assinaturas/${slug}.png` : null;
 }
 
-/**
- * A Turma 32 é a junção de três turmas: a 21 (só a Lívia), a 22 e a 23. A
- * Isabella Monteiro entrou na escola este ano, e não veio de nenhuma delas.
- * É o que a cena "três turmas, uma só" da página inicial conta.
- */
-export type TurmaDeOrigem = 21 | 22 | 23;
-
-export const CHEGOU_ESTE_ANO = 'Isabella Monteiro';
-
-const VIERAM_DA_21 = ['Lívia Whitaker'];
-
-const VIERAM_DA_23 = [
-  'Anna Carolina Russo', 'Arthur Caetano', 'Bernardo Câmara', 'Lucas Loyola',
-  'Lucas Varejão', 'Maian Costa', 'Maria Eduarda Barroso', 'Maria Luiza Pires',
-  'Matheus Veiga', 'Suellen Bazillio',
-];
-
-/** The class a graduate came from, or null for the one who arrived this year. */
-export function turmaDeOrigem(nome: string): TurmaDeOrigem | null {
-  if (nome === CHEGOU_ESTE_ANO) return null;
-  if (VIERAM_DA_21.includes(nome)) return 21;
-  if (VIERAM_DA_23.includes(nome)) return 23;
-  return 22;
-}
