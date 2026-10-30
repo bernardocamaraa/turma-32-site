@@ -10,6 +10,7 @@ import { Select } from '../components/Select';
 import { PageHeader } from '../components/SectionHeading';
 import { desligarAvisos, inscricaoAtual, ligarAvisos, situacaoAvisos } from '../lib/avisos';
 import { CarregandoSecao } from '../components/CarregandoSecao';
+import { assinaturaDoCandidato } from '../lib/formandos';
 import { precarregarUrna, UrnaVoto } from '../components/UrnaVoto';
 import { prepararSomDaUrna } from '../lib/somDaUrna';
 import {
@@ -1123,13 +1124,21 @@ function ResultadoTurma({
 /**
  * A winner over their pulpit, as if about to speak: the pulpit with the role
  * on its front comes up first, then a warm light comes on over it, then the
- * name comes out of the blur like in the list of names. `lado`: one of
- * several side by side (two speakers), so two fit across a phone.
+ * name comes out of the blur like in the list of names, over their own
+ * signature, faint, as a backdrop. `lado`: one of several side by side (two
+ * speakers), so two fit across a phone.
  */
 export function Pulpito({ nome, votos, cargo, atraso, lado }: { nome: string; votos: number | null; cargo: string; atraso: number; lado: boolean }) {
+  const assinatura = assinaturaDoCandidato(nome);
   return (
     <li className="pulpito" style={{ width: lado ? 'min(250px, calc(50% - 10px))' : 'min(290px, 100%)' }}>
       <span aria-hidden className="revela-parte pulpito-luz" style={aos(atraso - 400)} />
+      {/* The reveal animation owns this one's opacity, so the faintness is on the image inside. */}
+      {assinatura ? (
+        <span aria-hidden className="revela-parte pulpito-assinatura" style={aos(atraso + 300)}>
+          <img src={assinatura} alt="" />
+        </span>
+      ) : null}
       <span
         data-nome
         className="revela-parte revela-nome"
