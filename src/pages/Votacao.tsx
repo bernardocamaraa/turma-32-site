@@ -11,6 +11,7 @@ import { PageHeader } from '../components/SectionHeading';
 import { desligarAvisos, inscricaoAtual, ligarAvisos, situacaoAvisos } from '../lib/avisos';
 import { CarregandoSecao } from '../components/CarregandoSecao';
 import { precarregarUrna, UrnaVoto } from '../components/UrnaVoto';
+import { prepararSomDaUrna } from '../lib/somDaUrna';
 import {
   buscarVotacao,
   chaveDoNome,
@@ -475,6 +476,8 @@ function Cedula({
 
   async function enviar() {
     if (!pronta) return;
+    // Now, in the tap: later the browser wouldn't let the ballot box beep.
+    prepararSomDaUrna();
     const resumo = pendentes
       .map((p) => {
         const anulados = sobram(p) ? `, ${sobram(p) === 1 ? '1 voto anulado' : `${sobram(p)} votos anulados`}` : '';
