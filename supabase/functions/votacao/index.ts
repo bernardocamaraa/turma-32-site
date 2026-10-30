@@ -18,7 +18,7 @@
 //     their ballot is in: until then they get just the questions left to
 //     vote on.
 //   - `codigo`: COMMITTEE_CODE. Creates questions (open right away, or
-//     ready to open later, and editable until then), opens, deletes and
+//     ready to open later; editable until closed), opens, deletes and
 //     closes them, shows/hides the results and chooses what the class sees
 //     of them (`exibir`), arranges the ballot's order (`ordenar`) and
 //     duplicates a question (`duplicar`), and sees and edits each
@@ -313,14 +313,24 @@ Deno.serve(async (req) => {
       }
     }
 
-    // A ready question can still change, since nobody has seen it. Once
-    // opened it can't: votes would have gone to options that changed.
-    if (comissao && acao === 'editar' && typeof id === 'string') {
+    // A question not closed yet can change; once votes are in, only so far
+    // (editar_pergunta in votacao.sql says what and why).
+    if (comissao && acao === 'editar' && typeof id === 'string' && UUID.test(id)) {
       const lida = lerPergunta(texto, tipo, opcoes, maximo);
       if ('erro' in lida) return recusar(lida.erro);
-      const { data, error } = await supabase.from('votacao_perguntas').update(lida).eq('id', id).eq('pronta', true).select('id');
-      if (error) throw error;
-      if (data.length === 0) return recusar('Essa pergunta já foi aberta (ou excluída) e não dá mais para editar.');
+      const { error } = await supabase.rpc('editar_pergunta', {
+        p_id: id,
+        p_pergunta: lida.pergunta,
+        p_tipo: lida.tipo,
+        p_opcoes: lida.opcoes,
+        p_maximo: lida.maximo,
+        p_mesmo_assim: mesmoAssim === true,
+      });
+      if (error) {
+        // Messages raised on purpose in editar_pergunta() are for the committee.
+        if (error.code === 'P0001') return recusar(error.message);
+        throw error;
+      }
     }
 
     // Opening a ready question shows it to the class and starts its vote.

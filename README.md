@@ -164,10 +164,15 @@ com ou sem +55, e até sem o 9 da frente. O site acerta o formato sozinho
   turma não vê nem vota nela (o banco também recusa o voto) até a comissão
   tocar em "Abrir votação". Com duas ou mais prontas, aparece "Abrir as N
   agora", que abre todas juntas. Abrir não tem volta.
-- **Editar:** enquanto está pronta, a pergunta tem o botão "Editar": dá
-  para mudar o texto, os nomes (acrescentar ou tirar um candidato) e
-  quantas escolhas cada um faz. Depois de aberta, ela não muda mais, porque
-  os votos já foram para as opções dela.
+- **Editar:** até ser encerrada, a pergunta tem o botão "Editar". Pronta,
+  ou aberta sem ninguém ter votado, muda tudo: o texto, os nomes
+  (acrescentar ou tirar um candidato), o tipo e quantas escolhas cada um
+  faz. Aberta com votos, dá para corrigir o texto e acrescentar opções
+  (só quem ainda não votou vê); as que já estavam, o tipo e o número de
+  escolhas não mudam mais, porque os votos são contados por eles. Um nome
+  acrescentado que está numa pergunta em que alguém já votou sem ter votado
+  nesta pede confirmação, porque a pessoa poderia repetir o nome
+  (`editar_pergunta` em `votacao.sql`).
 - **Como um editor de formulário:** a aba Votação mostra as perguntas na
   ordem da cédula (a mesma que a turma vê), numeradas, e o formulário de
   pergunta nova fica no fim, porque a pergunta nova entra no fim da cédula.
