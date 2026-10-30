@@ -676,6 +676,7 @@ function PerguntaFormando({
             {/* A paper ballot, like the one that drops into the box (UrnaVoto): a line per option, a box to mark, and blank at the end. */}
             <div
               style={{
+                position: 'relative',
                 maxWidth: 560,
                 borderRadius: 10,
                 background: 'var(--chalk-050)',
@@ -698,6 +699,7 @@ function PerguntaFormando({
                       marcada={ativa}
                       // With a blank vote the names fade, but a tap still picks one.
                       apagada={usada || emBranco}
+                      riscada={usada}
                       bloqueada={cheia && !ativa}
                       nota={usada ? 'já escolhido' : undefined}
                       onClick={() => alternar(o)}
@@ -715,6 +717,13 @@ function PerguntaFormando({
               <LinhaDaCedula papel="checkbox" marcada={emBranco} tracejada onClick={() => onEscolher(emBranco ? [] : null)}>
                 Votar em branco
               </LinhaDaCedula>
+              {/* A blank vote crosses the whole ballot out with a big pen X, drawn stroke by stroke; the lines stay tappable under it. */}
+              {emBranco ? (
+                <svg aria-hidden className="cedula-x" viewBox="0 0 100 100" preserveAspectRatio="none">
+                  <line x1="5" y1="6" x2="95" y2="94" vectorEffect="non-scaling-stroke" />
+                  <line x1="95" y1="6" x2="5" y2="94" vectorEffect="non-scaling-stroke" />
+                </svg>
+              ) : null}
             </div>
 
             {repetidas.length > 0 ? (
@@ -742,6 +751,7 @@ function LinhaDaCedula({
   papel,
   marcada,
   apagada = false,
+  riscada = false,
   bloqueada = false,
   tracejada = false,
   nota,
@@ -752,6 +762,8 @@ function LinhaDaCedula({
   marcada: boolean;
   /** Faded: picked elsewhere, or a blank vote is marked. */
   apagada?: boolean;
+  /** Struck through in red pen: picked in another question already. */
+  riscada?: boolean;
   /** The question's limit is reached: unmark one first. */
   bloqueada?: boolean;
   /** Set apart from the names by a dashed line (the blank vote). */
@@ -804,7 +816,12 @@ function LinhaDaCedula({
       >
         {marcada ? <Check size={16} strokeWidth={3.2} color="var(--chalk-050)" style={{ animation: 'cedula-marca 220ms var(--ease-out) both' }} /> : null}
       </span>
-      <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{children}</span>
+      <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>
+        <span style={{ position: 'relative', display: 'inline-block', maxWidth: '100%' }}>
+          {children}
+          {riscada ? <span aria-hidden className="cedula-risco" /> : null}
+        </span>
+      </span>
       {nota ? <span style={{ flex: '0 0 auto', fontSize: 'var(--fs-caption)', fontWeight: 500, color: 'rgba(0,0,0,.45)' }}>{nota}</span> : null}
     </button>
   );

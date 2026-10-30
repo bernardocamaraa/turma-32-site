@@ -201,7 +201,9 @@ com ou sem +55, e até sem o 9 da frente. O site acerta o formato sozinho
 - **A cédula:** as opções de cada pergunta aparecem como uma cédula de
   papel, igual à que cai na urna na animação: um nome por linha, com um
   quadradinho que fica preto com ✓ ao ser marcado. A linha inteira é o
-  toque.
+  toque. Um nome já escolhido em outra pergunta ganha um risco vermelho de
+  caneta por cima, e o voto em branco desenha um X gigante na cédula
+  daquela pergunta.
 - **Voto em branco:** toda pergunta tem, na última linha da cédula,
   "Votar em branco", que conta como resposta. No resultado, os brancos
   aparecem à parte ("1 voto em branco"), fora das barras e das
