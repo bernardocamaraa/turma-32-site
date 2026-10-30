@@ -125,7 +125,8 @@ alter table public.votacao_contagem enable row level security;
 -- Deliberately no policies on these three: anon can't read or write them.
 
 -- Casts one formando's vote on one question: one option, up to the
--- question's `maximo` different ones, or a blank vote (`p_opcoes` null).
+-- question's `maximo` different ones (with '' for each of those votes left
+-- blank), or a blank vote (`p_opcoes` null).
 -- Marking them as having voted and adding one to each option happen in the
 -- same transaction, so a vote can't be counted without being marked (or the
 -- other way round), and the primary key on votacao_participacao is what
@@ -171,11 +172,14 @@ begin
     if array_position(p_opcoes, null) is not null then
       raise exception 'Escolha uma das opções da lista.';
     end if;
-    if (select count(distinct o) from unnest(p_opcoes) o) <> cardinality(p_opcoes) then
+    -- '' is one of the question's votes left blank ("anular o 2º voto"): it
+    -- may repeat, the names may not.
+    if (select count(distinct o) from unnest(p_opcoes) o where o <> '') <> (select count(*) from unnest(p_opcoes) o where o <> '') then
       raise exception 'Escolha opções diferentes na mesma pergunta.';
     end if;
 
     foreach v_opcao in array p_opcoes loop
+      continue when v_opcao = '';
       if v_tipo = 'formandos' then
         if not exists (select 1 from convidados_formando where formando = v_opcao) then
           raise exception 'Escolha um formando da lista.';
@@ -196,10 +200,12 @@ begin
   end if;
 
   -- A blank vote is counted under '' — never an option, since options are
-  -- trimmed and can't be empty — so the tally can show it apart.
+  -- trimmed and can't be empty — so the tally can show it apart. A whole
+  -- blank ballot is as many blank votes as the question gives (2 on a
+  -- 2-vote question), and each vote left blank is one.
   insert into votacao_contagem (pergunta_id, opcao, votos)
-  select p_pergunta, o, 1 from unnest(coalesce(p_opcoes, array[''])) o
-  on conflict (pergunta_id, opcao) do update set votos = votacao_contagem.votos + 1;
+  select p_pergunta, o, count(*) from unnest(coalesce(p_opcoes, array_fill(''::text, array[v_maximo]))) o group by o
+  on conflict (pergunta_id, opcao) do update set votos = votacao_contagem.votos + excluded.votos;
 end;
 $$;
 
@@ -342,6 +348,8 @@ begin
   select a.opcao, a.pergunta as primeira, b.pergunta as segunda into v_repetida
   from escolhas a
   join escolhas b on chave_opcao(a.opcao) = chave_opcao(b.opcao) and (a.criado_em, a.id) < (b.criado_em, b.id)
+  -- Votes left blank ('') aren't a name, and may be in any number of questions.
+  where a.opcao <> ''
   order by a.criado_em, b.criado_em
   limit 1;
   if found then

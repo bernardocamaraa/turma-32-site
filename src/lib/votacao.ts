@@ -44,9 +44,9 @@ export type Pergunta = {
    * once closed. Formandos get only what `exibicao` shows: the most voted.
    */
   resultado: Resultado[] | null;
-  /** Ballots that picked someone (`votaram` minus the blank ones) — sent along with `resultado`, to formandos only with the totals. */
+  /** Votes given to a name (on a 2-vote question, up to 2 per ballot) — sent along with `resultado`, to formandos only with the totals. */
   validos: number | null;
-  /** Blank votes, apart from the options — like `validos`. */
+  /** Blank votes, apart from the options: whole blank ballots and single votes left blank — like `validos`. */
   brancos: number | null;
   exibicao: Exibicao;
 };

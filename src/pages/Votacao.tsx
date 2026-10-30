@@ -420,6 +420,9 @@ function Cedula({
   const [escolhas, setEscolhas] = useState<Record<string, string[] | null>>({});
   const [erro, setErro] = useState<string | null>(null);
   const [enviariaNaPrevia, setEnviariaNaPrevia] = useState(false);
+  // Questions of several votes where the formando picked fewer names and
+  // left the rest blank on purpose ("Anular o 2º voto").
+  const [anuladas, setAnuladas] = useState<Record<string, boolean>>({});
   // Set once the server took the ballot in: plays it dropping into the box.
   const [naUrna, setNaUrna] = useState<{ quantos: number; emBranco: boolean } | null>(null);
 
@@ -434,8 +437,11 @@ function Cedula({
     return p ? feitas.filter((o) => (p.tipo === 'formandos' ? formandos : p.opcoes).includes(o)) : feitas;
   };
   const emBranco = (id: string) => escolhas[id] === null;
+  // Votes left blank: what's missing of a question's votes, once the formando anulled them.
+  const sobram = (p: Pergunta) => (anuladas[p.id] && de(p.id).length > 0 ? p.maximo - de(p.id).length : 0);
   const pendentes = perguntas.filter((p) => p.aberta && !p.jaVotou);
-  const faltam = pendentes.filter((p) => !emBranco(p.id) && de(p.id).length === 0);
+  // Each vote of a question is a name or left blank on purpose: two names on a 2-vote one, or one and the 2nd anulled.
+  const faltam = pendentes.filter((p) => !emBranco(p.id) && de(p.id).length + sobram(p) < p.maximo);
   const outras = (p: Pergunta) => pendentes.filter((q) => q.id !== p.id);
   // Options picked in `p` that are also picked in another question, and where
   // — the same name however it's spelled there (chaveDoNome).
@@ -452,6 +458,15 @@ function Cedula({
     setErro(null);
     setEnviariaNaPrevia(false);
     setEscolhas((atual) => ({ ...atual, [id]: opcoes }));
+    // A full set of names, none, or a blank vote: nothing left to anull.
+    const p = perguntas.find((q) => q.id === id);
+    if (!opcoes || opcoes.length === 0 || (p && opcoes.length >= p.maximo)) anular(id, false);
+  }
+
+  function anular(id: string, sim: boolean) {
+    setErro(null);
+    setEnviariaNaPrevia(false);
+    setAnuladas((atual) => ({ ...atual, [id]: sim }));
   }
 
   function irPara(id: string) {
@@ -460,10 +475,16 @@ function Cedula({
 
   async function enviar() {
     if (!pronta) return;
-    const resumo = pendentes.map((p) => `• ${p.pergunta}\n   ${emBranco(p.id) ? 'Em branco' : de(p.id).join(', ')}`).join('\n');
+    const resumo = pendentes
+      .map((p) => {
+        const anulados = sobram(p) ? `, ${sobram(p) === 1 ? '1 voto anulado' : `${sobram(p)} votos anulados`}` : '';
+        return `• ${p.pergunta}\n   ${emBranco(p.id) ? 'Em branco' : de(p.id).join(', ') + anulados}`;
+      })
+      .join('\n');
     const aviso = previa ? 'Prévia: nada vai ser enviado.\n\n' : '';
     if (!window.confirm(`${aviso}Confirmar os seus votos?\n\n${resumo}\n\nDepois de enviados, não dá para trocar.`)) return;
-    const votos = Object.fromEntries(pendentes.map((p) => [p.id, emBranco(p.id) ? null : de(p.id)]));
+    // A vote left blank goes as '' (votar_opcoes in votacao.sql counts it blank).
+    const votos = Object.fromEntries(pendentes.map((p) => [p.id, emBranco(p.id) ? null : [...de(p.id), ...Array(sobram(p)).fill('')]]));
     const cedula = { quantos: pendentes.length, emBranco: pendentes.every((p) => emBranco(p.id)) };
     // The preview plays it all the same — the ballot box included — and keeps the picks to try again.
     if (previa) {
@@ -475,6 +496,7 @@ function Cedula({
     setErro(falha);
     if (!falha) {
       setEscolhas({});
+      setAnuladas({});
       setNaUrna(cedula);
     }
   }
@@ -493,6 +515,8 @@ function Cedula({
           usadasEmOutras={outras(p).flatMap((q) => de(q.id).map(chaveDoNome))}
           repetidas={repetidas(p)}
           onEscolher={(opcoes) => escolher(p.id, opcoes)}
+          anulada={sobram(p) > 0}
+          onAnular={(sim) => anular(p.id, sim)}
           naUrna={naUrna !== null}
         />
       ))}
@@ -585,6 +609,8 @@ function PerguntaFormando({
   usadasEmOutras,
   repetidas,
   onEscolher,
+  anulada,
+  onAnular,
   naUrna,
 }: {
   p: Pergunta;
@@ -598,12 +624,17 @@ function PerguntaFormando({
   repetidas: { opcao: string; em: Pergunta }[];
   /** The options now picked, or null for a blank vote. */
   onEscolher: (opcoes: string[] | null) => void;
+  /** On a question of several votes: the ones without a name are left blank on purpose. */
+  anulada: boolean;
+  onAnular: (sim: boolean) => void;
   /** The ballot box is still on screen: a result waits for it to go before revealing. */
   naUrna: boolean;
 }) {
   const [busca, setBusca] = useState('');
   const varias = p.maximo > 1;
   const cheia = varias && escolhidas.length >= p.maximo;
+  // Several votes, some names picked but not all: the rest can be anulled (left blank).
+  const restantes = varias && !emBranco && escolhidas.length > 0 ? p.maximo - escolhidas.length : 0;
 
   // One choice: picking another replaces it. Several: each tap adds or
   // removes one, until the limit — then a name has to be unpicked first.
@@ -668,8 +699,10 @@ function PerguntaFormando({
                 {emBranco
                   ? 'Voto em branco. Para votar em alguém, toque num nome.'
                   : cheia
-                    ? `${p.maximo} escolhidos, o máximo. Para trocar, desmarque um.`
-                    : `Escolha até ${p.maximo} · ${escolhidas.length === 1 ? '1 escolhido' : `${escolhidas.length} escolhidos`}`}
+                    ? `${p.maximo} escolhidos. Para trocar, desmarque um.`
+                    : anulada
+                      ? `${plural(escolhidas.length, 'escolhido', 'escolhidos')}, e ${restantes === 1 ? 'o outro voto anulado' : `os outros ${restantes} votos anulados`}.`
+                      : `Vote em ${p.maximo} nomes · ${plural(escolhidas.length, 'escolhido', 'escolhidos')}. Para votar em menos, anule o resto no fim da cédula.`}
               </span>
             ) : null}
 
@@ -714,6 +747,12 @@ function PerguntaFormando({
                   </span>
                 ) : null}
               </div>
+              {/* Fewer names than votes: the rest can be left blank on purpose, each counted as a blank vote. */}
+              {restantes > 0 ? (
+                <LinhaDaCedula papel="checkbox" marcada={anulada} tracejada onClick={() => onAnular(!anulada)}>
+                  {restantes === 1 ? `Anular o ${p.maximo}º voto` : `Anular os outros ${restantes} votos`}
+                </LinhaDaCedula>
+              ) : null}
               <LinhaDaCedula papel="checkbox" marcada={emBranco} tracejada onClick={() => onEscolher(emBranco ? [] : null)}>
                 Votar em branco
               </LinhaDaCedula>
@@ -1015,10 +1054,10 @@ function ResultadoTurma({
               Houve empate, por isso aparecem {n} nomes em vez de {exibicao.primeiros}.
             </span>
           ) : null}
-          {/* With several picks each, the names' votes add up to more than the valid votes. */}
+          {/* With several votes each, the names' votes add up to more than those who voted. */}
           {exibicao.votos && maximo > 1 ? (
             <span className="revela-parte" style={{ ...aos(fim), ...pequeno }}>
-              Cada formando podia escolher até {maximo} opções.
+              Cada formando tinha {maximo} votos.
             </span>
           ) : null}
         </>
@@ -1174,8 +1213,8 @@ function Totais({
   );
 }
 
-/** "How many can each formando pick", as the committee reads it; position + 1 is the number. */
-const QUANTAS_ESCOLHAS = ['Só uma', 'Até 2', 'Até 3', 'Até 4', 'Até 5'];
+/** "How many votes each formando has", as the committee reads it; position + 1 is the number. */
+const QUANTAS_ESCOLHAS = ['1 voto', '2 votos', '3 votos', '4 votos', '5 votos'];
 
 /**
  * The committee's form for a new question — or, with `editando`, for
@@ -1343,7 +1382,7 @@ function FormularioPergunta({
 
         <div style={{ maxWidth: 240 }}>
           <Select
-            label="Quantas escolhas cada formando faz"
+            label="Quantos votos cada formando tem"
             options={QUANTAS_ESCOLHAS}
             value={QUANTAS_ESCOLHAS[maximo - 1]}
             disabled={travada}
@@ -1355,7 +1394,10 @@ function FormularioPergunta({
             Com {lista.length} opções, dá para deixar escolher no máximo {lista.length - 1}.
           </span>
         ) : maximo > 1 ? (
-          <span style={pequeno}>Cada formando escolhe de 1 a {maximo} opções nessa pergunta.</span>
+          <span style={pequeno}>
+            Cada formando vota em {maximo} nomes diferentes. Quem quiser votar em menos anula os que sobram, e cada um
+            conta como voto em branco.
+          </span>
         ) : null}
 
         <span style={pequeno}>
