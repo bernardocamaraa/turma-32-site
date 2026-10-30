@@ -71,3 +71,18 @@ export function assinaturaDe(nome: string): string | null {
   return COM_ASSINATURA.has(slug) ? `/assets/assinaturas/${slug}.png` : null;
 }
 
+
+/**
+ * The signature of a name as the committee wrote it on a vote's options,
+ * which isn't always the full name ("João Pedro", "Maian"): the graduate
+ * with that exact name, or else the only one whose name starts with it.
+ * Null when it matches no one, or more than one.
+ */
+export function assinaturaDoCandidato(nome: string): string | null {
+  const chave = slugAssinatura(nome);
+  if (!chave) return null;
+  const exato = FORMANDOS.find((f) => slugAssinatura(f) === chave);
+  if (exato) return assinaturaDe(exato);
+  const comeca = FORMANDOS.filter((f) => slugAssinatura(f).startsWith(`${chave}-`));
+  return comeca.length === 1 ? assinaturaDe(comeca[0]) : null;
+}

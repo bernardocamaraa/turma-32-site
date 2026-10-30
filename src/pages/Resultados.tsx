@@ -4,7 +4,8 @@ import { CarregandoSecao } from '../components/CarregandoSecao';
 import { MensagemDaLivia } from '../components/MensagemDaLivia';
 import { PageHeader } from '../components/SectionHeading';
 import { lerCodigo } from '../lib/codigoComissao';
-import { buscarVotacao, resultadoDaTurma, type AcessoVotacao, type DadosVotacao } from '../lib/votacao';
+import { Revela, Titulo } from '../components/Cena';
+import { buscarVotacao, chaveDoNome, resultadoDaTurma, type AcessoVotacao, type DadosVotacao } from '../lib/votacao';
 import { ConfeteDourado, POLL_MS, Pulpito, REVELA, useRevelacao } from './Votacao';
 
 type Lugar = { chave: string; nome: string; votos: number | null; cargo: string };
@@ -26,8 +27,8 @@ function lugaresDe(dados: DadosVotacao): Lugar[] {
 
 /**
  * /resultados: the whole vote's result on one stage — it's one vote with
- * several questions, so every winner stands side by side over their pulpit,
- * the role written on each, revealed one after the other. Not linked from
+ * several questions, so every winner stands over their pulpit, the role
+ * written on each, one under the other, each revealed as it comes into view. Not linked from
  * the site: the committee sends the link to the class. Whoever opens it
  * sees each result once the committee releases it, no WhatsApp needed. On
  * a committee phone (its code saved by the committee area) it's a preview
@@ -99,13 +100,13 @@ export function Resultados() {
           ) : null}
 
           {lugares.length > 0 ? (
-            // Keyed by what's on stage, so a result released meanwhile plays the reveal again with it.
             <>
-              <Palco key={lugares.map((l) => l.chave).join('|')} lugares={lugares} />
+              <Palco lugares={lugares} />
               {/* Her message explains part of the result, so it comes with it. */}
               <div style={{ marginTop: 'var(--space-8)' }}>
                 <MensagemDaLivia />
               </div>
+              <Agradecimento nomes={candidatosDe(dados)} />
             </>
           ) : (
             <Card padding="var(--space-7)">
@@ -123,52 +124,106 @@ export function Resultados() {
 }
 
 /**
- * Every place on one stage: the pulpits rise together when the stage comes
- * into view, then the lights come on and the names come out one by one,
- * and gold confetti bursts over them as the last one lands.
+ * Everyone who ran in the questions on stage, each once (a name can be an
+ * option in several), in alphabetical order.
+ */
+function candidatosDe(dados: DadosVotacao): string[] {
+  const noPalco = dados.perguntas.filter((p) => p.resultado && (!dados.comissao || (!p.aberta && !p.pronta)));
+  const nomes = new Map<string, string>();
+  for (const p of noPalco) for (const o of p.tipo === 'opcoes' ? p.opcoes : []) if (!nomes.has(chaveDoNome(o))) nomes.set(chaveDoNome(o), o);
+  return [...nomes.values()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+}
+
+/** At the bottom of the page: thanks to everyone who put their name forward, winners or not. */
+function Agradecimento({ nomes }: { nomes: string[] }) {
+  return (
+    <Revela
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 'var(--space-5)',
+        marginTop: 'var(--space-9)',
+        paddingTop: 'var(--space-9)',
+        borderTop: '1px solid var(--stroke-hair)',
+        textAlign: 'center',
+      }}
+    >
+      <Titulo tamanho="var(--fs-h1)">Obrigado a todos que se candidataram.</Titulo>
+      <p style={{ margin: 0, maxWidth: '36rem', fontSize: 'var(--fs-body-lg)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)' }}>
+        Colocar o nome à disposição da turma não é pouca coisa. Cada candidatura fez desta votação uma escolha de verdade, e
+        qualquer um de vocês faria bonito em cima daquele púlpito.
+      </p>
+      {nomes.length > 0 ? (
+        <ul
+          style={{
+            listStyle: 'none',
+            margin: 0,
+            padding: 0,
+            maxWidth: '40rem',
+            display: 'flex',
+            flexWrap: 'wrap',
+            justifyContent: 'center',
+            gap: 'var(--space-2) var(--space-5)',
+            fontSize: 'var(--fs-body)',
+            color: 'var(--gild-300)',
+          }}
+        >
+          {nomes.map((n) => (
+            <li key={n} style={{ whiteSpace: 'nowrap' }}>
+              {n}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-faint)' }}>Comissão de formatura da Turma 32</span>
+    </Revela>
+  );
+}
+
+/**
+ * Every place on one stage, one pulpit under the other, well apart, so each
+ * winner gets the stage to themselves.
  */
 function Palco({ lugares }: { lugares: Lugar[] }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-10)' }}>
+      {lugares.map((l) => (
+        <LugarNoPalco key={l.chave} lugar={l} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * One pulpit, revealed when it scrolls into view — further down the page,
+ * the ones below would otherwise play to nobody: the pulpit rises, the
+ * light comes on, the name comes out, and gold confetti bursts over it.
+ */
+function LugarNoPalco({ lugar }: { lugar: Lugar }) {
   const [ref, estado] = useRevelacao<HTMLDivElement>();
   const lista = useRef<HTMLOListElement>(null);
   const [centro, setCentro] = useState<{ meio: number; altura: number } | null>(null);
-  const nome = (i: number) => REVELA.primeiro + i * REVELA.entre;
-  const fim = nome(lugares.length - 1) + REVELA.nome * 0.6;
+  const fim = REVELA.primeiro + REVELA.nome * 0.6;
 
   useEffect(() => {
     const ol = lista.current;
-    if (estado !== 'agora' || !ol) return;
-    const nomes = [...ol.querySelectorAll('[data-nome]')].map((el) => el.getBoundingClientRect());
-    if (nomes.length === 0) return;
+    const nome = ol?.querySelector('[data-nome]');
+    if (estado !== 'agora' || !ol || !nome) return;
     const caixa = ol.getBoundingClientRect();
-    setCentro({
-      meio: (Math.min(...nomes.map((r) => r.left)) + Math.max(...nomes.map((r) => r.right))) / 2 - caixa.left,
-      altura: (Math.min(...nomes.map((r) => r.top)) + Math.max(...nomes.map((r) => r.bottom))) / 2 - caixa.top,
-    });
+    const r = nome.getBoundingClientRect();
+    setCentro({ meio: (r.left + r.right) / 2 - caixa.left, altura: (r.top + r.bottom) / 2 - caixa.top });
   }, [estado]);
 
   return (
     <div
       ref={ref}
       className={estado === 'espera' ? 'revela-espera' : estado === 'agora' ? 'revela-agora' : undefined}
-      // The lights spread past the outer pulpits: cut at the sides, so a phone doesn't scroll sideways.
-      style={{ position: 'relative', overflowX: 'clip' }}
+      // The light spreads past the pulpit: cut at the sides, so a phone doesn't scroll sideways.
+      style={{ position: 'relative', width: '100%', overflowX: 'clip' }}
     >
-      <ol
-        ref={lista}
-        style={{
-          listStyle: 'none',
-          margin: 0,
-          padding: 'var(--space-8) 0 0',
-          display: 'flex',
-          flexWrap: 'wrap',
-          justifyContent: 'center',
-          alignItems: 'flex-end',
-          gap: 'var(--space-8) var(--space-5)',
-        }}
-      >
-        {lugares.map((l, i) => (
-          <Pulpito key={l.chave} nome={l.nome} votos={l.votos} cargo={l.cargo} atraso={nome(i)} lado />
-        ))}
+      <ol ref={lista} style={{ listStyle: 'none', margin: 0, padding: 'var(--space-8) 0 0', display: 'flex', justifyContent: 'center' }}>
+        <Pulpito nome={lugar.nome} votos={lugar.votos} cargo={lugar.cargo} atraso={REVELA.primeiro} lado={false} />
       </ol>
       {estado === 'agora' && centro ? <ConfeteDourado meio={centro.meio} altura={centro.altura} atraso={fim - 80} /> : null}
     </div>

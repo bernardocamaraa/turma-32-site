@@ -442,6 +442,28 @@ g[role="button"]:focus-visible .mesa-alvo {
   pointer-events: none;
 }
 
+/* The winner's signature, large and faint behind their name, tilted a
+   little the way a signature is written. */
+.pulpito-assinatura {
+  position: absolute;
+  left: -6%;
+  right: -6%;
+  top: -34px;
+  height: 130px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.pulpito-assinatura img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  opacity: .16;
+  transform: rotate(-6deg);
+}
+
 .pulpito-movel {
   position: relative;
   width: 100%;
