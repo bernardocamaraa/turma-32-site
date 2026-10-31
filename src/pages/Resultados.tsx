@@ -4,7 +4,7 @@ import { Card } from '../components/Card';
 import { CarregandoSecao } from '../components/CarregandoSecao';
 import { PageHeader } from '../components/SectionHeading';
 import { Revela, Titulo } from '../components/Cena';
-import { usePrefersReducedMotion } from '../lib/useViewport';
+import { useIsMobile, usePrefersReducedMotion } from '../lib/useViewport';
 import { buscarVotacao, chaveDoNome, type DadosVotacao } from '../lib/votacao';
 import { ConfeteDourado, POLL_MS, Pulpito, REVELA, useRevelacao } from './Votacao';
 
@@ -212,14 +212,25 @@ function DicaDeRolar() {
 }
 
 /**
- * Every place on one stage, one pulpit under the other, well apart, so each
- * winner gets the stage to themselves.
+ * Every place on one stage, well apart, so each winner gets room of their
+ * own: on a phone one pulpit under the other; on a wider screen side by
+ * side (three across on a computer), the last row centred.
  */
 function Palco({ lugares }: { lugares: Lugar[] }) {
+  const mobile = useIsMobile();
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-10)' }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: mobile ? 'column' : 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'center',
+        alignItems: mobile ? 'center' : 'flex-end',
+        gap: mobile ? 'var(--space-10)' : 'var(--space-9) var(--space-6)',
+      }}
+    >
       {lugares.map((l) => (
-        <LugarNoPalco key={l.chave} lugar={l} />
+        <LugarNoPalco key={l.chave} lugar={l} largura={mobile ? '100%' : 'min(310px, 100%)'} />
       ))}
     </div>
   );
@@ -230,7 +241,7 @@ function Palco({ lugares }: { lugares: Lugar[] }) {
  * the ones below would otherwise play to nobody: the pulpit rises, the
  * light comes on, the name comes out, and gold confetti bursts over it.
  */
-function LugarNoPalco({ lugar }: { lugar: Lugar }) {
+function LugarNoPalco({ lugar, largura }: { lugar: Lugar; largura: string }) {
   const [ref, estado] = useRevelacao<HTMLDivElement>();
   const lista = useRef<HTMLOListElement>(null);
   const [centro, setCentro] = useState<{ meio: number; altura: number } | null>(null);
@@ -250,7 +261,7 @@ function LugarNoPalco({ lugar }: { lugar: Lugar }) {
       ref={ref}
       className={estado === 'espera' ? 'revela-espera' : estado === 'agora' ? 'revela-agora' : undefined}
       // The light spreads past the pulpit: cut at the sides, so a phone doesn't scroll sideways.
-      style={{ position: 'relative', width: '100%', overflowX: 'clip' }}
+      style={{ position: 'relative', width: largura, overflowX: 'clip' }}
     >
       <ol ref={lista} style={{ listStyle: 'none', margin: 0, padding: 'var(--space-8) 0 0', display: 'flex', justifyContent: 'center' }}>
         <Pulpito nome={lugar.nome} votos={lugar.votos} cargo={lugar.cargo} atraso={REVELA.primeiro} lado={false} />
