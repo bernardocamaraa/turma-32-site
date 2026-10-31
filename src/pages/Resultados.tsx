@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { Card } from '../components/Card';
 import { CarregandoSecao } from '../components/CarregandoSecao';
 import { PageHeader } from '../components/SectionHeading';
 import { lerCodigo } from '../lib/codigoComissao';
 import { Revela, Titulo } from '../components/Cena';
+import { usePrefersReducedMotion } from '../lib/useViewport';
 import { buscarVotacao, chaveDoNome, resultadoDaTurma, type AcessoVotacao, type DadosVotacao } from '../lib/votacao';
 import { ConfeteDourado, POLL_MS, Pulpito, REVELA, useRevelacao } from './Votacao';
 
@@ -101,6 +103,7 @@ export function Resultados() {
           {lugares.length > 0 ? (
             <>
               <Palco lugares={lugares} />
+              <DicaDeRolar />
               <Agradecimento nomes={candidatosDe(dados)} />
             </>
           ) : (
@@ -173,6 +176,60 @@ function Agradecimento({ nomes }: { nomes: string[] }) {
       ) : null}
       <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-faint)' }}>Comissão de formatura da Turma 32</span>
     </Revela>
+  );
+}
+
+/**
+ * "There's more below": with one pulpit under the other, most of the stage
+ * starts off screen. Pinned to the bottom of the screen, gone once the
+ * page's end is in sight (and back if it scrolls up again).
+ */
+function DicaDeRolar() {
+  const reduzido = usePrefersReducedMotion();
+  const [mais, setMais] = useState(false);
+  useEffect(() => {
+    let raf = 0;
+    const medir = () => {
+      raf = 0;
+      setMais(window.scrollY + window.innerHeight < document.documentElement.scrollHeight - 240);
+    };
+    const agendar = () => {
+      if (!raf) raf = requestAnimationFrame(medir);
+    };
+    medir();
+    window.addEventListener('scroll', agendar, { passive: true });
+    window.addEventListener('resize', agendar);
+    return () => {
+      window.removeEventListener('scroll', agendar);
+      window.removeEventListener('resize', agendar);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  return (
+    <div
+      aria-hidden
+      style={{
+        position: 'fixed',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 5,
+        display: 'flex',
+        justifyContent: 'center',
+        padding: '48px 0 max(20px, env(safe-area-inset-bottom))',
+        // A fade from the page's black, so the hint reads over whatever is under it.
+        background: 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.85) 70%)',
+        opacity: mais ? 1 : 0,
+        transition: 'opacity var(--dur-slow) var(--ease-out)',
+        pointerEvents: 'none',
+      }}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, color: 'var(--text-muted)', fontSize: 'var(--fs-body-sm)' }}>
+        Role para ver todos
+        <ChevronDown size={24} strokeWidth={1.8} style={{ animation: reduzido ? undefined : 'dica-rolar 2200ms var(--ease-in-out) infinite' }} />
+      </div>
+    </div>
   );
 }
 
