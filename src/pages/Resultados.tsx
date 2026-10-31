@@ -3,48 +3,40 @@ import { ChevronDown } from 'lucide-react';
 import { Card } from '../components/Card';
 import { CarregandoSecao } from '../components/CarregandoSecao';
 import { PageHeader } from '../components/SectionHeading';
-import { lerCodigo } from '../lib/codigoComissao';
 import { Revela, Titulo } from '../components/Cena';
-import { usePrefersReducedMotion } from '../lib/useViewport';
-import { buscarVotacao, chaveDoNome, resultadoDaTurma, type AcessoVotacao, type DadosVotacao } from '../lib/votacao';
+import { useIsMobile, usePrefersReducedMotion } from '../lib/useViewport';
+import { buscarVotacao, chaveDoNome, type DadosVotacao } from '../lib/votacao';
 import { ConfeteDourado, POLL_MS, Pulpito, REVELA, useRevelacao } from './Votacao';
 
 type Lugar = { chave: string; nome: string; votos: number | null; cargo: string };
 
 /**
- * The places the class sees, in the ballot's order: each released result's
- * names (the server already cut them down to what shows), or — for the
- * committee — what each closed question would show once released
- * (resultadoDaTurma, as in its preview on the vote's tab).
+ * The places, in the ballot's order: each released result's names (the
+ * server already cut them down to what the class sees).
  */
 function lugaresDe(dados: DadosVotacao): Lugar[] {
-  return dados.perguntas.flatMap((p) => {
-    if (!p.resultado) return [];
-    if (dados.comissao && (p.aberta || p.pronta)) return [];
-    const mostra = dados.comissao ? resultadoDaTurma(p.resultado, p.exibicao, p.eleitosEmOutra) : p.resultado;
-    return mostra.map((r) => ({ chave: `${p.id}:${r.opcao}`, nome: r.opcao, votos: r.votos, cargo: p.cargo ?? p.pergunta }));
-  });
+  return dados.perguntas.flatMap((p) =>
+    (p.resultado ?? []).map((r) => ({ chave: `${p.id}:${r.opcao}`, nome: r.opcao, votos: r.votos, cargo: p.cargo ?? p.pergunta })),
+  );
 }
 
 /**
  * /resultados: the whole vote's result on one stage — it's one vote with
  * several questions, so every winner stands over their pulpit, the role
- * written on each, one under the other, each revealed as it comes into view. Not linked from
- * the site: the committee sends the link to the class. Whoever opens it
- * sees each result once the committee releases it, no WhatsApp needed. On
- * a committee phone (its code saved by the committee area) it's a preview
- * of every closed question, released or not.
+ * written on each, one under the other, each revealed as it comes into
+ * view. Not linked from the site: the committee sends the link to the
+ * class. Whoever opens it — the committee too — sees each result once the
+ * committee releases it, no WhatsApp needed; the committee previews a
+ * result before releasing it on the vote's tab.
  */
 export function Resultados() {
-  const [codigo] = useState(lerCodigo);
   const [dados, setDados] = useState<DadosVotacao | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const acesso: AcessoVotacao = codigo ? { codigo } : {};
 
   async function carregar() {
     setErro(null);
     try {
-      setDados(await buscarVotacao(acesso));
+      setDados(await buscarVotacao({}));
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Não foi possível abrir agora.');
     }
@@ -61,7 +53,7 @@ export function Resultados() {
     const id = setInterval(async () => {
       if (document.hidden) return;
       try {
-        setDados(await buscarVotacao(acesso));
+        setDados(await buscarVotacao({}));
       } catch (e) {
         console.error(e);
       }
@@ -70,7 +62,6 @@ export function Resultados() {
   }, [pronto]);
 
   const lugares = dados ? lugaresDe(dados) : [];
-  const naoLiberadas = dados?.comissao ? dados.perguntas.filter((p) => !p.aberta && !p.pronta && !p.resultadoLiberado).length : 0;
 
   return (
     <main
@@ -89,17 +80,6 @@ export function Resultados() {
         <CarregandoSecao erro={erro} onTentar={carregar} />
       ) : (
         <>
-          {dados.comissao ? (
-            <Card padding="var(--space-6) var(--space-7)">
-              <p style={{ margin: 0, fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)' }}>
-                Prévia da comissão: aqui aparece tudo o que já foi encerrado, como a turma vai ver.
-                {naoLiberadas > 0
-                  ? ` ${naoLiberadas === 1 ? '1 resultado ainda não foi mostrado' : `${naoLiberadas} resultados ainda não foram mostrados`} para a turma: cada um aparece para eles quando vocês mostrarem na aba Votação.`
-                  : ''}
-              </p>
-            </Card>
-          ) : null}
-
           {lugares.length > 0 ? (
             <>
               <Palco lugares={lugares} />
@@ -109,9 +89,7 @@ export function Resultados() {
           ) : (
             <Card padding="var(--space-7)">
               <p style={{ margin: 0, fontSize: 'var(--fs-body-lg)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)' }}>
-                {dados.comissao
-                  ? 'Nenhuma votação foi encerrada ainda.'
-                  : 'Os resultados ainda não saíram. Esta página mostra cada um assim que a comissão liberar.'}
+                Os resultados ainda não saíram. Esta página mostra cada um assim que a comissão liberar.
               </p>
             </Card>
           )}
@@ -126,7 +104,7 @@ export function Resultados() {
  * option in several), in alphabetical order.
  */
 function candidatosDe(dados: DadosVotacao): string[] {
-  const noPalco = dados.perguntas.filter((p) => p.resultado && (!dados.comissao || (!p.aberta && !p.pronta)));
+  const noPalco = dados.perguntas.filter((p) => p.resultado);
   const nomes = new Map<string, string>();
   for (const p of noPalco) for (const o of p.tipo === 'opcoes' ? p.opcoes : []) if (!nomes.has(chaveDoNome(o))) nomes.set(chaveDoNome(o), o);
   return [...nomes.values()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
@@ -234,14 +212,25 @@ function DicaDeRolar() {
 }
 
 /**
- * Every place on one stage, one pulpit under the other, well apart, so each
- * winner gets the stage to themselves.
+ * Every place on one stage, well apart, so each winner gets room of their
+ * own: on a phone one pulpit under the other; on a wider screen side by
+ * side (three across on a computer), the last row centred.
  */
 function Palco({ lugares }: { lugares: Lugar[] }) {
+  const mobile = useIsMobile();
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-10)' }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: mobile ? 'column' : 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'center',
+        alignItems: mobile ? 'center' : 'flex-end',
+        gap: mobile ? 'var(--space-10)' : 'var(--space-9) var(--space-6)',
+      }}
+    >
       {lugares.map((l) => (
-        <LugarNoPalco key={l.chave} lugar={l} />
+        <LugarNoPalco key={l.chave} lugar={l} largura={mobile ? '100%' : 'min(310px, 100%)'} />
       ))}
     </div>
   );
@@ -252,7 +241,7 @@ function Palco({ lugares }: { lugares: Lugar[] }) {
  * the ones below would otherwise play to nobody: the pulpit rises, the
  * light comes on, the name comes out, and gold confetti bursts over it.
  */
-function LugarNoPalco({ lugar }: { lugar: Lugar }) {
+function LugarNoPalco({ lugar, largura }: { lugar: Lugar; largura: string }) {
   const [ref, estado] = useRevelacao<HTMLDivElement>();
   const lista = useRef<HTMLOListElement>(null);
   const [centro, setCentro] = useState<{ meio: number; altura: number } | null>(null);
@@ -272,7 +261,7 @@ function LugarNoPalco({ lugar }: { lugar: Lugar }) {
       ref={ref}
       className={estado === 'espera' ? 'revela-espera' : estado === 'agora' ? 'revela-agora' : undefined}
       // The light spreads past the pulpit: cut at the sides, so a phone doesn't scroll sideways.
-      style={{ position: 'relative', width: '100%', overflowX: 'clip' }}
+      style={{ position: 'relative', width: largura, overflowX: 'clip' }}
     >
       <ol ref={lista} style={{ listStyle: 'none', margin: 0, padding: 'var(--space-8) 0 0', display: 'flex', justifyContent: 'center' }}>
         <Pulpito nome={lugar.nome} votos={lugar.votos} cargo={lugar.cargo} atraso={REVELA.primeiro} lado={false} />

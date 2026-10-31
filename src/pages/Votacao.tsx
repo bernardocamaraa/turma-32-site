@@ -2419,8 +2419,7 @@ function LinkDaVotacao() {
         <span style={{ fontSize: 'var(--fs-body)', color: 'var(--accent)', wordBreak: 'break-all' }}>{`${window.location.origin}/resultados`}</span>
         <span style={pequeno}>
           Todos os vencedores juntos, cada um no seu púlpito. O link não aparece no site: é só para vocês mandarem. Quem abrir
-          vê os resultados que vocês mostrarem, sem precisar do WhatsApp; neste aparelho vocês veem a prévia de tudo o que já
-          foi encerrado.
+          vê os resultados que vocês mostrarem, sem precisar do WhatsApp.
         </span>
         <BotoesLink url={`${window.location.origin}/resultados`} mensagem="Saiu o resultado da votação da turma! Veja aqui:" />
       </div>
