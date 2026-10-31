@@ -518,54 +518,6 @@ g[role="button"]:focus-visible .mesa-alvo {
   color: var(--gild-300);
 }
 
-/* A chat message received (MensagemDaLivia): a bubble with its little
-   tail at the top left, and the three dots of someone still typing. */
-.bolha-recebida {
-  position: relative;
-  padding: 8px 12px;
-  border-radius: 0 10px 10px 10px;
-  background: #202c33;
-  box-shadow: 0 1px 1px rgba(0, 0, 0, .25);
-}
-
-.bolha-recebida::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: -8px;
-  width: 8px;
-  height: 12px;
-  background: #202c33;
-  clip-path: polygon(0 0, 100% 0, 100% 100%);
-}
-
-.digitando {
-  display: flex;
-  gap: 5px;
-  padding: 6px 2px;
-}
-
-.digitando span {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #8696a0;
-  animation: digitando-pula 1.2s var(--ease-in-out) infinite;
-}
-
-.digitando span:nth-child(2) {
-  animation-delay: .15s;
-}
-
-.digitando span:nth-child(3) {
-  animation-delay: .3s;
-}
-
-@keyframes digitando-pula {
-  0%, 60%, 100% { transform: translateY(0); opacity: .5; }
-  30% { transform: translateY(-4px); opacity: 1; }
-}
-
 .pulpito-base {
   width: 104%;
   height: 12px;

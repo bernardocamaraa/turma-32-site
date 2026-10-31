@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Card } from '../components/Card';
 import { CarregandoSecao } from '../components/CarregandoSecao';
-import { MensagemDaLivia } from '../components/MensagemDaLivia';
 import { PageHeader } from '../components/SectionHeading';
 import { lerCodigo } from '../lib/codigoComissao';
 import { Revela, Titulo } from '../components/Cena';
@@ -102,10 +101,6 @@ export function Resultados() {
           {lugares.length > 0 ? (
             <>
               <Palco lugares={lugares} />
-              {/* Her message explains part of the result, so it comes with it. */}
-              <div style={{ marginTop: 'var(--space-8)' }}>
-                <MensagemDaLivia />
-              </div>
               <Agradecimento nomes={candidatosDe(dados)} />
             </>
           ) : (
