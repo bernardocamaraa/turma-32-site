@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode } from 'react';
 import { ArrowLeft, ArrowRight, Check, ClipboardPaste, Clock, Crosshair, Music, Play, TriangleAlert, User, Users, Youtube } from 'lucide-react';
 import { Badge } from '../components/Badge';
 import { BotoesLink } from '../components/BotoesLink';
@@ -11,6 +11,7 @@ import { Select } from '../components/Select';
 import { Popups, usePopup, type Popup } from '../components/Popups';
 import { lerEleitor, salvarEleitor } from '../lib/eleitor';
 import {
+  buscarAlternativas,
   buscarMusicas,
   formatarTempo,
   juntarNomes,
@@ -20,6 +21,7 @@ import {
   urlDaMusica,
   type AcaoMusicas,
   type AcessoMusicas,
+  type Alternativa,
   type DadosMusicas,
   type Grupo,
   type MusicaBase,
@@ -304,6 +306,7 @@ function PaginaMusica() {
             salvando={salvando}
             agir={agir}
             pedido={pedido}
+            buscarAlternativas={(video) => buscarAlternativas(eleitor!, video)}
           />
         </>
       )}
@@ -544,12 +547,16 @@ function PassoAPasso({
   salvando,
   agir,
   pedido,
+  buscarAlternativas: buscarAlt,
 }: {
   dados: DadosMusicas & { voce: string };
   salvando: boolean;
   agir: (acao: AcaoMusicas) => Promise<string | null>;
   pedido: PedidoEtapa;
+  /** Other versions of a video that won't play inside the site. */
+  buscarAlternativas: (video: string) => Promise<Alternativa[]>;
 }) {
+  const popup = usePopup();
   const grupo = dados.grupo;
   const fechado = !!grupo?.completo;
   // The song that counts now: the complete group's, or their own.
@@ -563,6 +570,12 @@ function PassoAPasso({
   // Just saved: step 4 throws the confetti (not when coming back later).
   const [festa, setFesta] = useState(0);
   const topo = useRef<HTMLDivElement>(null);
+  // The photo's link is signed anew on every read: keep the first one, so
+  // the record's label doesn't reload every few seconds.
+  const foto = useRef<string | null>(null);
+  if (!foto.current && dados.fotoInfancia) foto.current = dados.fotoInfancia;
+  // A group's record carries the class logo; so does a formando without a photo yet.
+  const rotulo = fechado ? null : foto.current;
 
   function ir(para: Etapa) {
     const de = ETAPAS.findIndex((e) => e.id === etapa);
@@ -589,7 +602,7 @@ function PassoAPasso({
 
   if (!dados.abertas) {
     return musica ? (
-      <PassoPronto musica={musica} paraGrupo={fechado} grupo={grupo} repetida={dados.repetida} abertas={false} salvando={salvando} convites={0} festa={0} />
+      <PassoPronto musica={musica} paraGrupo={fechado} grupo={grupo} repetida={dados.repetida} abertas={false} salvando={salvando} convites={0} festa={0} foto={rotulo} />
     ) : (
       <Card padding="var(--space-7)">
         <p style={texto}>A comissão já fechou a lista de músicas. Se você ainda não mandou a sua, fale com ela.</p>
@@ -621,56 +634,79 @@ function PassoAPasso({
             }}
           />
         ) : etapa === 'minuto' ? (
-          <PassoMinuto
-            link={link}
-            minuto={minuto}
-            segundo={segundo}
-            onMinuto={setMinuto}
-            onSegundo={setSegundo}
-            onInicio={definirInicio}
-            salvando={salvando}
-            erro={erro}
-            onVoltar={() => ir('link')}
-            onSalvar={async (inicio) => {
-              const falha = await agir({ acao: 'escolher', link, inicio, paraGrupo: fechado });
-              setErro(falha);
-              if (!falha) {
-                setFesta((f) => f + 1);
-                ir('pronto');
-              }
+          <ContextoAlternativas.Provider
+            value={{
+              buscar: buscarAlt,
+              usar: (codigo) => {
+                setLink(`https://youtu.be/${codigo}`);
+                popup({ tipo: 'info', titulo: 'Trocamos a versão', texto: 'Essa toca aqui no site. Confira se o minuto continua certo: em outra versão o começo pode mudar.' });
+              },
             }}
-          />
+          >
+            <PassoMinuto
+              link={link}
+              minuto={minuto}
+              segundo={segundo}
+              onMinuto={setMinuto}
+              onSegundo={setSegundo}
+              onInicio={definirInicio}
+              salvando={salvando}
+              erro={erro}
+              onVoltar={() => ir('link')}
+              onSalvar={async (inicio) => {
+                const falha = await agir({ acao: 'escolher', link, inicio, paraGrupo: fechado });
+                setErro(falha);
+                if (!falha) {
+                  setFesta((f) => f + 1);
+                  ir('pronto');
+                }
+              }}
+            />
+          </ContextoAlternativas.Provider>
         ) : musica ? (
-          <PassoPronto
-            musica={musica}
-            paraGrupo={fechado}
-            grupo={grupo}
-            repetida={dados.repetida}
-            abertas
-            salvando={salvando}
-            convites={grupo ? 0 : (dados.convites ?? []).length}
-            festa={festa}
-            erro={erro}
-            onMudarMinuto={() => {
-              setLink(linkDaMusica({ ...musica, inicio: 0 }));
-              definirInicio(musica.inicio);
-              ir('minuto');
+          <ContextoAlternativas.Provider
+            value={{
+              buscar: buscarAlt,
+              usar: (codigo) => {
+                setLink(`https://youtu.be/${codigo}`);
+                definirInicio(musica.inicio);
+                ir('minuto');
+                popup({ tipo: 'info', titulo: 'Quase lá!', texto: 'Confira o minuto nessa versão e toque em Salvar.' });
+              },
             }}
-            onTrocar={() => {
-              setLink('');
-              setMinuto('');
-              setSegundo('');
-              ir('link');
-            }}
-            onTirar={async () => {
-              const pergunta = fechado ? 'Tirar a música do grupo? Vocês podem escolher outra depois.' : 'Tirar a sua música? Você pode escolher outra depois.';
-              if (!window.confirm(pergunta)) return;
-              const falha = await agir({ acao: 'apagar', paraGrupo: fechado });
-              setErro(falha);
-              if (!falha) ir('link');
-            }}
-            onGrupo={() => ir('modo')}
-          />
+          >
+            <PassoPronto
+              musica={musica}
+              paraGrupo={fechado}
+              grupo={grupo}
+              repetida={dados.repetida}
+              abertas
+              salvando={salvando}
+              convites={grupo ? 0 : (dados.convites ?? []).length}
+              festa={festa}
+              foto={rotulo}
+              erro={erro}
+              onMudarMinuto={() => {
+                setLink(linkDaMusica({ ...musica, inicio: 0 }));
+                definirInicio(musica.inicio);
+                ir('minuto');
+              }}
+              onTrocar={() => {
+                setLink('');
+                setMinuto('');
+                setSegundo('');
+                ir('link');
+              }}
+              onTirar={async () => {
+                const pergunta = fechado ? 'Tirar a música do grupo? Vocês podem escolher outra depois.' : 'Tirar a sua música? Você pode escolher outra depois.';
+                if (!window.confirm(pergunta)) return;
+                const falha = await agir({ acao: 'apagar', paraGrupo: fechado });
+                setErro(falha);
+                if (!falha) ir('link');
+              }}
+              onGrupo={() => ir('modo')}
+            />
+          </ContextoAlternativas.Provider>
         ) : (
           // "Pronto" without a song (it was just taken out somewhere else): start over.
           passoModo
@@ -1218,7 +1254,11 @@ function Confete({ vez }: { vez: number }) {
   );
 }
 
-/** Step 4: the song is saved — a spinning record of it, to play, change or take out. */
+/**
+ * Step 4: the song is saved — a spinning record of it, to play, change or
+ * take out. The record's label is the formando's childhood photo, or the
+ * class logo (a group, or no photo sent to the committee yet).
+ */
 function PassoPronto({
   musica,
   paraGrupo,
@@ -1228,6 +1268,7 @@ function PassoPronto({
   salvando,
   convites,
   festa,
+  foto,
   erro,
   onMudarMinuto,
   onTrocar,
@@ -1244,6 +1285,8 @@ function PassoPronto({
   convites: number;
   /** Goes up when the song was just saved: throw the confetti. */
   festa: number;
+  /** Their childhood photo for the record's label — or null for the class logo. */
+  foto: string | null;
   erro?: string | null;
   onMudarMinuto?: () => void;
   onTrocar?: () => void;
@@ -1270,7 +1313,10 @@ function PassoPronto({
         </div>
 
         <div className="vinil" aria-hidden style={{ margin: 'var(--space-3) 0' }}>
-          <span className="vinil-rotulo" style={{ backgroundImage: `url(https://i.ytimg.com/vi/${musica.codigo}/hqdefault.jpg)` }} />
+          <span
+            className={`vinil-rotulo${foto ? '' : ' vinil-logo'}`}
+            style={{ backgroundImage: `url(${foto ?? '/assets/logo-32-pequena.png'})` }}
+          />
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', maxWidth: '30rem' }}>
@@ -1487,13 +1533,20 @@ type PlayerYT = {
   playVideo: () => void;
   getCurrentTime: () => number;
   getDuration?: () => number;
+  cueVideoById?: (opcoes: { videoId: string; startSeconds?: number }) => void;
   destroy: () => void;
 };
 
 type ApiYT = {
   Player: new (
     el: HTMLElement,
-    opcoes: { videoId: string; width?: string; height?: string; playerVars?: Record<string, number | string>; events?: Record<string, () => void> },
+    opcoes: {
+      videoId: string;
+      width?: string;
+      height?: string;
+      playerVars?: Record<string, number | string>;
+      events?: { onReady?: () => void; onStateChange?: (e: { data: number }) => void; onError?: (e: { data: number }) => void };
+    },
   ) => PlayerYT;
 };
 
@@ -1549,13 +1602,130 @@ function Previa({ codigo, inicio, player, tocar }: { codigo: string; inicio: num
   return <PlayerYoutube key={codigo} codigo={codigo} inicio={inicio} player={player} tocar={tocar} />;
 }
 
+/**
+ * Where a blocked video can look for other versions of the song, and what
+ * picking one does — given by the step showing the video (step 3 swaps the
+ * link; step 4 takes them back to step 3 with it). Without it (the
+ * committee's tab), the blocked video just links to YouTube.
+ */
+const ContextoAlternativas = createContext<{ buscar: (codigo: string) => Promise<Alternativa[]>; usar: (codigo: string) => void } | null>(null);
+
+/**
+ * In place of a video YouTube won't play inside other sites (VEVO and some
+ * labels turn that off): its cover, why, a button that opens it on YouTube
+ * already at the chosen second — and, looked up right away, other versions
+ * of the same song (lyrics, audio) that do play here, to swap with a tap.
+ * The original still counts: on the night the DJ plays it from YouTube.
+ */
+function VideoForaDoSite({ codigo, inicio }: { codigo: string; inicio: number }) {
+  const alternativas = useContext(ContextoAlternativas);
+  const [lista, setLista] = useState<Alternativa[] | null>(null);
+
+  useEffect(() => {
+    if (!alternativas) return;
+    let ativo = true;
+    alternativas.buscar(codigo).then(
+      (l) => ativo && setLista(l),
+      () => ativo && setLista([]),
+    );
+    return () => {
+      ativo = false;
+    };
+  }, [codigo]);
+
+  return (
+    <div style={{ width: '100%', maxWidth: 560, display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+      <div className="aparece" style={{ ...moldura, aspectRatio: 'auto', minHeight: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span
+          aria-hidden
+          style={{ position: 'absolute', inset: 0, backgroundImage: `url(https://i.ytimg.com/vi/${codigo}/hqdefault.jpg)`, backgroundSize: 'cover', backgroundPosition: 'center', filter: 'blur(6px) brightness(.35)', transform: 'scale(1.1)' }}
+        />
+        <div style={{ position: 'relative', width: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 'var(--space-3)', padding: 'var(--space-6) var(--space-5)' }}>
+          <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-primary)' }}>Esse vídeo não toca aqui no site</span>
+          <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--chalk-100)', maxWidth: '26rem' }}>
+            Quem publicou (a Vevo, por exemplo) não deixa ele tocar fora do YouTube. Pode manter: no baile, o DJ toca direto do
+            YouTube. {alternativas ? 'Ou use uma versão que toca aqui, logo abaixo.' : 'Para conferir o minuto, ouça por lá.'}
+          </span>
+          <Button as="a" href={linkDaMusica({ codigo, inicio })} target="_blank" rel="noreferrer" iconLeft={<Youtube size={18} aria-hidden />}>
+            {inicio > 0 ? `Abrir no YouTube em ${formatarTempo(inicio)}` : 'Abrir no YouTube'}
+          </Button>
+        </div>
+      </div>
+
+      {alternativas ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', textAlign: 'left' }}>
+          <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600 }}>Versões da mesma música que tocam aqui</span>
+          {lista === null ? (
+            <span style={{ ...pequeno, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span className="equalizador" aria-hidden style={{ height: 16, gap: 3 }}>
+                <span style={{ width: 3 }} />
+                <span style={{ width: 3 }} />
+                <span style={{ width: 3 }} />
+              </span>
+              Procurando versões com letra ou só o áudio…
+            </span>
+          ) : lista.length === 0 ? (
+            <span style={pequeno}>
+              Não achamos outra versão. Se quiser, procure no YouTube a música com "lyrics" ou "áudio" no nome e cole o link no passo 2.
+            </span>
+          ) : (
+            lista.map((v) => (
+              <button
+                key={v.codigo}
+                type="button"
+                className="aparece opcao-musica"
+                onClick={() => alternativas.usar(v.codigo)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 'var(--space-4)',
+                  width: '100%',
+                  padding: 'var(--space-3)',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'var(--ink-800)',
+                  border: '1px solid var(--stroke-hair)',
+                  color: 'var(--text-primary)',
+                  textAlign: 'left',
+                  font: 'inherit',
+                  cursor: 'pointer',
+                }}
+              >
+                <img
+                  src={`https://i.ytimg.com/vi/${v.codigo}/mqdefault.jpg`}
+                  alt=""
+                  width={96}
+                  height={54}
+                  style={{ width: 96, aspectRatio: '16 / 9', objectFit: 'cover', borderRadius: 8, background: '#000', flex: '0 0 auto' }}
+                />
+                <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: 1 }}>
+                  <span style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{v.titulo}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>{[v.canal, v.duracao].filter(Boolean).join(' · ')}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--gild-300)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                    Usar esta versão <ArrowRight size={14} aria-hidden />
+                  </span>
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 /** `tocar`: start playing as soon as it's ready (it was opened by a tap on "Ouvir"). */
 function PlayerYoutube({ codigo, inicio, player, tocar }: { codigo: string; inicio: number; player: MutableRefObject<PlayerYT | null>; tocar?: boolean }) {
   const lugar = useRef<HTMLDivElement>(null);
   const [falhou, setFalhou] = useState(false);
+  // YouTube refused to play it here: the owner (often VEVO) doesn't allow
+  // other sites to embed it (errors 101/150), or it's gone (100).
+  const [bloqueado, setBloqueado] = useState(false);
   // The start when the video was first shown: later changes only move the
   // "Ouvir a partir de" button, not the video under the formando's finger.
   const inicioInicial = useRef(inicio);
+  // The start as it is now, for when the video ends (below).
+  const inicioAtual = useRef(inicio);
+  inicioAtual.current = inicio;
 
   useEffect(() => {
     let ativo = true;
@@ -1576,6 +1746,18 @@ function PlayerYoutube({ codigo, inicio, player, tocar }: { codigo: string; inic
               player.current = criado;
               if (tocar) criado?.playVideo();
             },
+            // Played to the end, YouTube's own play button would start over
+            // from 0:00. Put the video back at the chosen second instead, so
+            // playing it again starts where the song starts on the night.
+            onStateChange: (e) => {
+              if (ativo && e.data === 0) criado?.cueVideoById?.({ videoId: codigo, startSeconds: inicioAtual.current });
+            },
+            onError: (e) => {
+              if (ativo && [100, 101, 150].includes(e.data)) {
+                if (player.current === criado) player.current = null;
+                setBloqueado(true);
+              }
+            },
           },
         });
       },
@@ -1588,6 +1770,7 @@ function PlayerYoutube({ codigo, inicio, player, tocar }: { codigo: string; inic
     };
   }, [codigo]);
 
+  if (bloqueado) return <VideoForaDoSite codigo={codigo} inicio={inicio} />;
   if (falhou) {
     return (
       <div style={moldura}>

@@ -74,6 +74,12 @@ export type DadosMusicas = {
   semGrupo: boolean;
   /** Committee only: every group. */
   grupos: Grupo[] | null;
+  /**
+   * A link (valid a day) to the formando's own childhood photo, the one the
+   * committee collected — for the record's label on the last step. Null when
+   * there's none yet, or for a complete group (the class logo goes there).
+   */
+  fotoInfancia?: string | null;
 };
 
 export type AcessoMusicas = { whatsapp: string; nome?: string } | { codigo: string } | Record<string, never>;
@@ -191,4 +197,16 @@ export function quantosTemMusica(d: DadosMusicas): number {
   const emFechado = new Set(fechados.flatMap(membrosDentro));
   const deGrupos = fechados.filter((g) => g.musica).flatMap(membrosDentro).length;
   return deGrupos + (d.musicas ?? []).filter((m) => !emFechado.has(m.formando)).length;
+}
+
+/** Another version of a song (lyrics, audio) that plays inside the site. */
+export type Alternativa = { codigo: string; titulo: string; canal: string | null; duracao: string | null };
+
+/**
+ * For a video YouTube won't play inside other sites (VEVO…): up to 3 other
+ * versions of the same song that do. Empty if none was found.
+ */
+export async function buscarAlternativas(acesso: AcessoMusicas, video: string): Promise<Alternativa[]> {
+  const r = await chamarFuncao<{ alternativas?: Alternativa[] }>('musicas', { ...acesso, acao: 'alternativas', video });
+  return r.alternativas ?? [];
 }

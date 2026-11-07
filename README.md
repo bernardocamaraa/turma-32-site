@@ -316,6 +316,25 @@ escolhe qual e em que minuto ela começa.
   dourado ao salvar). Quem já tem música cai direto no passo 4. No passo 3
   o tempo fica em dois campos grandes (minuto e segundo), e "Começar daqui"
   pega o ponto onde o vídeo está pausado.
+- **O disco do "Pronto"** tem no meio a foto de criança da pessoa (a
+  primeira que a comissão colocou na aba Fotos de criança). A função
+  `musicas` manda um link temporário (vale 1 dia) só da foto de quem entrou,
+  nunca a de outra pessoa. Em grupo, ou para quem ainda não tem foto, vai a
+  logo da turma.
+- **O player volta para o minuto escolhido** quando o vídeo termina: tocar
+  de novo começa dali, não do 0:00.
+- **Vídeos que não tocam fora do YouTube** (a Vevo e algumas gravadoras
+  bloqueiam): no lugar do player aparece a capa do vídeo com a explicação
+  e o botão "Abrir no YouTube em 1:30". A música vale normalmente, porque o
+  DJ toca direto do YouTube. Logo abaixo, o site mostra até 3 versões da
+  mesma música que tocam aqui ("lyrics", "áudio"): a função `musicas`
+  (`acao: 'alternativas'`) procura na página de busca do próprio YouTube,
+  tira remix, cover, mix e vídeos longos, põe as com letra/áudio primeiro e
+  confere no oEmbed quais tocam fora do YouTube. Tocar numa delas troca o
+  link e leva ao passo 3 com o mesmo minuto, para conferir (em outra versão
+  o começo pode mudar). Cada busca deixa uma linha nos logs da função. Como
+  depende da página do YouTube, pode parar de achar se o YouTube mudar a
+  página; aí aparece só "Não achamos outra versão".
 - **Notificações em tela cheia** (`src/components/Popups.tsx`): uma de cada
   vez, no meio da tela. As confirmações das próprias ações ("Música
   salva!", "Convite enviado!") fecham sozinhas em ~2,5 s; as novidades que
