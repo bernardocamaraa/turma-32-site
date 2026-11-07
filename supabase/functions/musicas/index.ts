@@ -21,6 +21,10 @@
 //     stay, and their creators see it. Once
 //     everyone invited has accepted, any of them picks the group's song
 //     (`escolher` with `paraGrupo`). The rules live in musicas.sql.
+//     `alternativas` (with a `video` id): for a video YouTube won't
+//     play inside other sites (VEVO…), up to 3 other versions of the same
+//     song ("lyrics", "audio") that do play here — found on YouTube's own
+//     search page, each checked against oEmbed. The committee can ask too.
 //     Also gets a link to their own childhood photo (`fotoInfancia`, from
 //     the committee's private `fotos-infancia` bucket — infancia.sql), for
 //     the record on the last step; never anyone else's.
@@ -136,6 +140,106 @@ const grupoParaPagina = (g: Grupo, semGrupo: Set<string>, emGrupo: Set<string>) 
       : null,
 });
 
+const CABECALHOS_YOUTUBE = {
+  'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+  'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+  // Skips the cookie-consent page some regions get instead of the results.
+  Cookie: 'CONSENT=YES+1; SOCS=CAI',
+};
+
+type Alternativa = { codigo: string; titulo: string; canal: string | null; duracao: string | null };
+
+/** A video's title even when oEmbed refuses it (videos that can't be embedded): from its page. */
+async function tituloDaPagina(codigo: string): Promise<string | null> {
+  const doOembed = await buscarTitulo(codigo);
+  if (typeof doOembed === 'string') return doOembed;
+  try {
+    const resposta = await fetch(`https://www.youtube.com/watch?v=${codigo}`, { headers: CABECALHOS_YOUTUBE, signal: AbortSignal.timeout(5000) });
+    const html = await resposta.text();
+    const m = /<meta property="og:title" content="([^"]+)"/.exec(html) ?? /<title>([^<]+?)(?: - YouTube)?<\/title>/.exec(html);
+    return m ? m[1].replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'") : null;
+  } catch (e) {
+    console.error(e);
+    return null;
+  }
+}
+
+/** "Artista - Música (Official Music Video) [4K]" → "Artista - Música": what to search for. */
+function tituloLimpo(titulo: string): string {
+  return titulo
+    .replace(/[([][^)\]]*(official|oficial|video|vídeo|clipe|clip|visualizer|4k|hd|ao vivo|live)[^)\]]*[)\]]/gi, '')
+    .replace(/\b(official|oficial)\b.*$/i, '')
+    .replace(/\bvevo\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+/** The videos on a YouTube search results page (its ytInitialData), in order. */
+async function buscarNoYoutube(busca: string): Promise<Alternativa[]> {
+  const resposta = await fetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(busca)}&sp=EgIQAQ%253D%253D`, {
+    headers: CABECALHOS_YOUTUBE,
+    signal: AbortSignal.timeout(6000),
+  });
+  const html = await resposta.text();
+  const m = /var ytInitialData = (\{.*?\});<\/script>/s.exec(html) ?? /window\["ytInitialData"\] = (\{.*?\});/s.exec(html);
+  if (!m) return [];
+  const achados: Alternativa[] = [];
+  const andar = (no: unknown) => {
+    if (!no || typeof no !== 'object' || achados.length >= 15) return;
+    if (Array.isArray(no)) return no.forEach(andar);
+    const o = no as Record<string, unknown>;
+    const v = o.videoRenderer as Record<string, any> | undefined;
+    if (v && typeof v.videoId === 'string') {
+      achados.push({
+        codigo: v.videoId,
+        titulo: v.title?.runs?.map((r: { text: string }) => r.text).join('') ?? v.title?.simpleText ?? '',
+        canal: v.ownerText?.runs?.[0]?.text ?? null,
+        duracao: v.lengthText?.simpleText ?? null,
+      });
+      return;
+    }
+    Object.values(o).forEach(andar);
+  };
+  andar(JSON.parse(m[1]));
+  return achados;
+}
+
+/** "3:45" / "1:02:03" → seconds. */
+const segundosDe = (t: string | null) => (t ? t.split(':').reduce((s, p) => s * 60 + Number(p), 0) : 0);
+
+/**
+ * Up to 3 versions of the song in `codigo` that can play inside the site:
+ * searches "<title> lyrics" and "<title> audio", puts lyric/audio videos
+ * first, drops the original, mixes and very long videos, and keeps only
+ * the ones oEmbed answers (YouTube refuses oEmbed for videos that can't be
+ * embedded).
+ */
+async function alternativasPara(codigo: string): Promise<Alternativa[]> {
+  const titulo = await tituloDaPagina(codigo);
+  if (!titulo) return [];
+  const base = tituloLimpo(titulo);
+  const listas = await Promise.all([`${base} lyrics`, `${base} audio`].map((b) => buscarNoYoutube(b).catch(() => [] as Alternativa[])));
+  const vistos = new Set([codigo]);
+  const candidatos: Alternativa[] = [];
+  for (const v of listas.flat()) {
+    if (vistos.has(v.codigo)) continue;
+    vistos.add(v.codigo);
+    const seg = segundosDe(v.duracao);
+    if (seg === 0 || seg > 12 * 60) continue;
+    if (/\b(mix|playlist|1 hour|1 hora|remix|cover|karaok[eê]|8d|slowed|sped up|nightcore)\b/i.test(v.titulo)) continue;
+    candidatos.push(v);
+  }
+  const nota = (v: Alternativa) => (/(lyrics?|letra|legendad|tradu)/i.test(v.titulo) ? 0 : /\b(audio|áudio)\b/i.test(v.titulo) ? 1 : 2);
+  candidatos.sort((a, b) => nota(a) - nota(b));
+  const conferidos = await Promise.all(
+    candidatos.slice(0, 8).map(async (v) => (typeof (await buscarTitulo(v.codigo)) === 'string' ? v : null)),
+  );
+  const saida = conferidos.filter((v): v is Alternativa => v !== null).slice(0, 3);
+  // One line per search in the function's logs, to see how well it finds them.
+  console.log(JSON.stringify({ alternativas: codigo, busca: base, achados: listas.map((l) => l.length), candidatos: candidatos.length, tocam: saida.map((v) => v.codigo) }));
+  return saida;
+}
+
 /** Same slug rule as middleware.ts and the infancia function: each formando's folder of childhood photos. */
 function slug(nome: string): string {
   return nome
@@ -164,7 +268,7 @@ Deno.serve(async (req) => {
 
   try {
     const {
-      codigo, whatsapp, nome, acao, link, inicio, formando, abertas: definirAbertas, paraGrupo, grupo, convidados, convidado, aceitar, sim,
+      codigo, whatsapp, nome, acao, link, inicio, formando, abertas: definirAbertas, paraGrupo, grupo, convidados, convidado, aceitar, sim, video,
     } = await req.json();
 
     const supabase = createClient(
@@ -220,6 +324,19 @@ Deno.serve(async (req) => {
         .order('criado_em');
       if (error) throw error;
       return data as Grupo[];
+    }
+
+    // Other versions of a video that won't play here. Only for someone who
+    // got in (a formando or the committee), and nothing else changes.
+    if (acao === 'alternativas') {
+      if (!comissao && !voce) return json({ error: 'Entre de novo com o seu WhatsApp.' }, 401);
+      if (typeof video !== 'string' || !/^[A-Za-z0-9_-]{11}$/.test(video)) return recusar('Vídeo inválido.');
+      try {
+        return json({ alternativas: await alternativasPara(video) });
+      } catch (e) {
+        console.error(e);
+        return json({ alternativas: [] });
+      }
     }
 
     const acoesDeGrupo = ['criarGrupo', 'convidar', 'desconvidar', 'responder', 'sairDoGrupo', 'semGrupo'];
