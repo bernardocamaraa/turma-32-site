@@ -44,8 +44,8 @@ on conflict (id) do nothing;
 
 -- The teachers' table: the venue's two rectangles beside the dance floor
 -- (once R1 and R2, the committee's) pushed together into one long table R,
--- 10 seats on each side.
-insert into public.mesas (id, capacidade, reservada_para) values ('R', 20, 'professores')
+-- with exactly one seat per teacher: it's full, no seats left for anyone.
+insert into public.mesas (id, capacidade, reservada_para) values ('R', 13, 'professores')
 on conflict (id) do update set capacidade = excluded.capacidade, reservada_para = excluded.reservada_para;
 
 update public.mesas

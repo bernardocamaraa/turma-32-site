@@ -41,10 +41,9 @@ export const POSICOES_MESAS: PosicaoMesa[] = [
   ...LINHAS_ESQUERDA.flatMap((cy, linha) =>
     COLUNAS_ESQUERDA.slice(0, linha === 3 ? 2 : 4).map((cx, coluna) => redonda(`E${linha * 4 + coluna + 1}`, cx, cy)),
   ),
-  // The venue's two rectangles (centered at y 92 and 209, 84 long each),
-  // pushed together into one long table from the top of the first to the
-  // bottom of the second.
-  { id: 'R', formato: 'retangular', x: pct(413, LARGURA), y: pct(150.5, ALTURA), altura: 201 },
+  // The venue's two rectangles (84 long each, centered at y 92 and 209),
+  // pushed together end to end, centered where the gap between them was.
+  { id: 'R', formato: 'retangular', x: pct(413, LARGURA), y: pct(150.5, ALTURA), altura: 168 },
   redonda('D1', 505, 52),
   redonda('D2', 505, 124),
   redonda('D3', 505, 188),

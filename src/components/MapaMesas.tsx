@@ -38,9 +38,11 @@ function lugaresEmVolta(p: PosicaoMesa, capacidade: number): { x: number; y: num
     const RET = ret(p);
     const porLado = Math.ceil(capacidade / 2);
     const passo = (RET.h - 12) / porLado;
+    // With an odd count the second side has one seat fewer: center it.
+    const folga = (porLado - (capacidade - porLado)) / 2;
     return Array.from({ length: capacidade }, (_, i) => {
       const lado = i < porLado ? -1 : 1;
-      const k = i % porLado;
+      const k = i < porLado ? i : i - porLado + folga;
       return { x: lado * (RET.w / 2 + 7), y: -RET.h / 2 + 6 + passo * (k + 0.5) };
     });
   }
@@ -295,10 +297,11 @@ function MesaAberta({
   const deitada = d.p.formato === 'retangular' && painel === 'baixo';
   const base = alcance(d.p);
   const r = deitada ? { x: base.y, y: base.x } : base;
-  // Grows as much as its shape allows, but never past the map's edges — nor,
-  // on a phone, past the slice of the (wider than the screen) map in view.
+  // Grows as much as its shape allows, but no taller than 70% of the map —
+  // the long table would otherwise take over the screen — nor, on a phone,
+  // wider than the slice of the (wider than the screen) map in view.
   const larguraVisivel = painel === 'baixo' ? W * 0.45 : W - 8;
-  const s = Math.min(ESCALA[d.p.formato], larguraVisivel / (2 * r.x), (H - 8) / (2 * r.y));
+  const s = Math.min(ESCALA[d.p.formato], larguraVisivel / (2 * r.x), (H * 0.7) / (2 * r.y));
   const a = { x: r.x * s, y: r.y * s };
   // Keep clear of the details panel: beside the map it covers about 40% of
   // its width; as a phone's bottom sheet, roughly the lower half.

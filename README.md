@@ -111,8 +111,8 @@ espalhar os lugares dele por mais de uma mesa, se não couber tudo numa só.
   link", "Mandar no WhatsApp" e "Novo link". Este último troca o link na
   hora, caso algum vaze, e o antigo para de funcionar.
 - **Mesa dos professores**: `R`, a mesa comprida ao lado da pista (as duas
-  retangulares da casa juntas, 20 lugares). Já vem com os 13 professores
-  (`mesas.ocupantes_fixos`), e só o código da comissão marca lugares nela.
+  retangulares da casa juntas). Tem 13 lugares, um para cada professor
+  (`mesas.ocupantes_fixos`), e já fica completa.
   A redonda `P`, embaixo da pista, é uma mesa comum.
 - **Fechar o mapa**: o botão "Fechar mapa" congela as mudanças da turma
   (por exemplo, quando o mapa for mandado para a casa de festas). A comissão
