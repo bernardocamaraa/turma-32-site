@@ -192,6 +192,17 @@ export function Musica() {
             />
           ) : null}
 
+          {!grupo && dados.abertas ? (
+            <DescerEmGrupo
+              voce={dados.voce}
+              formandos={dados.formandos ?? []}
+              emGrupo={dados.emGrupo ?? []}
+              semGrupo={dados.semGrupo ?? false}
+              salvando={salvando}
+              agir={agir}
+            />
+          ) : null}
+
           {fechado ? (
             <SecaoDaMusica
               key="grupo"
@@ -215,16 +226,6 @@ export function Musica() {
             />
           )}
 
-          {!grupo && dados.abertas ? (
-            <DescerEmGrupo
-              voce={dados.voce}
-              formandos={dados.formandos ?? []}
-              emGrupo={dados.emGrupo ?? []}
-              semGrupo={dados.semGrupo ?? false}
-              salvando={salvando}
-              agir={agir}
-            />
-          ) : null}
         </>
       )}
     </main>
