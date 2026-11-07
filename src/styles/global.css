@@ -888,3 +888,329 @@ g[role="button"]:focus-visible .mesa-alvo {
   height: 100%;
   border: 0;
 }
+
+/* ---------------------------------------------------------------------------
+   Pop-up notifications (components/Popups.tsx): full screen, one at a time,
+   over a blurred page. The card springs in, its icon pops, and it leaves
+   faster than it came. */
+.popup-fundo {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(24px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom));
+  background: radial-gradient(80% 60% at 50% 45%, color-mix(in srgb, var(--popup-cor) 22%, transparent), rgba(0, 0, 0, .82) 70%);
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  animation: popup-fundo 320ms ease-out both;
+}
+.popup-fundo.sai {
+  animation: popup-fundo-sai 220ms ease-in both;
+}
+.popup-cartao {
+  position: relative;
+  width: min(420px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 14px;
+  padding: 40px 28px 28px;
+  border-radius: 28px;
+  background: linear-gradient(180deg, rgba(44, 44, 46, .92), rgba(22, 22, 24, .96));
+  border: 1px solid rgba(245, 245, 247, .12);
+  box-shadow: 0 40px 100px rgba(0, 0, 0, .7), inset 0 1px 0 rgba(255, 255, 255, .06);
+  animation: popup-entra 560ms var(--ease-snap) both;
+}
+.popup-fundo.sai .popup-cartao {
+  animation: popup-sai 220ms ease-in both;
+}
+.popup-icone {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #000;
+  background: var(--popup-cor);
+  box-shadow: 0 0 0 10px color-mix(in srgb, var(--popup-cor) 18%, transparent), 0 0 60px color-mix(in srgb, var(--popup-cor) 60%, transparent);
+  animation: popup-icone 700ms 120ms var(--ease-snap) both;
+  margin-bottom: 6px;
+}
+.popup-titulo {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -.03em;
+  line-height: 1.12;
+  color: var(--text-primary);
+  text-wrap: balance;
+}
+.popup-texto {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.45;
+  color: var(--text-muted);
+  text-wrap: balance;
+}
+.popup-botoes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin-top: 10px;
+}
+.popup-botao {
+  min-height: 52px;
+  border-radius: 980px;
+  border: none;
+  font: 600 17px var(--font-core);
+  cursor: pointer;
+  background: var(--chalk-050);
+  color: #000;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.popup-botao:active {
+  transform: scale(.97);
+}
+.popup-botao.secundario {
+  background: transparent;
+  color: var(--text-muted);
+}
+.popup-botao:focus-visible {
+  outline: 2px solid var(--popup-cor);
+  outline-offset: 3px;
+}
+.popup-tempo {
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  bottom: 14px;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--popup-cor);
+  opacity: .5;
+  transform-origin: left;
+  animation: popup-tempo linear both;
+}
+@keyframes popup-fundo {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes popup-fundo-sai {
+  to { opacity: 0; }
+}
+@keyframes popup-entra {
+  from { opacity: 0; transform: translateY(40px) scale(.9); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes popup-sai {
+  to { opacity: 0; transform: scale(.95); }
+}
+@keyframes popup-icone {
+  0% { transform: scale(0) rotate(-40deg); }
+  60% { transform: scale(1.12) rotate(6deg); }
+  100% { transform: none; }
+}
+@keyframes popup-tempo {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
+/* ---------------------------------------------------------------------------
+   /musica (pages/Musica.tsx) */
+
+/* The header's equalizer: bars bouncing to an imaginary beat. */
+.equalizador {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 5px;
+  height: 44px;
+}
+.equalizador span {
+  width: 7px;
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(180deg, var(--gild-200), var(--gild-500));
+  transform-origin: bottom;
+  animation: equalizador 1.1s ease-in-out infinite;
+  box-shadow: 0 0 14px rgba(201, 169, 106, .35);
+}
+.equalizador span:nth-child(2) { animation-delay: -.45s; animation-duration: .9s; }
+.equalizador span:nth-child(3) { animation-delay: -.2s; animation-duration: 1.3s; }
+.equalizador span:nth-child(4) { animation-delay: -.7s; animation-duration: .8s; }
+.equalizador span:nth-child(5) { animation-delay: -.1s; animation-duration: 1.05s; }
+@keyframes equalizador {
+  0%, 100% { transform: scaleY(.25); }
+  50% { transform: scaleY(1); }
+}
+
+.titulo-musica {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(40px, 9vw, 80px);
+  font-weight: 800;
+  letter-spacing: -.045em;
+  line-height: .98;
+  padding-bottom: .06em;
+  background: linear-gradient(100deg, #ffffff 0%, #f5f5f7 35%, var(--gild-200) 62%, var(--gild-400) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Each step comes in from the side it's going to: forward from the right,
+   back from the left. */
+.passo-avanca { animation: passo-avanca 420ms var(--ease-snap) both; }
+.passo-volta { animation: passo-volta 420ms var(--ease-snap) both; }
+@keyframes passo-avanca {
+  from { opacity: 0; transform: translateX(28px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes passo-volta {
+  from { opacity: 0; transform: translateX(-28px); }
+  to { opacity: 1; transform: none; }
+}
+
+.etapa-linha {
+  transform-origin: left;
+  transition: transform 520ms var(--ease-snap);
+}
+.etapa-atual {
+  animation: etapa-atual 2.4s ease-in-out infinite;
+}
+@keyframes etapa-atual {
+  0%, 100% { box-shadow: 0 0 0 4px rgba(245, 245, 247, .12); }
+  50% { box-shadow: 0 0 0 8px rgba(245, 245, 247, .05); }
+}
+
+/* Step 1's two big choices. */
+.opcao-musica {
+  transition: transform var(--dur) var(--ease-out), border-color var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out),
+    background var(--dur) var(--ease-out);
+}
+.opcao-musica:hover {
+  transform: translateY(-3px);
+  border-color: rgba(201, 169, 106, .55) !important;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, .45), 0 0 0 1px rgba(201, 169, 106, .2);
+}
+.opcao-musica:active {
+  transform: scale(.98);
+}
+.opcao-musica:focus-visible {
+  outline: 2px solid var(--gild-300);
+  outline-offset: 3px;
+}
+.opcao-musica.ativa {
+  box-shadow: 0 0 0 1px var(--gild-400), 0 0 40px rgba(201, 169, 106, .18);
+}
+
+/* Things that appear when they become true: the video found, the check. */
+.aparece {
+  animation: aparece 520ms var(--ease-snap) both;
+}
+@keyframes aparece {
+  from { opacity: 0; transform: translateY(10px) scale(.96); }
+  to { opacity: 1; transform: none; }
+}
+.check-pop {
+  animation: check-pop 640ms var(--ease-snap) both;
+}
+@keyframes check-pop {
+  0% { transform: scale(0) rotate(-45deg); }
+  60% { transform: scale(1.15) rotate(6deg); }
+  100% { transform: none; }
+}
+
+/* Step 3's big minute and second boxes. */
+.campo-tempo {
+  width: 104px;
+  height: 72px;
+  border-radius: 18px;
+  border: 1px solid rgba(201, 169, 106, .35);
+  background: rgba(0, 0, 0, .35);
+  color: var(--gild-200);
+  font: 800 40px var(--font-display);
+  letter-spacing: -.03em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.campo-tempo::placeholder {
+  color: rgba(239, 224, 189, .3);
+}
+.campo-tempo:focus {
+  border-color: var(--gild-300);
+  box-shadow: 0 0 0 4px rgba(201, 169, 106, .2);
+}
+
+/* Step 4: the song as a spinning record, the video's thumbnail as its label. */
+.vinil {
+  position: relative;
+  width: min(240px, 62vw);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, transparent 0 31%, rgba(255, 255, 255, .05) 31.5% 32%, transparent 32.5%),
+    repeating-radial-gradient(circle, #111 0 2px, #1b1b1d 2px 4px);
+  box-shadow: 0 30px 70px rgba(0, 0, 0, .7), 0 0 0 1px rgba(255, 255, 255, .06), 0 0 60px rgba(201, 169, 106, .12);
+  animation: vinil-gira 7s linear infinite;
+}
+.vinil::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(from 40deg, transparent 0 10%, rgba(255, 255, 255, .1) 14%, transparent 20% 60%, rgba(255, 255, 255, .07) 64%, transparent 70%);
+  animation: vinil-gira 7s linear infinite reverse;
+}
+.vinil-rotulo {
+  position: absolute;
+  inset: 30%;
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center;
+  border: 3px solid var(--gild-400);
+}
+.vinil-rotulo::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 12%;
+  height: 12%;
+  margin: -6% 0 0 -6%;
+  border-radius: 50%;
+  background: #000;
+  box-shadow: 0 0 0 2px var(--gild-400);
+}
+@keyframes vinil-gira {
+  to { transform: rotate(360deg); }
+}
+
+/* A golden burst when the song is saved. */
+.confete-musica {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+.confete-musica i {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  width: 8px;
+  height: 14px;
+  border-radius: 2px;
+  opacity: 0;
+  animation: confete-musica 1400ms var(--ease-out) forwards;
+}
+@keyframes confete-musica {
+  0% { opacity: 1; transform: translate(-50%, -50%) rotate(0) scale(.6); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(var(--giro)) scale(1); }
+}
