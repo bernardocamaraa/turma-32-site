@@ -7,14 +7,14 @@
  * - /mesas/<link>: looks up whose personal link it is and serves index.html
  *   with that formando's name and image (public/previas/mesas/<slug>.jpg,
  *   made by scripts/gerar-previas.mjs).
- * - /votacao: the vote's single link gets its own title and description.
+ * - /votacao and /musica: the class-wide links get their own title and description.
  *
  * People opening the link get the normal page untouched — no extra lookup,
  * no delay. Anything that goes wrong (unknown link, Supabase slow or down)
  * also falls through to the normal page, with the site's generic preview.
  */
 
-export const config = { matcher: ['/mesas/:link', '/votacao'] };
+export const config = { matcher: ['/mesas/:link', '/votacao', '/musica'] };
 
 // Vercel provides the project's environment variables here at runtime; the
 // project has no @types/node, so declare just what this file reads.
@@ -109,6 +109,17 @@ export function comPreviaDaVotacao(html: string, url: URL): string {
   });
 }
 
+/** The preview for the stairs song's single link. */
+export function comPreviaDaMusica(html: string, url: URL): string {
+  return comPrevia(html, {
+    titulo: 'A música da sua descida · Turma 32',
+    descricao: 'Escolha a música para descer a escada no baile: cole o link do YouTube e diga o minuto em que ela começa.',
+    imagem: `${url.origin}/previas/turma-32.jpg`,
+    alt: 'Logo da Turma 32 sobre as assinaturas dos formandos',
+    url,
+  });
+}
+
 function respostaHtml(html: string, cache: string): Response {
   return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': cache } });
 }
@@ -123,6 +134,12 @@ export default async function middleware(request: Request): Promise<Response> {
       const pagina = await fetch(new URL('/index.html', url));
       if (!pagina.ok) return seguir();
       return respostaHtml(comPreviaDaVotacao(await pagina.text(), url), 'public, max-age=300');
+    }
+
+    if (url.pathname === '/musica') {
+      const pagina = await fetch(new URL('/index.html', url));
+      if (!pagina.ok) return seguir();
+      return respostaHtml(comPreviaDaMusica(await pagina.text(), url), 'public, max-age=300');
     }
 
     const link = decodeURIComponent(url.pathname.split('/')[2] ?? '');

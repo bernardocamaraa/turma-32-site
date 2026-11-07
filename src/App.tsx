@@ -15,6 +15,7 @@ import { Mesas } from './pages/Mesas';
 // area is committee only.
 const Votacao = lazy(() => import('./pages/Votacao').then((m) => ({ default: m.Votacao })));
 const Comissao = lazy(() => import('./pages/Comissao').then((m) => ({ default: m.Comissao })));
+const Musica = lazy(() => import('./pages/Musica').then((m) => ({ default: m.Musica })));
 const Resultados = lazy(() => import('./pages/Resultados').then((m) => ({ default: m.Resultados })));
 
 // Where the committee's pages used to be, before they became tabs of the
@@ -26,6 +27,8 @@ const ANTIGOS: [string, string][] = [
   ...['/infancia', '/infância', '/fotos-de-crianca', '/fotos-de-criança', '/fotos-infancia', '/fotos-infância'].map(
     (p): [string, string] => [p, '/comissao/fotos-de-crianca'],
   ),
+  // The song link typed by hand, with an accent or in the plural.
+  ...['/música', '/musicas', '/músicas'].map((p): [string, string] => [p, '/musica']),
 ];
 
 function ScrollToTop() {
@@ -76,6 +79,14 @@ function AppRoutes() {
           }
         />
         <Route path="/mesas/:link" element={<Mesas />} />
+        <Route
+          path="/musica"
+          element={
+            <Suspense fallback={<Carregando tela />}>
+              <Musica />
+            </Suspense>
+          }
+        />
         <Route
           path="/votacao"
           element={
