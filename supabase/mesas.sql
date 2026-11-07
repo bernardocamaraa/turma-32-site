@@ -28,7 +28,7 @@ create table if not exists public.mesas (
 );
 
 -- People who aren't formandos but have a seat set aside — the teachers at
--- table P. Each name takes one seat and counts towards the table's
+-- table R. Each name takes one seat and counts towards the table's
 -- capacity; the map lists them like everyone else.
 alter table public.mesas
   add column if not exists ocupantes_fixos text[] not null default '{}';
@@ -38,14 +38,29 @@ insert into public.mesas (id, reservada_para) values
   ('E5', null), ('E6', null), ('E7', null), ('E8', null),
   ('E9', null), ('E10', null), ('E11', null), ('E12', null),
   ('E13', null), ('E14', null),
-  ('R1', 'comissao'), ('R2', 'comissao'),
   ('D1', null), ('D2', null), ('D3', null), ('D4', null),
-  ('P', 'professores')
+  ('P', null)
 on conflict (id) do nothing;
 
+-- The teachers' table: the venue's two rectangles beside the dance floor
+-- (once R1 and R2, the committee's) pushed together into one long table R,
+-- 10 seats on each side.
+insert into public.mesas (id, capacidade, reservada_para) values ('R', 20, 'professores')
+on conflict (id) do update set capacidade = excluded.capacidade, reservada_para = excluded.reservada_para;
+
 update public.mesas
-set ocupantes_fixos = array['Vitor', 'Gustavo', 'Flávia', 'Diniz', 'Cristiano', 'Ozael', 'Cleidson', 'Cláudio', 'Araújo', 'Lorena']
-where id = 'P';
+set ocupantes_fixos = array['Vitor', 'Gustavo', 'Flávia', 'Diniz', 'Cristiano', 'Ozael', 'Cleidson', 'Cláudio', 'Araújo', 'Lorena', 'Thereza', 'Jairo', 'Vânia']
+where id = 'R';
+
+-- For a project from before R: anyone the committee seated at R1/R2 moves
+-- to R, the two rectangles go away, and P — the teachers' table until then
+-- — becomes an ordinary table the class can pick.
+insert into public.reservas_mesa (formando, mesa, lugares)
+select formando, 'R', sum(lugares) from public.reservas_mesa where mesa in ('R1', 'R2') group by formando
+on conflict (formando, mesa) do update set lugares = reservas_mesa.lugares + excluded.lugares;
+delete from public.mesas where id in ('R1', 'R2');
+update public.mesas set reservada_para = null, ocupantes_fixos = '{}'
+where id = 'P' and reservada_para = 'professores';
 
 -- How many people each formando brings, the formando included. Starts at 0
 -- (not filled in yet). The committee types only the guests, as the venue's

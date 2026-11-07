@@ -4,8 +4,9 @@ import { chamarFuncao } from './supabase';
  * The venue's table map, traced from the floor plan the venue sent (602×336
  * px). Positions are the center of each table as a percentage of that
  * drawing, so the map scales to any width. Ids follow the layout: E = the
- * grid on the left, R = the two rectangles beside the dance floor, D = the
- * column on the far right, P = the teachers' table.
+ * grid on the left, R = the long table beside the dance floor (the venue's
+ * two rectangles pushed together — the teachers' table), D = the column on
+ * the far right, P = the round one below the dance floor.
  *
  * Which tables are reserved (professores/comissão) lives in the database
  * (`mesas.reservada_para`) — that's what's enforced — this file only says
@@ -19,6 +20,8 @@ export type PosicaoMesa = {
   /** Center, in % of the map's width/height. */
   x: number;
   y: number;
+  /** Rectangles only: length in the floor plan's px (84 for one of the venue's rectangles). */
+  altura?: number;
 };
 
 const LARGURA = 602;
@@ -38,20 +41,16 @@ export const POSICOES_MESAS: PosicaoMesa[] = [
   ...LINHAS_ESQUERDA.flatMap((cy, linha) =>
     COLUNAS_ESQUERDA.slice(0, linha === 3 ? 2 : 4).map((cx, coluna) => redonda(`E${linha * 4 + coluna + 1}`, cx, cy)),
   ),
-  { id: 'R1', formato: 'retangular', x: pct(413, LARGURA), y: pct(92, ALTURA) },
-  { id: 'R2', formato: 'retangular', x: pct(413, LARGURA), y: pct(209, ALTURA) },
+  // The venue's two rectangles (centered at y 92 and 209, 84 long each),
+  // pushed together into one long table from the top of the first to the
+  // bottom of the second.
+  { id: 'R', formato: 'retangular', x: pct(413, LARGURA), y: pct(150.5, ALTURA), altura: 201 },
   redonda('D1', 505, 52),
   redonda('D2', 505, 124),
   redonda('D3', 505, 188),
   redonda('D4', 505, 253),
   redonda('P', 321, 259),
 ];
-
-/** Size of each kind of table, in % of the map's width/height. */
-export const TAMANHO_MESA: Record<FormatoMesa, { w: number; h: number }> = {
-  redonda: { w: pct(44, LARGURA), h: pct(44, ALTURA) },
-  retangular: { w: pct(50, LARGURA), h: pct(92, ALTURA) },
-};
 
 /** The dance floor, as a box in % (left, top, width, height). */
 export const PISTA = { x: pct(230, LARGURA), y: pct(31, ALTURA), w: pct(122, LARGURA), h: pct(122, ALTURA) };
@@ -67,7 +66,7 @@ export type Mesa = {
   reservada_para: 'professores' | 'comissao' | null;
   /**
    * People who aren't formandos but already hold a seat here — the teachers
-   * at table P. One seat each. Optional so the page still works against an
+   * at table R. One seat each. Optional so the page still works against an
    * older `mesas` function that doesn't send it.
    */
   ocupantes_fixos?: string[];
