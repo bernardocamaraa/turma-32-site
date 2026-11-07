@@ -312,7 +312,18 @@ escolhe qual e em que minuto ela começa.
   YouTube, com botão "Colar" e a miniatura do vídeo quando o link está
   certo), **3. O minuto** (dar play, pausar e tocar em "Começar daqui", ou
   digitar) e **4. Pronto** (a música salva, com "Mudar o minuto", "Trocar a
-  música" e "Tirar a música"). Quem já tem música cai direto no passo 4.
+  música" e "Tirar a música", com o disco da música girando e confete
+  dourado ao salvar). Quem já tem música cai direto no passo 4. No passo 3
+  o tempo fica em dois campos grandes (minuto e segundo), e "Começar daqui"
+  pega o ponto onde o vídeo está pausado.
+- **Notificações em tela cheia** (`src/components/Popups.tsx`): uma de cada
+  vez, no meio da tela. As confirmações das próprias ações ("Música
+  salva!", "Convite enviado!") fecham sozinhas em ~2,5 s; as novidades que
+  vêm dos colegas esperam um toque e têm um botão que leva ao passo certo:
+  convite novo, alguém aceitou/recusou/decidiu descer sem grupo/entrou em
+  outro grupo/saiu, grupo completo, grupo desfeito, música do grupo
+  escolhida e lista fechada pela comissão. A página confere a cada 15 s
+  (`novidades` em `src/pages/Musica.tsx`). Esc ou um toque fora fecha.
 - **Um link só para a turma toda**, como a votação: o formando entra com o
   WhatsApp, e é o mesmo número da votação (quem já votou naquele celular
   entra direto; quem não está na lista escolhe o nome, como lá).

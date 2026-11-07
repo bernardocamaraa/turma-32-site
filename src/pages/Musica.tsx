@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, Check, Music, TriangleAlert, User, Users } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, ClipboardPaste, Clock, Crosshair, Music, Play, TriangleAlert, User, Users, Youtube } from 'lucide-react';
 import { Badge } from '../components/Badge';
 import { BotoesLink } from '../components/BotoesLink';
 import { Button } from '../components/Button';
@@ -8,7 +8,7 @@ import { CarregandoSecao } from '../components/CarregandoSecao';
 import { EntrarComWhatsapp } from '../components/EntrarComWhatsapp';
 import { Input } from '../components/Input';
 import { Select } from '../components/Select';
-import { PageHeader } from '../components/SectionHeading';
+import { Popups, usePopup, type Popup } from '../components/Popups';
 import { lerEleitor, salvarEleitor } from '../lib/eleitor';
 import {
   buscarMusicas,
@@ -39,11 +39,106 @@ const erroEstilo: CSSProperties = { fontSize: 'var(--fs-body-sm)', color: 'var(-
  * both). Only the committee sees the songs — tab "Músicas", below.
  */
 export function Musica() {
+  return (
+    <Popups>
+      <PaginaMusica />
+    </Popups>
+  );
+}
+
+/** A request from outside the steps (a pop-up's "Ver") to go to one of them. */
+type PedidoEtapa = { etapa: Etapa; n: number };
+
+/**
+ * What changed between two reads that came from someone else — a new
+ * invitation, an answer to yours, the group complete or undone, the group's
+ * song picked, the list closed — as pop-ups (and where "Ver" should go).
+ */
+function novidades(antes: DadosMusicas, agora: DadosMusicas): (Popup & { ir?: Etapa })[] {
+  const saida: (Popup & { ir?: Etapa })[] = [];
+  const idsAntes = new Set((antes.convites ?? []).map((c) => c.id));
+  for (const c of agora.convites ?? []) {
+    if (!idsAntes.has(c.id)) {
+      saida.push({ tipo: 'grupo', titulo: `${primeiroNome(c.criadoPor)} te chamou para descer em grupo!`, texto: 'Toque abaixo para aceitar ou recusar.', ir: 'modo' });
+    }
+  }
+  const g0 = antes.grupo;
+  const g1 = agora.grupo;
+  if (g0 && g1 && g0.id === g1.id) {
+    for (const m of g1.membros) {
+      if (m.formando === agora.voce) continue;
+      const era = g0.membros.find((x) => x.formando === m.formando);
+      const nome = primeiroNome(m.formando);
+      if (era?.status === 'convidado' && m.status === 'aceito') saida.push({ tipo: 'grupo', titulo: `${nome} aceitou o convite!` });
+      else if (era?.status === 'convidado' && m.status === 'recusado') saida.push({ tipo: 'aviso', titulo: `${nome} recusou o convite.` });
+      else if (m.status === 'convidado' && m.semGrupo && !era?.semGrupo) {
+        saida.push({ tipo: 'aviso', titulo: `${nome} decidiu descer sem grupo.`, texto: 'Mas ainda pode mudar de ideia e aceitar.' });
+      } else if (m.status === 'convidado' && m.emOutroGrupo && !era?.emOutroGrupo) saida.push({ tipo: 'aviso', titulo: `${nome} entrou em outro grupo.` });
+    }
+    for (const m of g0.membros) {
+      if (m.status === 'aceito' && m.formando !== agora.voce && !g1.membros.some((x) => x.formando === m.formando)) {
+        saida.push({ tipo: 'aviso', titulo: `${primeiroNome(m.formando)} saiu do grupo.` });
+      }
+    }
+    if (g1.completo && g0.completo && g1.musica && (g1.musica.codigo !== g0.musica?.codigo || g1.musica.inicio !== g0.musica?.inicio)) {
+      saida.push({ tipo: 'festa', titulo: g0.musica ? 'A música do grupo mudou' : 'A música do grupo foi escolhida!', texto: g1.musica.titulo ?? undefined, ir: 'pronto' });
+    }
+  }
+  if (g1?.completo && !(g0?.id === g1.id && g0.completo)) {
+    saida.push({ tipo: 'festa', titulo: 'Grupo completo!', texto: g1.musica ? 'Vocês descem juntos.' : 'Agora escolham a música do grupo.', ir: g1.musica ? 'pronto' : 'link' });
+  }
+  if (g0 && !g1) saida.push({ tipo: 'aviso', titulo: 'O grupo foi desfeito.', texto: 'Você voltou para a sua própria música.', ir: 'modo' });
+  if (antes.abertas && !agora.abertas) saida.push({ tipo: 'info', titulo: 'A comissão fechou a lista de músicas.' });
+  return saida;
+}
+
+/** The pop-up that confirms one of your own actions, once it worked. */
+function confirmacao(acao: AcaoMusicas, antes: DadosMusicas | null, agora: DadosMusicas): (Popup & { ir?: Etapa }) | null {
+  switch (acao.acao) {
+    case 'escolher':
+      return { tipo: 'ok', titulo: 'Música salva!', texto: `Começa em ${formatarTempo(acao.inicio)}.` };
+    case 'apagar':
+      return { tipo: 'info', titulo: 'Música tirada.', texto: 'Escolha outra quando quiser.' };
+    case 'criarGrupo':
+      return { tipo: 'grupo', titulo: 'Convite enviado!', texto: `Avise ${juntarNomes(acao.convidados.map(primeiroNome))} para entrar aqui e aceitar.` };
+    case 'convidar':
+      return { tipo: 'grupo', titulo: `Convite enviado para ${primeiroNome(acao.convidado)}!` };
+    case 'desconvidar':
+      return { tipo: 'info', titulo: 'Convite retirado.' };
+    case 'responder': {
+      if (!acao.aceitar) return { tipo: 'info', titulo: 'Convite recusado.' };
+      const g = agora.grupo;
+      if (g?.completo) return { tipo: 'festa', titulo: 'Grupo completo!', texto: 'Agora escolham a música do grupo.', ir: g.musica ? 'pronto' : 'link' };
+      const faltam = g?.membros.filter((m) => m.status === 'convidado').map((m) => primeiroNome(m.formando)) ?? [];
+      return { tipo: 'grupo', titulo: 'Você entrou no grupo!', texto: faltam.length ? `Falta ${juntarNomes(faltam)} aceitar.` : undefined };
+    }
+    case 'sairDoGrupo':
+      return { tipo: 'info', titulo: antes?.grupo?.criadoPor === antes?.voce ? 'Grupo desfeito.' : 'Você saiu do grupo.' };
+    case 'semGrupo':
+      return acao.sim ? { tipo: 'info', titulo: 'Combinado!', texto: 'Quem te convidou vai saber. O convite continua valendo se mudar de ideia.' } : null;
+    default:
+      return null;
+  }
+}
+
+const primeiroNome = (nome: string) => nome.split(' ')[0];
+
+function PaginaMusica() {
+  const popup = usePopup();
   const [eleitor, setEleitor] = useState(lerEleitor);
   const [dados, setDados] = useState<DadosMusicas | null>(null);
   const [entrando, setEntrando] = useState(false);
   const [erroAcesso, setErroAcesso] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const [pedido, setPedido] = useState<PedidoEtapa>({ etapa: 'modo', n: 0 });
+  // The last state seen, to tell what changed on the next read.
+  const visto = useRef<DadosMusicas | null>(null);
+
+  function avisar(p: Popup & { ir?: Etapa }) {
+    const { ir, ...resto } = p;
+    const rotulo = { modo: resto.tipo === 'grupo' ? 'Ver o convite' : 'Ver', link: 'Escolher a música', minuto: 'Escolher o minuto', pronto: 'Ver a música' }[ir ?? 'modo'];
+    popup(ir ? { ...resto, acao: { rotulo, onClick: () => setPedido((x) => ({ etapa: ir, n: x.n + 1 })) } } : resto);
+  }
 
   async function carregar(com: AcessoMusicas): Promise<DadosMusicas | null> {
     setEntrando(true);
@@ -51,6 +146,7 @@ export function Musica() {
     try {
       const novo = await buscarMusicas(com);
       setDados(novo);
+      visto.current = novo;
       return novo;
     } catch (e) {
       setErroAcesso(e instanceof Error ? e.message : 'Não foi possível entrar agora.');
@@ -67,11 +163,15 @@ export function Musica() {
         salvarEleitor(null);
         setEleitor(null);
       }
+      // Invitations already waiting when they arrive: say so once.
+      const convites = novo?.voce && !novo.grupo ? (novo.convites ?? []) : [];
+      if (convites.length === 1) avisar({ tipo: 'grupo', titulo: `${primeiroNome(convites[0].criadoPor)} te chamou para descer em grupo!`, ir: 'modo' });
+      else if (convites.length > 1) avisar({ tipo: 'grupo', titulo: `Você tem ${convites.length} convites para descer em grupo!`, ir: 'modo' });
     });
   }, []);
 
   // Invitations and answers come from classmates' phones: catch up now and
-  // then while the page is open.
+  // then while the page is open, and pop up what changed.
   const dentro = eleitor !== null && !!dados?.voce;
   useEffect(() => {
     if (!dentro || !eleitor) return;
@@ -80,11 +180,14 @@ export function Musica() {
       if (document.hidden) return;
       try {
         const novo = await buscarMusicas(eleitor);
-        if (ativo && novo.voce) setDados(novo);
+        if (!ativo || !novo.voce) return;
+        if (visto.current) novidades(visto.current, novo).forEach(avisar);
+        visto.current = novo;
+        setDados(novo);
       } catch (e) {
         console.error(e);
       }
-    }, 20000);
+    }, 15000);
     return () => {
       ativo = false;
       clearInterval(id);
@@ -100,12 +203,17 @@ export function Musica() {
     return true;
   }
 
-  /** Runs an action; the error message to show, or null if it worked. */
+  /** Runs an action; the error message to show, or null if it worked (and a pop-up says so). */
   async function agir(acao: AcaoMusicas): Promise<string | null> {
     if (!eleitor) return 'Entre de novo com o seu WhatsApp.';
     setSalvando(true);
     try {
-      setDados(await buscarMusicas(eleitor, acao));
+      const antes = visto.current;
+      const novo = await buscarMusicas(eleitor, acao);
+      visto.current = novo;
+      setDados(novo);
+      const ok = confirmacao(acao, antes, novo);
+      if (ok) avisar(ok);
       return null;
     } catch (e) {
       return e instanceof Error ? e.message : 'Não foi possível salvar agora.';
@@ -125,7 +233,8 @@ export function Musica() {
   return (
     <main
       style={{
-        maxWidth: 'var(--maxw-page)',
+        // One column, narrow enough to read as a step-by-step on a computer too.
+        maxWidth: 'calc(800px + 2 * var(--gutter-page))',
         margin: '0 auto',
         padding: 'var(--space-9) var(--gutter-page) var(--space-10)',
         display: 'flex',
@@ -133,7 +242,23 @@ export function Musica() {
         gap: 'var(--space-7)',
       }}
     >
-      <PageHeader eyebrow="Turma 32 · Baile" title="A música da sua descida." />
+      <header style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+        <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--gild-300)' }}>Turma 32 · Baile de formatura</span>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--space-5)', flexWrap: 'wrap' }}>
+          <h1 className="titulo-musica">A música da sua descida.</h1>
+          <span className="equalizador" aria-hidden>
+            <span />
+            <span />
+            <span />
+            <span />
+            <span />
+          </span>
+        </div>
+        <p style={{ ...texto, maxWidth: '36rem', fontSize: 'var(--fs-lead, 19px)' }}>
+          No baile, cada formando desce a escada ao som da própria música. Escolha a sua em 4 passos: só a comissão fica sabendo,
+          para a turma é surpresa.
+        </p>
+      </header>
 
       {!eleitor || !dados?.voce ? (
         <EntrarComWhatsapp
@@ -141,33 +266,44 @@ export function Musica() {
           entrando={entrando}
           erro={erroAcesso}
           onEntrar={identificar}
-          explicacao="No baile, cada formando desce a escada com a sua música. Digite o seu WhatsApp para escolher a sua (é o mesmo número da votação)."
-          botao="Entrar"
+          explicacao="Digite o seu WhatsApp para começar (é o mesmo número da votação)."
+          botao="Começar"
         />
       ) : (
         <>
-          <Card padding="var(--space-7)">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', maxWidth: '40rem' }}>
-              <span style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-h2)', fontWeight: 700, letterSpacing: '-.025em', lineHeight: 1.1 }}>
-                Olá, {dados.voce.split(' ')[0]}.
-              </span>
-              <p style={texto}>
-                Em poucos passos você escolhe a música da sua descida da escada e o momento em que ela começa. Só a comissão vê
-                as escolhas; para a turma, é surpresa.
-              </p>
-              <div style={{ display: 'flex' }}>
-                <Button variant="ghost" onClick={sair} style={{ paddingLeft: 0 }}>
-                  Não é você? Trocar
-                </Button>
-              </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
+            <span
+              aria-hidden
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 700,
+                fontSize: 18,
+                color: '#000',
+                background: 'linear-gradient(135deg, var(--gild-200), var(--gild-500))',
+              }}
+            >
+              {dados.voce[0]}
+            </span>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600 }}>Olá, {primeiroNome(dados.voce)}!</span>
+              <span style={pequeno}>Entrou como {dados.voce}</span>
             </div>
-          </Card>
+            <Button variant="ghost" size="sm" onClick={sair}>
+              Não é você?
+            </Button>
+          </div>
 
           <PassoAPasso
             key={grupo?.completo ? `grupo-${grupo.id}` : 'sozinho'}
             dados={{ ...dados, voce: dados.voce }}
             salvando={salvando}
             agir={agir}
+            pedido={pedido}
           />
         </>
       )}
@@ -206,7 +342,11 @@ function Convite({
   }
 
   return (
-    <Card padding="var(--space-7)" style={{ border: '1px solid var(--gild-400)' }}>
+    <Card
+      padding="var(--space-7)"
+      className="aparece"
+      style={{ border: '1px solid var(--gild-400)', background: 'linear-gradient(135deg, rgba(201,169,106,.16), rgba(201,169,106,.03) 60%), var(--ink-850)', boxShadow: '0 0 50px rgba(201,169,106,.12)' }}
+    >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', maxWidth: '40rem' }}>
         <span style={{ ...pequeno, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--gild-300)' }}>
           <Users size={16} aria-hidden /> Convite para descer em grupo
@@ -224,10 +364,10 @@ function Convite({
         {!abertas ? <p style={pequeno}>A comissão já fechou a lista de músicas. Para mudar, fale com ela.</p> : null}
         {erro ? <span style={erroEstilo}>{erro}</span> : null}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-          <Button disabled={salvando || jaTemGrupo || !abertas} onClick={() => responder(true)}>
+          <Button size="lg" variant="gild" disabled={salvando || jaTemGrupo || !abertas} iconLeft={<Check size={18} strokeWidth={3} aria-hidden />} onClick={() => responder(true)}>
             Aceitar
           </Button>
-          <Button variant="ghost" disabled={salvando || !abertas} onClick={() => responder(false)}>
+          <Button size="lg" variant="ghost" disabled={salvando || !abertas} onClick={() => responder(false)}>
             Recusar
           </Button>
         </div>
@@ -397,31 +537,50 @@ const ETAPAS: { id: Etapa; nome: string }[] = [
  * the invitations), 2. the YouTube link, 3. where it starts, 4. done — the
  * song saved, with ways back to change it. Remounted (key) when their group
  * becomes complete or comes apart, since the song in question changes.
+ * `pedido`: a pop-up's "Ver" asking to go to a step.
  */
 function PassoAPasso({
   dados,
   salvando,
   agir,
+  pedido,
 }: {
   dados: DadosMusicas & { voce: string };
   salvando: boolean;
   agir: (acao: AcaoMusicas) => Promise<string | null>;
+  pedido: PedidoEtapa;
 }) {
   const grupo = dados.grupo;
   const fechado = !!grupo?.completo;
   // The song that counts now: the complete group's, or their own.
   const musica = fechado ? grupo!.musica : dados.minha;
   const [etapa, setEtapa] = useState<Etapa>(musica ? 'pronto' : 'modo');
+  const [sentido, setSentido] = useState<'avanca' | 'volta'>('avanca');
   const [link, setLink] = useState('');
   const [minuto, setMinuto] = useState('');
   const [segundo, setSegundo] = useState('');
   const [erro, setErro] = useState<string | null>(null);
+  // Just saved: step 4 throws the confetti (not when coming back later).
+  const [festa, setFesta] = useState(0);
+  const topo = useRef<HTMLDivElement>(null);
 
   function ir(para: Etapa) {
+    const de = ETAPAS.findIndex((e) => e.id === etapa);
+    const ate = ETAPAS.findIndex((e) => e.id === para);
+    setSentido(ate >= de ? 'avanca' : 'volta');
     setErro(null);
     setEtapa(para);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const y = (topo.current?.getBoundingClientRect().top ?? 0) + window.scrollY - 80;
+    if (window.scrollY > y) window.scrollTo({ top: y, behavior: 'smooth' });
   }
+
+  // A pop-up's "Ver" (only the ones asked after this mounted).
+  const pedidoVisto = useRef(pedido.n);
+  useEffect(() => {
+    if (pedido.n === pedidoVisto.current) return;
+    pedidoVisto.current = pedido.n;
+    ir(pedido.etapa === 'pronto' && !musica ? 'modo' : pedido.etapa);
+  }, [pedido.n]);
 
   function definirInicio(segundos: number) {
     setMinuto(String(Math.floor(segundos / 60)));
@@ -430,7 +589,7 @@ function PassoAPasso({
 
   if (!dados.abertas) {
     return musica ? (
-      <PassoPronto musica={musica} paraGrupo={fechado} grupo={grupo} repetida={dados.repetida} abertas={false} salvando={salvando} convites={0} />
+      <PassoPronto musica={musica} paraGrupo={fechado} grupo={grupo} repetida={dados.repetida} abertas={false} salvando={salvando} convites={0} festa={0} />
     ) : (
       <Card padding="var(--space-7)">
         <p style={texto}>A comissão já fechou a lista de músicas. Se você ainda não mandou a sua, fale com ela.</p>
@@ -439,87 +598,84 @@ function PassoAPasso({
   }
 
   const indice = ETAPAS.findIndex((e) => e.id === etapa);
+  const passoModo = (
+    <PassoModo dados={dados} salvando={salvando} agir={agir} onSozinho={() => ir(musica && !fechado ? 'pronto' : 'link')} onProximo={() => ir(musica ? 'pronto' : 'link')} />
+  );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+    <div ref={topo} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
       <Etapas atual={indice} onIr={(i) => ir(ETAPAS[i].id)} />
 
-      {etapa === 'modo' ? (
-        <PassoModo
-          dados={dados}
-          salvando={salvando}
-          agir={agir}
-          onSozinho={() => ir(musica && !fechado ? 'pronto' : 'link')}
-          onProximo={() => ir(musica ? 'pronto' : 'link')}
-        />
-      ) : etapa === 'link' ? (
-        <PassoLink
-          link={link}
-          paraGrupo={fechado}
-          onLink={setLink}
-          onVoltar={() => ir('modo')}
-          onProximo={(inicioDoLink) => {
-            if (inicioDoLink !== null && !minuto && !segundo) definirInicio(inicioDoLink);
-            ir('minuto');
-          }}
-        />
-      ) : etapa === 'minuto' ? (
-        <PassoMinuto
-          link={link}
-          minuto={minuto}
-          segundo={segundo}
-          onMinuto={setMinuto}
-          onSegundo={setSegundo}
-          onInicio={definirInicio}
-          salvando={salvando}
-          erro={erro}
-          onVoltar={() => ir('link')}
-          onSalvar={async (inicio) => {
-            const falha = await agir({ acao: 'escolher', link, inicio, paraGrupo: fechado });
-            setErro(falha);
-            if (!falha) ir('pronto');
-          }}
-        />
-      ) : musica ? (
-        <PassoPronto
-          musica={musica}
-          paraGrupo={fechado}
-          grupo={grupo}
-          repetida={dados.repetida}
-          abertas
-          salvando={salvando}
-          convites={grupo ? 0 : (dados.convites ?? []).length}
-          erro={erro}
-          onMudarMinuto={() => {
-            setLink(linkDaMusica({ ...musica, inicio: 0 }));
-            definirInicio(musica.inicio);
-            ir('minuto');
-          }}
-          onTrocar={() => {
-            setLink('');
-            setMinuto('');
-            setSegundo('');
-            ir('link');
-          }}
-          onTirar={async () => {
-            const pergunta = fechado ? 'Tirar a música do grupo? Vocês podem escolher outra depois.' : 'Tirar a sua música? Você pode escolher outra depois.';
-            if (!window.confirm(pergunta)) return;
-            const falha = await agir({ acao: 'apagar', paraGrupo: fechado });
-            setErro(falha);
-            if (!falha) ir('link');
-          }}
-          onGrupo={() => ir('modo')}
-        />
-      ) : (
-        // "Pronto" without a song (it was just taken out somewhere else): start over.
-        <PassoModo
-          dados={dados}
-          salvando={salvando}
-          agir={agir}
-          onSozinho={() => ir('link')}
-          onProximo={() => ir('link')}
-        />
-      )}
+      <div key={etapa} className={sentido === 'avanca' ? 'passo-avanca' : 'passo-volta'}>
+        {etapa === 'modo' ? (
+          passoModo
+        ) : etapa === 'link' ? (
+          <PassoLink
+            link={link}
+            paraGrupo={fechado}
+            onLink={setLink}
+            onVoltar={() => ir('modo')}
+            onProximo={(inicioDoLink) => {
+              if (inicioDoLink !== null && !minuto && !segundo) definirInicio(inicioDoLink);
+              ir('minuto');
+            }}
+          />
+        ) : etapa === 'minuto' ? (
+          <PassoMinuto
+            link={link}
+            minuto={minuto}
+            segundo={segundo}
+            onMinuto={setMinuto}
+            onSegundo={setSegundo}
+            onInicio={definirInicio}
+            salvando={salvando}
+            erro={erro}
+            onVoltar={() => ir('link')}
+            onSalvar={async (inicio) => {
+              const falha = await agir({ acao: 'escolher', link, inicio, paraGrupo: fechado });
+              setErro(falha);
+              if (!falha) {
+                setFesta((f) => f + 1);
+                ir('pronto');
+              }
+            }}
+          />
+        ) : musica ? (
+          <PassoPronto
+            musica={musica}
+            paraGrupo={fechado}
+            grupo={grupo}
+            repetida={dados.repetida}
+            abertas
+            salvando={salvando}
+            convites={grupo ? 0 : (dados.convites ?? []).length}
+            festa={festa}
+            erro={erro}
+            onMudarMinuto={() => {
+              setLink(linkDaMusica({ ...musica, inicio: 0 }));
+              definirInicio(musica.inicio);
+              ir('minuto');
+            }}
+            onTrocar={() => {
+              setLink('');
+              setMinuto('');
+              setSegundo('');
+              ir('link');
+            }}
+            onTirar={async () => {
+              const pergunta = fechado ? 'Tirar a música do grupo? Vocês podem escolher outra depois.' : 'Tirar a sua música? Você pode escolher outra depois.';
+              if (!window.confirm(pergunta)) return;
+              const falha = await agir({ acao: 'apagar', paraGrupo: fechado });
+              setErro(falha);
+              if (!falha) ir('link');
+            }}
+            onGrupo={() => ir('modo')}
+          />
+        ) : (
+          // "Pronto" without a song (it was just taken out somewhere else): start over.
+          passoModo
+        )}
+      </div>
     </div>
   );
 }
@@ -527,68 +683,57 @@ function PassoAPasso({
 /** The four steps across the top: done ones get a check and can be gone back to. */
 function Etapas({ atual, onIr }: { atual: number; onIr: (i: number) => void }) {
   return (
-    <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-2)' }}>
-      {ETAPAS.map((e, i) => {
-        const feita = i < atual;
-        const agora = i === atual;
-        return (
-          <li key={e.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-2)', position: 'relative' }}>
-            {i > 0 ? (
-              <span
-                aria-hidden
+    <nav aria-label="Passos">
+      <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-2)' }}>
+        {ETAPAS.map((e, i) => {
+          const feita = i < atual;
+          const agora = i === atual;
+          return (
+            <li key={e.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-3)', position: 'relative' }}>
+              {i > 0 ? (
+                <span aria-hidden style={{ position: 'absolute', top: 21, right: '50%', width: '100%', height: 2, background: 'var(--stroke-hair)', overflow: 'hidden' }}>
+                  <span
+                    className="etapa-linha"
+                    style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, var(--gild-500), var(--gild-300))', transform: `scaleX(${i <= atual ? 1 : 0})` }}
+                  />
+                </span>
+              ) : null}
+              <button
+                type="button"
+                disabled={!feita}
+                onClick={() => onIr(i)}
+                aria-current={agora ? 'step' : undefined}
+                aria-label={`Passo ${i + 1}: ${e.nome}${feita ? ' (feito, voltar)' : ''}`}
+                className={agora ? 'etapa-atual' : undefined}
                 style={{
-                  position: 'absolute',
-                  top: 17,
-                  right: '50%',
-                  width: '100%',
-                  height: 2,
-                  background: i <= atual ? 'var(--gild-400)' : 'var(--stroke-hair)',
-                  zIndex: 0,
+                  position: 'relative',
+                  zIndex: 1,
+                  width: 44,
+                  height: 44,
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 16,
+                  fontWeight: 700,
+                  cursor: feita ? 'pointer' : 'default',
+                  border: agora || feita ? 'none' : '1px solid var(--stroke-muted)',
+                  background: agora ? 'var(--chalk-050)' : feita ? 'linear-gradient(135deg, var(--gild-200), var(--gild-500))' : 'var(--ink-850)',
+                  color: agora || feita ? '#000' : 'var(--text-faint)',
+                  transition: 'background var(--dur) var(--ease-out), transform var(--dur) var(--ease-out)',
                 }}
-              />
-            ) : null}
-            <button
-              type="button"
-              disabled={!feita}
-              onClick={() => onIr(i)}
-              aria-current={agora ? 'step' : undefined}
-              aria-label={`Passo ${i + 1}: ${e.nome}`}
-              style={{
-                position: 'relative',
-                zIndex: 1,
-                width: 36,
-                height: 36,
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontFamily: 'var(--font-mono)',
-                fontSize: 15,
-                fontWeight: 700,
-                cursor: feita ? 'pointer' : 'default',
-                border: agora || feita ? 'none' : '1px solid var(--stroke-hair)',
-                background: agora ? 'var(--chalk-050)' : feita ? 'var(--gild-400)' : 'var(--ink-800)',
-                color: agora || feita ? '#000' : 'var(--text-faint)',
-                boxShadow: agora ? '0 0 0 4px rgba(245,245,247,.12)' : 'none',
-              }}
-            >
-              {feita ? <Check size={18} strokeWidth={3} aria-hidden /> : i + 1}
-            </button>
-            <span
-              style={{
-                fontSize: 12,
-                lineHeight: 1.2,
-                textAlign: 'center',
-                color: agora ? 'var(--text-primary)' : 'var(--text-faint)',
-                fontWeight: agora ? 600 : 400,
-              }}
-            >
-              {e.nome}
-            </span>
-          </li>
-        );
-      })}
-    </ol>
+              >
+                {feita ? <Check size={20} strokeWidth={3} aria-hidden className="check-pop" /> : i + 1}
+              </button>
+              <span style={{ fontSize: 12, lineHeight: 1.25, textAlign: 'center', color: agora ? 'var(--text-primary)' : 'var(--text-faint)', fontWeight: agora ? 600 : 500 }}>
+                {e.nome}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
   );
 }
 
@@ -596,11 +741,9 @@ function Etapas({ atual, onIr }: { atual: number; onIr: (i: number) => void }) {
 function CabecalhoPasso({ numero, titulo: t, sobre }: { numero: number; titulo: string; sobre?: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-      <span style={{ fontSize: 13, fontWeight: 600, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--gild-300)' }}>
-        Passo {numero} de 4
-      </span>
-      <span style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-h3)', fontWeight: 700, letterSpacing: '-.02em', lineHeight: 1.15 }}>{t}</span>
-      {sobre ? <p style={texto}>{sobre}</p> : null}
+      <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--gild-300)' }}>Passo {numero} de 4</span>
+      <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 'var(--fs-h3)', fontWeight: 700, letterSpacing: '-.025em', lineHeight: 1.12 }}>{t}</h2>
+      {sobre ? <p style={{ ...texto, marginTop: 'var(--space-2)' }}>{sobre}</p> : null}
     </div>
   );
 }
@@ -608,30 +751,32 @@ function CabecalhoPasso({ numero, titulo: t, sobre }: { numero: number; titulo: 
 /** A small numbered instruction: "1  Abra o YouTube". */
 function Instrucao({ n, children }: { n: number; children: ReactNode }) {
   return (
-    <li style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start' }}>
+    <li style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'flex-start' }}>
       <span
         aria-hidden
         style={{
           flex: '0 0 auto',
-          width: 26,
-          height: 26,
+          width: 28,
+          height: 28,
           borderRadius: '50%',
           background: 'rgba(201,169,106,.16)',
+          border: '1px solid rgba(201,169,106,.35)',
           color: 'var(--gild-300)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          fontFamily: 'var(--font-mono)',
           fontSize: 13,
           fontWeight: 700,
         }}
       >
         {n}
       </span>
-      <span style={{ ...texto, color: 'var(--text-primary)', paddingTop: 1 }}>{children}</span>
+      <span style={{ ...texto, color: 'var(--text-primary)', paddingTop: 2 }}>{children}</span>
     </li>
   );
 }
+
+const listaInstrucoes: CSSProperties = { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' };
 
 /** One of the two big choices of step 1. */
 function Opcao({ icone, titulo: t, sobre, ativa, onClick }: { icone: ReactNode; titulo: string; sobre: string; ativa?: boolean; onClick: () => void }) {
@@ -639,25 +784,45 @@ function Opcao({ icone, titulo: t, sobre, ativa, onClick }: { icone: ReactNode; 
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={ativa}
+      className={`opcao-musica${ativa ? ' ativa' : ''}`}
       style={{
-        flex: '1 1 220px',
+        width: '100%',
         display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'flex-start',
-        gap: 'var(--space-2)',
+        alignItems: 'center',
+        gap: 'var(--space-5)',
         padding: 'var(--space-6)',
-        borderRadius: 'var(--radius-md, 16px)',
+        minHeight: 96,
+        borderRadius: 'var(--radius-md)',
         textAlign: 'left',
         cursor: 'pointer',
-        background: ativa ? 'rgba(201,169,106,.12)' : 'var(--ink-800)',
+        background: ativa ? 'linear-gradient(135deg, rgba(201,169,106,.16), rgba(201,169,106,.04))' : 'var(--ink-800)',
         border: `1px solid ${ativa ? 'var(--gild-400)' : 'var(--stroke-hair)'}`,
         color: 'var(--text-primary)',
         fontFamily: 'var(--font-core)',
       }}
     >
-      <span style={{ color: 'var(--gild-300)' }}>{icone}</span>
-      <span style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-h4)', fontWeight: 600 }}>{t}</span>
-      <span style={pequeno}>{sobre}</span>
+      <span
+        style={{
+          flex: '0 0 auto',
+          width: 52,
+          height: 52,
+          borderRadius: 16,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#000',
+          background: 'linear-gradient(135deg, var(--gild-200), var(--gild-500))',
+          boxShadow: '0 8px 24px rgba(201,169,106,.25)',
+        }}
+      >
+        {icone}
+      </span>
+      <span style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
+        <span style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-h4)', fontWeight: 650 }}>{t}</span>
+        <span style={pequeno}>{sobre}</span>
+      </span>
+      <ArrowRight size={20} aria-hidden style={{ color: 'var(--text-faint)', flex: '0 0 auto' }} />
     </button>
   );
 }
@@ -706,7 +871,7 @@ function PassoModo({
           <SeuGrupo grupo={grupo} voce={dados.voce} formandos={dados.formandos ?? []} emGrupo={dados.emGrupo ?? []} abertas salvando={salvando} agir={agir} />
           {grupo.completo ? (
             <div style={{ display: 'flex' }}>
-              <Button size="lg" iconRight={<ArrowRight size={18} aria-hidden />} onClick={onProximo}>
+              <Button size="lg" variant="gild" iconRight={<ArrowRight size={18} aria-hidden />} onClick={onProximo}>
                 {grupo.musica ? 'Ver a música do grupo' : 'Próximo: a música do grupo'}
               </Button>
             </div>
@@ -714,7 +879,7 @@ function PassoModo({
             <Card padding="var(--space-6) var(--space-7)">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
                 <p style={texto}>
-                  Assim que todos aceitarem, vocês seguem para o passo 2 e escolhem a música do grupo (qualquer um pode escolher).
+                  Assim que todos aceitarem, você recebe um aviso aqui e vocês seguem para o passo 2 para escolher a música do grupo.
                 </p>
                 <div style={{ display: 'flex', marginLeft: -12 }}>
                   <Button variant="ghost" onClick={onSozinho}>
@@ -727,7 +892,7 @@ function PassoModo({
         </>
       ) : (
         <Card padding="var(--space-7)">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
             <CabecalhoPasso
               numero={1}
               titulo="Você vai descer só ou em grupo?"
@@ -737,10 +902,10 @@ function PassoModo({
                   : undefined
               }
             />
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
-              <Opcao icone={<User size={26} aria-hidden />} titulo="Só eu" sobre="Você escolhe a sua música." onClick={sozinho} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+              <Opcao icone={<User size={26} strokeWidth={2.2} aria-hidden />} titulo="Só eu" sobre="Você escolhe a sua música." onClick={sozinho} />
               <Opcao
-                icone={<Users size={26} aria-hidden />}
+                icone={<Users size={26} strokeWidth={2.2} aria-hidden />}
                 titulo="Em grupo"
                 sobre="Até 3 pessoas, uma música só."
                 ativa={montando}
@@ -751,8 +916,8 @@ function PassoModo({
               <p style={pequeno}>Você disse que vai descer sem grupo, mas os convites continuam valendo se você mudar de ideia.</p>
             ) : null}
             {montando ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', paddingTop: 'var(--space-4)', borderTop: '1px solid var(--stroke-hair)' }}>
-                <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+              <div className="aparece" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', paddingTop: 'var(--space-5)', borderTop: '1px solid var(--stroke-hair)' }}>
+                <ol style={listaInstrucoes}>
                   <Instrucao n={1}>Escolha quem vai descer com você.</Instrucao>
                   <Instrucao n={2}>Cada um entra aqui com o próprio WhatsApp e aceita o convite.</Instrucao>
                   <Instrucao n={3}>Quando todos aceitarem, vocês escolhem a música do grupo.</Instrucao>
@@ -763,6 +928,7 @@ function PassoModo({
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
                   <Button
                     size="lg"
+                    variant="gild"
                     disabled={!primeiro || salvando}
                     carregando={salvando}
                     onClick={async () => setErro(await agir({ acao: 'criarGrupo', convidados: [primeiro, segundo].filter(Boolean) }))}
@@ -813,23 +979,20 @@ function PassoLink({
 
   return (
     <Card padding="var(--space-7)">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
         <CabecalhoPasso numero={2} titulo={paraGrupo ? 'Qual é a música do grupo?' : 'Qual é a sua música?'} />
-        <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-          <Instrucao n={1}>
-            Abra o YouTube e procure a música.{' '}
-            <a href="https://www.youtube.com/" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>
-              Abrir o YouTube
-            </a>
-          </Instrucao>
+        <ol style={listaInstrucoes}>
+          <Instrucao n={1}>Abra o YouTube e procure a música.</Instrucao>
           <Instrucao n={2}>
-            No vídeo, toque em <strong>Compartilhar</strong>.
+            No vídeo, toque em <strong>Compartilhar</strong> e depois em <strong>Copiar link</strong>.
           </Instrucao>
-          <Instrucao n={3}>
-            Toque em <strong>Copiar link</strong>.
-          </Instrucao>
-          <Instrucao n={4}>Volte aqui e cole o link no campo abaixo.</Instrucao>
+          <Instrucao n={3}>Volte aqui e cole o link.</Instrucao>
         </ol>
+        <div style={{ display: 'flex', marginTop: 'calc(-1 * var(--space-2))' }}>
+          <Button as="a" variant="secondary" href="https://www.youtube.com/" target="_blank" rel="noreferrer" iconLeft={<Youtube size={18} aria-hidden />}>
+            Abrir o YouTube
+          </Button>
+        </div>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
           <div style={{ flex: '1 1 260px' }}>
             <Input
@@ -842,20 +1005,34 @@ function PassoLink({
             />
           </div>
           {podeColar ? (
-            <Button variant="secondary" onClick={colar} style={{ marginBottom: lido && 'erro' in lido ? 30 : 0 }}>
+            <Button variant="secondary" size="lg" iconLeft={<ClipboardPaste size={18} aria-hidden />} onClick={colar} style={{ marginBottom: lido && 'erro' in lido ? 30 : 0 }}>
               Colar
             </Button>
           ) : null}
         </div>
         {video ? (
-          <div style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div
+            key={video.codigo}
+            className="aparece"
+            style={{
+              display: 'flex',
+              gap: 'var(--space-5)',
+              alignItems: 'center',
+              padding: 'var(--space-4)',
+              borderRadius: 'var(--radius-md)',
+              background: 'rgba(127,185,138,.08)',
+              border: '1px solid rgba(127,185,138,.3)',
+            }}
+          >
             <img
               src={`https://i.ytimg.com/vi/${video.codigo}/mqdefault.jpg`}
               alt=""
-              style={{ width: 160, aspectRatio: '16 / 9', objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--stroke-hair)' }}
+              width={140}
+              height={79}
+              style={{ width: 140, aspectRatio: '16 / 9', objectFit: 'cover', borderRadius: 10, background: '#000', flex: '0 0 auto' }}
             />
-            <span style={{ ...texto, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--state-ok)' }}>
-              <Check size={18} strokeWidth={3} aria-hidden /> Achamos o vídeo!
+            <span style={{ ...texto, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--state-ok)', fontWeight: 600 }}>
+              <Check size={20} strokeWidth={3} aria-hidden className="check-pop" /> Achamos o vídeo!
             </span>
           </div>
         ) : null}
@@ -872,7 +1049,28 @@ function PassoLink({
   );
 }
 
-/** Step 3: where the song starts — play, pause at the spot, "Começar daqui". */
+/** One big box of the start time (the minute, or the second), with its name under it. */
+function CampoTempo({ rotulo, valor, placeholder, maximo, onValor }: { rotulo: string; valor: string; placeholder: string; maximo: number; onValor: (v: string) => void }) {
+  return (
+    <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-2)' }}>
+      <input
+        inputMode="numeric"
+        placeholder={placeholder}
+        value={valor}
+        onChange={(e) => onValor(e.target.value.replace(/\D/g, '').slice(0, maximo))}
+        onFocus={(e) => e.target.select()}
+        className="campo-tempo"
+      />
+      <span style={pequeno}>{rotulo}</span>
+    </label>
+  );
+}
+
+/**
+ * Step 3: where the song starts. The video plays right there: pause it at
+ * the spot and tap "Começar daqui", or type the minute and
+ * second. "Ouvir a partir de" plays from there to check.
+ */
 function PassoMinuto({
   link,
   minuto,
@@ -917,6 +1115,11 @@ function PassoMinuto({
   const valido = Number.isInteger(m) && Number.isInteger(s) && m >= 0 && m < 600 && s >= 0 && s < 60;
   const inicio = valido ? m * 60 + s : null;
 
+  function ouvirDe(t: number) {
+    player.current?.seekTo(t, true);
+    player.current?.playVideo();
+  }
+
   if (!video) {
     return (
       <Card padding="var(--space-7)">
@@ -934,59 +1137,53 @@ function PassoMinuto({
 
   return (
     <Card padding="var(--space-7)">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
         <CabecalhoPasso numero={3} titulo="Em que momento a música começa?" sobre="É o trecho que vai tocar quando você aparecer na escada." />
-        <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-          <Instrucao n={1}>Dê play no vídeo.</Instrucao>
-          <Instrucao n={2}>Pause no ponto onde a música deve começar.</Instrucao>
-          <Instrucao n={3}>
-            Toque em <strong>Começar daqui</strong>.
-          </Instrucao>
-        </ol>
         <Previa codigo={video.codigo} inicio={inicio ?? 0} player={player} />
-        <div style={{ display: 'flex' }}>
-          <Button size="lg" variant="gild" disabled={agora === null} onClick={() => agora !== null && onInicio(agora)}>
-            {agora === null ? 'Começar daqui' : `Começar daqui (${formatarTempo(agora)})`}
-          </Button>
-        </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', padding: 'var(--space-5)', borderRadius: 'var(--radius-sm)', background: 'var(--ink-800)' }}>
-          <span style={pequeno}>A música vai começar em</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-            <Input
-              aria-label="Minuto"
-              placeholder="0"
-              inputMode="numeric"
-              value={minuto}
-              onChange={(e) => onMinuto(e.target.value.replace(/\D/g, '').slice(0, 3))}
-              style={{ width: 84 }}
-            />
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 28, fontWeight: 700 }}>:</span>
-            <Input
-              aria-label="Segundo"
-              placeholder="00"
-              inputMode="numeric"
-              value={segundo}
-              onChange={(e) => onSegundo(e.target.value.replace(/\D/g, '').slice(0, 2))}
-              style={{ width: 84 }}
-            />
-            <Button
-              variant="ghost"
-              disabled={inicio === null}
-              onClick={() => {
-                player.current?.seekTo(inicio ?? 0, true);
-                player.current?.playVideo();
-              }}
-            >
-              Ouvir daí
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 'var(--space-3)',
+            padding: 'var(--space-6)',
+            borderRadius: 'var(--radius-md)',
+            background: 'linear-gradient(180deg, rgba(201,169,106,.1), rgba(201,169,106,.02))',
+            border: '1px solid rgba(201,169,106,.25)',
+          }}
+        >
+          <ol style={listaInstrucoes}>
+            <Instrucao n={1}>Dê play no vídeo e pause onde a música deve começar.</Instrucao>
+            <Instrucao n={2}>
+              Toque em <strong>Começar daqui</strong>. Ou, se já souber, digite o minuto e o segundo abaixo.
+            </Instrucao>
+          </ol>
+          <div style={{ display: 'flex' }}>
+            <Button size="lg" variant="secondary" disabled={agora === null} iconLeft={<Crosshair size={18} aria-hidden />} onClick={() => agora !== null && onInicio(agora)}>
+              {agora === null ? 'Começar daqui' : `Começar daqui (${formatarTempo(agora)})`}
             </Button>
           </div>
-          <span style={pequeno}>{valido ? 'minuto : segundo. Se preferir, digite aqui.' : 'O segundo vai de 0 a 59.'}</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginTop: 'var(--space-3)' }}>
+            <span style={pequeno}>A música começa em</span>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--space-3)' }}>
+              <CampoTempo rotulo="minuto" valor={minuto} placeholder="0" maximo={3} onValor={onMinuto} />
+              <span aria-hidden style={{ fontFamily: 'var(--font-display)', fontSize: 44, fontWeight: 800, lineHeight: '72px', color: 'var(--gild-200)' }}>
+                :
+              </span>
+              <CampoTempo rotulo="segundo" valor={segundo} placeholder="00" maximo={2} onValor={onSegundo} />
+            </div>
+            {!valido ? <span style={erroEstilo}>O segundo vai de 0 a 59.</span> : null}
+          </div>
+          <div style={{ display: 'flex', marginLeft: -12 }}>
+            <Button variant="ghost" disabled={inicio === null} iconLeft={<Play size={16} aria-hidden />} onClick={() => ouvirDe(inicio ?? 0)}>
+              Ouvir a partir de {formatarTempo(inicio ?? 0)}
+            </Button>
+          </div>
         </div>
 
         {erro ? <span style={erroEstilo}>{erro}</span> : null}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-          <Button size="lg" disabled={inicio === null || salvando} carregando={salvando} onClick={() => inicio !== null && onSalvar(inicio)}>
+          <Button size="lg" variant="gild" disabled={inicio === null || salvando} carregando={salvando} iconRight={salvando ? undefined : <Check size={18} strokeWidth={3} aria-hidden />} onClick={() => inicio !== null && onSalvar(inicio)}>
             {salvando ? 'Salvando…' : `Salvar: começa em ${formatarTempo(inicio ?? 0)}`}
           </Button>
           <Button size="lg" variant="ghost" iconLeft={<ArrowLeft size={18} aria-hidden />} onClick={onVoltar}>
@@ -998,7 +1195,30 @@ function PassoMinuto({
   );
 }
 
-/** Step 4: the song is saved — play it, change it, or take it out. */
+/** A golden burst, thrown once each time `vez` goes up. */
+function Confete({ vez }: { vez: number }) {
+  if (!vez) return null;
+  const pecas = Array.from({ length: 36 }, (_, i) => {
+    const angulo = (i / 36) * Math.PI * 2 + (i % 3) * 0.2;
+    const distancia = 120 + ((i * 47) % 140);
+    return {
+      dx: `${Math.cos(angulo) * distancia}px`,
+      dy: `${Math.sin(angulo) * distancia - 40}px`,
+      giro: `${(i * 97) % 720 - 360}deg`,
+      cor: ['var(--gild-200)', 'var(--gild-400)', 'var(--chalk-050)', 'var(--ice-300)'][i % 4],
+      atraso: `${(i % 6) * 25}ms`,
+    };
+  });
+  return (
+    <div key={vez} className="confete-musica" aria-hidden>
+      {pecas.map((p, i) => (
+        <i key={i} style={{ background: p.cor, animationDelay: p.atraso, ['--dx' as string]: p.dx, ['--dy' as string]: p.dy, ['--giro' as string]: p.giro }} />
+      ))}
+    </div>
+  );
+}
+
+/** Step 4: the song is saved — a spinning record of it, to play, change or take out. */
 function PassoPronto({
   musica,
   paraGrupo,
@@ -1007,6 +1227,7 @@ function PassoPronto({
   abertas,
   salvando,
   convites,
+  festa,
   erro,
   onMudarMinuto,
   onTrocar,
@@ -1021,6 +1242,8 @@ function PassoPronto({
   salvando: boolean;
   /** Invitations waiting for them (not in a group). */
   convites: number;
+  /** Goes up when the song was just saved: throw the confetti. */
+  festa: number;
   erro?: string | null;
   onMudarMinuto?: () => void;
   onTrocar?: () => void;
@@ -1028,43 +1251,47 @@ function PassoPronto({
   onGrupo?: () => void;
 }) {
   const player = useRef<PlayerYT | null>(null);
+  const [ouvindo, setOuvindo] = useState(false);
   return (
-    <Card padding="var(--space-7)" style={{ border: '1px solid rgba(127,185,138,.4)' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-          <span
-            aria-hidden
-            style={{ flex: '0 0 auto', width: 48, height: 48, borderRadius: '50%', background: 'var(--state-ok)', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          >
-            <Check size={28} strokeWidth={3} />
-          </span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-h3)', fontWeight: 700, letterSpacing: '-.02em' }}>Pronto!</span>
-            <span style={pequeno}>{paraGrupo ? 'A música do grupo está salva.' : 'A sua música está salva.'}</span>
-          </div>
-        </div>
-
-        {paraGrupo && grupo ? <p style={texto}>Vocês descem juntos: {juntarNomes(membrosDentro(grupo))}.</p> : null}
-
+    <Card padding="var(--space-7)" style={{ position: 'relative', overflow: 'hidden', background: 'radial-gradient(120% 70% at 50% 0%, rgba(201,169,106,.14), transparent 60%), var(--ink-850)' }}>
+      <Confete vez={festa} />
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 'var(--space-5)' }}>
+        <span
+          className="check-pop"
+          aria-hidden
+          style={{ width: 52, height: 52, borderRadius: '50%', background: 'var(--state-ok)', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 40px rgba(127,185,138,.45)' }}
+        >
+          <Check size={30} strokeWidth={3} />
+        </span>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-          <span style={titulo}>{musica.titulo ?? 'Vídeo do YouTube'}</span>
-          <span style={{ ...texto, color: 'var(--accent)' }}>Começa em {formatarTempo(musica.inicio)}</span>
+          <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 'var(--fs-h2)', fontWeight: 800, letterSpacing: '-.03em' }}>Pronto!</h2>
+          <span style={texto}>{paraGrupo ? 'A música do grupo está salva.' : 'A sua música está salva.'}</span>
+          {paraGrupo && grupo ? <span style={{ ...pequeno, color: 'var(--gild-300)' }}>Vocês descem juntos: {juntarNomes(membrosDentro(grupo))}</span> : null}
         </div>
-        <Previa codigo={musica.codigo} inicio={musica.inicio} player={player} />
-        <div style={{ display: 'flex' }}>
-          <Button
-            variant="secondary"
-            onClick={() => {
-              player.current?.seekTo(musica.inicio, true);
-              player.current?.playVideo();
-            }}
-          >
+
+        <div className="vinil" aria-hidden style={{ margin: 'var(--space-3) 0' }}>
+          <span className="vinil-rotulo" style={{ backgroundImage: `url(https://i.ytimg.com/vi/${musica.codigo}/hqdefault.jpg)` }} />
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', maxWidth: '30rem' }}>
+          <span style={{ ...titulo, fontSize: 'var(--fs-h4)' }}>{musica.titulo ?? 'Vídeo do YouTube'}</span>
+          <span style={{ display: 'inline-flex', alignSelf: 'center', alignItems: 'center', gap: 8, padding: '6px 14px', borderRadius: 980, background: 'rgba(201,169,106,.14)', color: 'var(--gild-200)', fontWeight: 600 }}>
+            <Clock size={16} aria-hidden /> Começa em {formatarTempo(musica.inicio)}
+          </span>
+        </div>
+
+        {ouvindo ? (
+          <div className="aparece" style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+            <Previa codigo={musica.codigo} inicio={musica.inicio} player={player} tocar />
+          </div>
+        ) : (
+          <Button size="lg" variant="secondary" iconLeft={<Play size={18} aria-hidden />} onClick={() => setOuvindo(true)}>
             Ouvir a partir de {formatarTempo(musica.inicio)}
           </Button>
-        </div>
+        )}
 
         {repetida ? (
-          <p role="note" style={{ ...texto, display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start', color: 'var(--state-warn)' }}>
+          <p role="note" style={{ ...texto, display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start', color: 'var(--state-warn)', textAlign: 'left' }}>
             <TriangleAlert size={18} strokeWidth={2} aria-hidden style={{ flex: '0 0 auto', marginTop: 3 }} />
             <span>Outro formando escolheu essa mesma música. Pode manter, mas talvez valha escolher outra.</span>
           </p>
@@ -1073,11 +1300,11 @@ function PassoPronto({
 
         {abertas ? (
           <>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-              <Button variant="secondary" onClick={onMudarMinuto}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 'var(--space-3)', paddingTop: 'var(--space-4)', borderTop: '1px solid var(--stroke-hair)', width: '100%' }}>
+              <Button variant="secondary" iconLeft={<Clock size={16} aria-hidden />} onClick={onMudarMinuto}>
                 Mudar o minuto
               </Button>
-              <Button variant="secondary" onClick={onTrocar}>
+              <Button variant="secondary" iconLeft={<Music size={16} aria-hidden />} onClick={onTrocar}>
                 Trocar a música
               </Button>
               <Button variant="ghost" disabled={salvando} onClick={onTirar}>
@@ -1086,19 +1313,14 @@ function PassoPronto({
             </div>
             <p style={pequeno}>Dá para voltar e mudar quando quiser, até a comissão fechar a lista.</p>
             {convites > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', paddingTop: 'var(--space-4)', borderTop: '1px solid var(--stroke-hair)' }}>
-                <span style={{ ...texto, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--gild-300)' }}>
-                  <Users size={18} aria-hidden /> Você tem {convites === 1 ? 'um convite' : `${convites} convites`} para descer em grupo.
-                </span>
-                <div style={{ display: 'flex', marginLeft: -12 }}>
-                  <Button variant="ghost" onClick={onGrupo}>
-                    Ver {convites === 1 ? 'o convite' : 'os convites'}
-                  </Button>
-                </div>
-              </div>
+              <button type="button" className="opcao-musica" onClick={onGrupo} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', width: '100%', padding: 'var(--space-5)', borderRadius: 'var(--radius-md)', background: 'rgba(201,169,106,.1)', border: '1px solid rgba(201,169,106,.4)', color: 'var(--text-primary)', cursor: 'pointer', textAlign: 'left', font: 'inherit' }}>
+                <Users size={22} aria-hidden style={{ color: 'var(--gild-300)', flex: '0 0 auto' }} />
+                <span style={{ flex: 1 }}>Você tem {convites === 1 ? 'um convite' : `${convites} convites`} para descer em grupo.</span>
+                <ArrowRight size={18} aria-hidden style={{ color: 'var(--gild-300)' }} />
+              </button>
             ) : (
-              <div style={{ display: 'flex', marginLeft: -12 }}>
-                <Button variant="ghost" onClick={onGrupo}>
+              <div style={{ display: 'flex' }}>
+                <Button variant="ghost" iconLeft={<Users size={16} aria-hidden />} onClick={onGrupo}>
                   {grupo ? 'Ver o grupo' : 'Quer descer em grupo?'}
                 </Button>
               </div>
@@ -1264,6 +1486,7 @@ type PlayerYT = {
   seekTo: (segundos: number, permitirBuscar: boolean) => void;
   playVideo: () => void;
   getCurrentTime: () => number;
+  getDuration?: () => number;
   destroy: () => void;
 };
 
@@ -1322,11 +1545,12 @@ const moldura: CSSProperties = {
  * read where it is. If YouTube's script can't load, a plain embed that
  * starts at `inicio`.
  */
-function Previa({ codigo, inicio, player }: { codigo: string; inicio: number; player: MutableRefObject<PlayerYT | null> }) {
-  return <PlayerYoutube key={codigo} codigo={codigo} inicio={inicio} player={player} />;
+function Previa({ codigo, inicio, player, tocar }: { codigo: string; inicio: number; player: MutableRefObject<PlayerYT | null>; tocar?: boolean }) {
+  return <PlayerYoutube key={codigo} codigo={codigo} inicio={inicio} player={player} tocar={tocar} />;
 }
 
-function PlayerYoutube({ codigo, inicio, player }: { codigo: string; inicio: number; player: MutableRefObject<PlayerYT | null> }) {
+/** `tocar`: start playing as soon as it's ready (it was opened by a tap on "Ouvir"). */
+function PlayerYoutube({ codigo, inicio, player, tocar }: { codigo: string; inicio: number; player: MutableRefObject<PlayerYT | null>; tocar?: boolean }) {
   const lugar = useRef<HTMLDivElement>(null);
   const [falhou, setFalhou] = useState(false);
   // The start when the video was first shown: later changes only move the
@@ -1348,7 +1572,9 @@ function PlayerYoutube({ codigo, inicio, player }: { codigo: string; inicio: num
           playerVars: { start: inicioInicial.current, playsinline: 1, rel: 0 },
           events: {
             onReady: () => {
-              if (ativo) player.current = criado;
+              if (!ativo) return;
+              player.current = criado;
+              if (tocar) criado?.playVideo();
             },
           },
         });
@@ -1367,7 +1593,7 @@ function PlayerYoutube({ codigo, inicio, player }: { codigo: string; inicio: num
       <div style={moldura}>
         <iframe
           title="Vídeo do YouTube"
-          src={`https://www.youtube.com/embed/${codigo}?start=${inicio}&playsinline=1&rel=0`}
+          src={`https://www.youtube.com/embed/${codigo}?start=${inicio}&playsinline=1&rel=0${tocar ? '&autoplay=1' : ''}`}
           allow="autoplay; encrypted-media; picture-in-picture"
           allowFullScreen
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0 }}
