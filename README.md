@@ -330,6 +330,26 @@ escolhe qual e em que minuto ela começa.
   quem mandou pelo WhatsApp. "Copiar lista para o DJ" e "Baixar planilha
   (.csv)" levam nome, música, minuto e link (o do YouTube já abre no
   minuto). Escolhas iguais aparecem marcadas ("Mesma música de…").
+- **Descer em grupo (até 3 pessoas, uma música só):** em "Vai descer em
+  grupo?", o formando escolhe 1 ou 2 colegas e manda o convite. Cada
+  convidado vê o convite quando entra em `/musica` e escolhe:
+  - **Aceitar:** entra no grupo. Quando todos os convidados aceitam (e são
+    pelo menos 2), o grupo fica completo e qualquer um escolhe a música do
+    grupo. Enquanto o grupo está completo, a música de cada um fica de lado
+    (não é apagada: se o grupo se desfizer, volta).
+  - **Vou descer sem grupo:** quem convidou vê o aviso, mas o convite não é
+    recusado: continua lá, e a pessoa ainda pode mudar de ideia e aceitar.
+  - **Recusar:** quem convidou vê "Recusou" e pode chamar outra pessoa.
+
+  Uma pessoa pode receber vários convites e escolhe qual aceitar; os outros
+  continuam esperando (quem convidou vê que ela "entrou em outro grupo").
+  Ela só fica em um grupo por vez. Quem criou o grupo pode chamar mais
+  gente (até 3 no total), tirar um convite ou desfazer o grupo; os outros
+  podem sair. As regras ficam no banco (`musica_*` em `musicas.sql`), com
+  trava, então dois aceites ao mesmo tempo não colocam ninguém em dois
+  grupos. Na aba **Músicas**, cada grupo completo aparece como uma linha só
+  (e assim vai para a lista do DJ), e os grupos ainda se formando aparecem
+  à parte, com quem falta responder. A comissão pode desfazer um grupo.
 - **Fechar lista:** congela as escolhas da turma (por exemplo, quando a lista
   for para o DJ). A comissão continua podendo mexer. Começa aberta.
 

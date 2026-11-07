@@ -8,8 +8,8 @@ import { chamarFuncao } from './supabase';
  */
 export type Plataforma = 'youtube' | 'spotify';
 
-export type Musica = {
-  formando: string;
+/** A song as picked: by one formando (Musica) or by a group (Grupo.musica). */
+export type MusicaBase = {
   plataforma: Plataforma;
   /** The video's id (YouTube) or the track's (Spotify). */
   codigo: string;
@@ -18,6 +18,33 @@ export type Musica = {
   /** Seconds from the start of the song. */
   inicio: number;
   atualizadoEm: string;
+};
+
+export type Musica = MusicaBase & { formando: string };
+
+export type MembroGrupo = {
+  formando: string;
+  status: 'convidado' | 'aceito' | 'recusado';
+  /** Still invited, but said they'll walk down without a group — can still change their mind. */
+  semGrupo?: boolean;
+  /** Still invited, but accepted another group meanwhile. */
+  emOutroGrupo?: boolean;
+};
+
+/**
+ * Up to 3 formandos walking down together, to one song (musicas.sql): the
+ * creator invites, each invitee accepts or refuses; complete once everyone
+ * invited accepted (two or more in). While complete, the members' own songs
+ * are set aside.
+ */
+export type Grupo = {
+  id: string;
+  criadoPor: string;
+  /** The creator first. */
+  membros: MembroGrupo[];
+  completo: boolean;
+  /** The group's song — null until picked, and always in an invitation. */
+  musica: MusicaBase | null;
 };
 
 export type DadosMusicas = {
@@ -32,17 +59,42 @@ export type DadosMusicas = {
   minha: Musica | null;
   /** Someone else picked the same video/track as `minha` (who isn't said: it's a surprise). */
   repetida: boolean;
-  /** Committee only: every song picked, and every formando's name. */
+  /** Committee only: every formando's own song. */
   musicas: Musica[] | null;
+  /** Every formando's name (to the committee, and to a formando to pick who to invite). */
   formandos: string[] | null;
+  /** The formando's group (accepted in it), complete or not. */
+  grupo: Grupo | null;
+  /** Groups inviting the formando, waiting for an answer. */
+  convites: Grupo[];
+  /** Who's already in a group (can't be invited). */
+  emGrupo: string[];
+  /** The formando said they'll walk down without a group (their invitations still stand). */
+  semGrupo: boolean;
+  /** Committee only: every group. */
+  grupos: Grupo[] | null;
 };
 
 export type AcessoMusicas = { whatsapp: string; nome?: string } | { codigo: string } | Record<string, never>;
 
 export type AcaoMusicas =
-  /** Picks (or replaces) the song. `formando`: committee only, whose song. */
-  | { acao: 'escolher'; link: string; inicio: number; formando?: string }
-  | { acao: 'apagar'; formando?: string }
+  /**
+   * Picks (or replaces) the song. `paraGrupo`: the group's (the formando's
+   * complete group) rather than their own. Committee: whose — `formando`, or `grupo`.
+   */
+  | { acao: 'escolher'; link: string; inicio: number; paraGrupo?: boolean; formando?: string; grupo?: string }
+  | { acao: 'apagar'; paraGrupo?: boolean; formando?: string; grupo?: string }
+  /** Starts a group, inviting 1 or 2 classmates. */
+  | { acao: 'criarGrupo'; convidados: string[] }
+  /** The group's creator: invite one more, or withdraw an invitation. */
+  | { acao: 'convidar' | 'desconvidar'; convidado: string }
+  | { acao: 'responder'; grupo: string; aceitar: boolean }
+  /** Leaves the group — the creator undoes it for everyone. */
+  | { acao: 'sairDoGrupo' }
+  /** Says (or takes back) that they'll walk down without a group. */
+  | { acao: 'semGrupo'; sim: boolean }
+  /** Committee: undo a group. */
+  | { acao: 'desfazerGrupo'; grupo: string }
   /** Committee: let the class change their songs, or freeze them. */
   | { acao: 'abertas'; abertas: boolean };
 
@@ -129,8 +181,27 @@ export function formatarTempo(segundos: number): string {
 }
 
 /** Where to open the song: the video already at the chosen second, or the track. */
-export function linkDaMusica(m: Pick<Musica, 'plataforma' | 'codigo' | 'inicio'>): string {
+export function linkDaMusica(m: Pick<MusicaBase, 'plataforma' | 'codigo' | 'inicio'>): string {
   return m.plataforma === 'youtube'
     ? `https://www.youtube.com/watch?v=${m.codigo}${m.inicio > 0 ? `&t=${m.inicio}s` : ''}`
     : `https://open.spotify.com/track/${m.codigo}`;
+}
+
+/** ["Ana", "Bia", "Caio"] → "Ana, Bia e Caio". */
+export function juntarNomes(nomes: string[]): string {
+  return nomes.length <= 1 ? nomes.join('') : `${nomes.slice(0, -1).join(', ')} e ${nomes[nomes.length - 1]}`;
+}
+
+/** Who's in (accepted) — the names that walk down together. */
+export const membrosDentro = (g: Grupo) => g.membros.filter((m) => m.status === 'aceito').map((m) => m.formando);
+
+/**
+ * Committee: how many formandos already have a song — their own, or their
+ * complete group's (a member's own song doesn't count while in one).
+ */
+export function quantosTemMusica(d: DadosMusicas): number {
+  const fechados = (d.grupos ?? []).filter((g) => g.completo);
+  const emFechado = new Set(fechados.flatMap(membrosDentro));
+  const deGrupos = fechados.filter((g) => g.musica).flatMap(membrosDentro).length;
+  return deGrupos + (d.musicas ?? []).filter((m) => !emFechado.has(m.formando)).length;
 }

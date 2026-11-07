@@ -10,7 +10,7 @@ import { PageHeader } from '../components/SectionHeading';
 import { lerCodigo, salvarCodigo } from '../lib/codigoComissao';
 import { buscarInfancia } from '../lib/infancia';
 import { buscarMesas, type DadosMesas } from '../lib/mesas';
-import { buscarMusicas } from '../lib/musicas';
+import { buscarMusicas, quantosTemMusica } from '../lib/musicas';
 import { buscarDadosComissao, urlDaFoto, type ComissaoData } from '../lib/supabase';
 import { useIsMobile } from '../lib/useViewport';
 import { buscarVotacao, type DadosVotacao } from '../lib/votacao';
@@ -234,7 +234,7 @@ function Inicio({ codigo }: { codigo: string }) {
       .then((d) => `${d.formandos.filter((f) => f.fotos.length > 0).length} de ${d.formandos.length} formandos já têm foto`)
       .then(definir('fotos-de-crianca'), console.error);
     buscarMusicas({ codigo })
-      .then((d) => `${d.musicas?.length ?? 0} de ${d.formandos?.length ?? 0} já escolheram · lista ${d.abertas ? 'aberta' : 'fechada'}`)
+      .then((d) => `${quantosTemMusica(d)} de ${d.formandos?.length ?? 0} já têm música · lista ${d.abertas ? 'aberta' : 'fechada'}`)
       .then(definir('musicas'), console.error);
     buscarDadosComissao(codigo)
       .then((d) => `Álbum ${d.albumAberto ? 'aberto' : 'fechado'} · ${plural(d.mensagens?.length ?? 0, 'mensagem', 'mensagens')}`)
