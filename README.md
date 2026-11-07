@@ -305,6 +305,14 @@ o `votacao.sql` inteiro de novo **antes** de publicar a função.
 No baile, cada formando desce a escada com uma música. Em `/musica` ele
 escolhe qual e em que minuto ela começa.
 
+- **Passo a passo:** depois de entrar, a página guia o formando em 4
+  passos, com uma barra no topo mostrando onde ele está (dá para tocar num
+  passo já feito para voltar): **1. Só ou em grupo** (com os convites
+  recebidos e o estado do grupo), **2. A música** (como copiar o link no
+  YouTube, com botão "Colar" e a miniatura do vídeo quando o link está
+  certo), **3. O minuto** (dar play, pausar e tocar em "Começar daqui", ou
+  digitar) e **4. Pronto** (a música salva, com "Mudar o minuto", "Trocar a
+  música" e "Tirar a música"). Quem já tem música cai direto no passo 4.
 - **Um link só para a turma toda**, como a votação: o formando entra com o
   WhatsApp, e é o mesmo número da votação (quem já votou naquele celular
   entra direto; quem não está na lista escolhe o nome, como lá).
