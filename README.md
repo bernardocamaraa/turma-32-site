@@ -375,6 +375,9 @@ O cartão que aparece quando alguém cola um link do site vem das tags
 `og:*` do bloco `<!-- previa -->` em `index.html`: título, descrição e a
 imagem `public/previas/turma-32.jpg`.
 
+O link da música (`/musica`) tem imagem própria, `public/previas/musica.jpg`,
+com notas musicais e "Clique aqui para escolher".
+
 O link pessoal de cada formando (`/mesas/<link>`) mostra o nome e a imagem
 dele. Como os apps montam a prévia sem rodar o JavaScript do site, quem
 faz isso é o `middleware.ts`, na raiz do projeto, que roda na Vercel:
@@ -389,7 +392,8 @@ As imagens são geradas por `scripts/gerar-previas.mjs`, a partir de
 `src/lib/formandos.ts`. Se a lista de formandos mudar, rode de novo:
 
 ```bash
-node scripts/gerar-previas.mjs   # precisa do Playwright instalado
+node scripts/gerar-previas.mjs          # precisa do Playwright instalado
+node scripts/gerar-previas.mjs musica   # só a imagem da música
 ```
 
 O WhatsApp guarda a prévia de cada endereço por um tempo. Para conferir uma

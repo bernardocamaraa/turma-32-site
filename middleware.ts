@@ -109,13 +109,13 @@ export function comPreviaDaVotacao(html: string, url: URL): string {
   });
 }
 
-/** The preview for the stairs song's single link. */
+/** The preview for the stairs song's single link (public/previas/musica.jpg, made by scripts/gerar-previas.mjs). */
 export function comPreviaDaMusica(html: string, url: URL): string {
   return comPrevia(html, {
-    titulo: 'A música da sua descida · Turma 32',
-    descricao: 'Escolha a música para descer a escada no baile: cole o link do YouTube e diga o minuto em que ela começa.',
-    imagem: `${url.origin}/previas/turma-32.jpg`,
-    alt: 'Logo da Turma 32 sobre as assinaturas dos formandos',
+    titulo: 'Música · Turma 32',
+    descricao: 'Clique aqui para escolher a música da sua descida da escada no baile.',
+    imagem: `${url.origin}/previas/musica.jpg`,
+    alt: 'Logo da Turma 32 com notas musicais e a palavra Música',
     url,
   });
 }
