@@ -10,7 +10,11 @@ const H = 336;
 // no numbers, no names. Who sits where shows on the open table and in the
 // panel beside it (pages/Mesas.tsx).
 const R_MESA = 21;
-const RET = { w: 34, h: 84 };
+
+/** A rectangle's size: one of the venue's is 34×84; the long table (R) is two of them pushed together. */
+function ret(p: PosicaoMesa): { w: number; h: number } {
+  return { w: 34, h: p.altura ?? 84 };
+}
 
 // The open table: how much it grows, and where its seats sit (in the
 // table's own coordinates, before scaling).
@@ -31,11 +35,14 @@ const COR_LUGAR: Record<EstadoLugar, { fill: string; stroke: string }> = {
 /** Seat positions around a table, centered on (0,0). */
 function lugaresEmVolta(p: PosicaoMesa, capacidade: number): { x: number; y: number }[] {
   if (p.formato === 'retangular') {
+    const RET = ret(p);
     const porLado = Math.ceil(capacidade / 2);
     const passo = (RET.h - 12) / porLado;
+    // With an odd count the second side has one seat fewer: center it.
+    const folga = (porLado - (capacidade - porLado)) / 2;
     return Array.from({ length: capacidade }, (_, i) => {
       const lado = i < porLado ? -1 : 1;
-      const k = i % porLado;
+      const k = i < porLado ? i : i - porLado + folga;
       return { x: lado * (RET.w / 2 + 7), y: -RET.h / 2 + 6 + passo * (k + 0.5) };
     });
   }
@@ -45,11 +52,13 @@ function lugaresEmVolta(p: PosicaoMesa, capacidade: number): { x: number; y: num
   });
 }
 
-/** How far the open table reaches from its center, after scaling — used to keep it inside the map. */
+/** How far the open table reaches from its center, before scaling. */
 function alcance(p: PosicaoMesa): { x: number; y: number } {
-  const s = ESCALA[p.formato];
-  if (p.formato === 'retangular') return { x: (RET.w / 2 + 11) * s, y: (RET.h / 2 + 4) * s };
-  return { x: (R_LUGARES + R_LUGAR + 2) * s, y: (R_LUGARES + R_LUGAR + 2) * s };
+  if (p.formato === 'retangular') {
+    const RET = ret(p);
+    return { x: RET.w / 2 + 11, y: RET.h / 2 + 4 };
+  }
+  return { x: R_LUGARES + R_LUGAR + 2, y: R_LUGARES + R_LUGAR + 2 };
 }
 
 const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), max);
@@ -72,6 +81,7 @@ type MesaDesenhada = {
 function CorpoMesa({ d, clipId }: { d: MesaDesenhada; clipId: string }) {
   const { p, mesa, ocupados, minha } = d;
   const redonda = p.formato === 'redonda';
+  const RET = ret(p);
   const meiaAltura = redonda ? R_MESA : RET.h / 2;
   const nivel = Math.min(ocupados / mesa.capacidade, 1);
   const cheia = ocupados >= mesa.capacidade;
@@ -227,9 +237,9 @@ export function MapaMesas({
           {/* Invisible hit area a little larger than the drawing, so small tables are easy to tap. */}
           <rect
             x={-25}
-            y={d.p.formato === 'retangular' ? -46 : -25}
+            y={d.p.formato === 'retangular' ? -ret(d.p).h / 2 - 4 : -25}
             width={50}
-            height={d.p.formato === 'retangular' ? 92 : 50}
+            height={d.p.formato === 'retangular' ? ret(d.p).h + 8 : 50}
             style={{ fill: 'transparent' }}
           />
           <g className="mesa-alvo">
@@ -252,7 +262,7 @@ function RotuloProfessores({ desenhadas }: { desenhadas: MesaDesenhada[] }) {
   return (
     <text
       x={p.cx}
-      y={p.cy + R_MESA + 12}
+      y={p.cy + (p.p.formato === 'retangular' ? ret(p.p).h / 2 : R_MESA) + 12}
       textAnchor="middle"
       dominantBaseline="central"
       style={{ fill: 'var(--text-faint)', fontFamily: 'var(--font-core)', fontSize: 10, pointerEvents: 'none' }}
@@ -267,6 +277,9 @@ function RotuloProfessores({ desenhadas }: { desenhadas: MesaDesenhada[] }) {
  * sits (nudged inward if it would spill off the edge) and its seats pop in
  * one by one around it — gold for the viewer's, blue for classmates', silver
  * for the teachers, empty for free ones. Clicking the dimmed map closes it.
+ *
+ * On a phone the bottom sheet covers the lower half of the map, where the
+ * long table (R) can't fit standing up — there it opens lying down.
  */
 function MesaAberta({
   d,
@@ -281,8 +294,15 @@ function MesaAberta({
   painel: 'esquerda' | 'direita' | 'baixo' | null;
   onFechar: () => void;
 }) {
-  const s = ESCALA[d.p.formato];
-  const a = alcance(d.p);
+  const deitada = d.p.formato === 'retangular' && painel === 'baixo';
+  const base = alcance(d.p);
+  const r = deitada ? { x: base.y, y: base.x } : base;
+  // Grows as much as its shape allows, but no taller than 70% of the map —
+  // the long table would otherwise take over the screen — nor, on a phone,
+  // wider than the slice of the (wider than the screen) map in view.
+  const larguraVisivel = painel === 'baixo' ? W * 0.45 : W - 8;
+  const s = Math.min(ESCALA[d.p.formato], larguraVisivel / (2 * r.x), (H * 0.7) / (2 * r.y));
+  const a = { x: r.x * s, y: r.y * s };
   // Keep clear of the details panel: beside the map it covers about 40% of
   // its width; as a phone's bottom sheet, roughly the lower half.
   const minX = painel === 'esquerda' ? W * 0.42 + a.x : a.x + 4;
@@ -318,7 +338,24 @@ function MesaAberta({
           } as CSSProperties
         }
       >
-        <CorpoMesa d={d} clipId={`${uid}-${d.p.id}-aberta`} />
+        <g transform={deitada ? 'rotate(90)' : undefined}>
+          <CorpoMesa d={d} clipId={`${uid}-${d.p.id}-aberta`} />
+          {lugaresEmVolta(d.p, d.mesa.capacidade).map((pos, i) => (
+            <circle
+              key={i}
+              className="mesa-lugar"
+              cx={pos.x}
+              cy={pos.y}
+              r={R_LUGAR}
+              style={{
+                fill: COR_LUGAR[estados[i]].fill,
+                stroke: COR_LUGAR[estados[i]].stroke,
+                strokeWidth: 0.8,
+                animation: `mesa-lugar 260ms var(--ease-snap) ${180 + i * 35}ms backwards`,
+              }}
+            />
+          ))}
+        </g>
         <text
           y={-1.5}
           textAnchor="middle"
@@ -335,21 +372,6 @@ function MesaAberta({
         >
           de {d.mesa.capacidade}
         </text>
-        {lugaresEmVolta(d.p, d.mesa.capacidade).map((pos, i) => (
-          <circle
-            key={i}
-            className="mesa-lugar"
-            cx={pos.x}
-            cy={pos.y}
-            r={R_LUGAR}
-            style={{
-              fill: COR_LUGAR[estados[i]].fill,
-              stroke: COR_LUGAR[estados[i]].stroke,
-              strokeWidth: 0.8,
-              animation: `mesa-lugar 260ms var(--ease-snap) ${180 + i * 35}ms backwards`,
-            }}
-          />
-        ))}
       </g>
     </>
   );

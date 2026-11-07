@@ -135,7 +135,7 @@ export function Mesas({ codigoComissao }: { codigoComissao?: string }) {
   const mesa = dados?.mesas.find((m) => m.id === selecionada) ?? null;
   const naMesa = dados?.reservas.filter((r) => r.mesa === selecionada) ?? [];
   const meusNaMesa = naMesa.find((r) => r.formando === nome)?.lugares ?? 0;
-  // The teachers at table P hold seats without being formandos.
+  // The teachers at table R hold seats without being formandos.
   const fixos = mesa?.ocupantes_fixos ?? [];
   const ocupadosOutros = naMesa.reduce((s, r) => s + (r.formando === nome ? 0 : r.lugares), 0) + fixos.length;
   const maximo = mesa ? Math.max(Math.min(mesa.capacidade - ocupadosOutros, meusNaMesa + restante), 0) : 0;
