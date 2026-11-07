@@ -10,6 +10,8 @@ import { Select } from '../components/Select';
 import { PageHeader } from '../components/SectionHeading';
 import { desligarAvisos, inscricaoAtual, ligarAvisos, situacaoAvisos } from '../lib/avisos';
 import { CarregandoSecao } from '../components/CarregandoSecao';
+import { EntrarComWhatsapp } from '../components/EntrarComWhatsapp';
+import { lerEleitor, salvarEleitor } from '../lib/eleitor';
 import { assinaturaDoCandidato } from '../lib/formandos';
 import { precarregarUrna, UrnaVoto } from '../components/UrnaVoto';
 import { prepararSomDaUrna } from '../lib/somDaUrna';
@@ -36,29 +38,6 @@ export const POLL_MS = 20000;
 const texto = { fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)', margin: 0 };
 const pequeno = { fontSize: 'var(--fs-body-sm)', color: 'var(--text-faint)' };
 const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
-
-const CHAVE_ELEITOR = 'turma32-votacao-eleitor';
-
-// Remembers who's voting on this phone, so the number isn't retyped on
-// every visit. Storage can be blocked (private mode) — then the page just
-// asks again.
-function lerEleitor(): { whatsapp: string } | null {
-  try {
-    const salvo = JSON.parse(localStorage.getItem(CHAVE_ELEITOR) ?? 'null');
-    return salvo && typeof salvo.whatsapp === 'string' ? { whatsapp: salvo.whatsapp } : null;
-  } catch {
-    return null;
-  }
-}
-
-function salvarEleitor(valor: { whatsapp: string } | null) {
-  try {
-    if (valor) localStorage.setItem(CHAVE_ELEITOR, JSON.stringify(valor));
-    else localStorage.removeItem(CHAVE_ELEITOR);
-  } catch {
-    // ignore — see lerEleitor
-  }
-}
 
 /**
  * The class vote — its own page, apart from the table map, with one link
@@ -231,7 +210,14 @@ export function Votacao({ codigoComissao }: { codigoComissao?: string }) {
       <PageHeader eyebrow="Turma 32" title="Votação da turma." />
 
       {!eleitor || !dados?.voce ? (
-        <Identificacao livres={dados?.livres ?? []} entrando={entrando} erro={erroAcesso} onEntrar={identificar} />
+        <EntrarComWhatsapp
+          livres={dados?.livres ?? []}
+          entrando={entrando}
+          erro={erroAcesso}
+          onEntrar={identificar}
+          explicacao="Digite o seu WhatsApp para entrar. É por ele que o site sabe quem você é e garante um voto por pessoa; ninguém vê em quem você votou."
+          botao="Entrar para votar"
+        />
       ) : (
         <>
           <Card padding="var(--space-7)">
@@ -273,97 +259,6 @@ export function Votacao({ codigoComissao }: { codigoComissao?: string }) {
   );
 }
 
-/**
- * The way in for a formando: their WhatsApp. When the committee already
- * has the number, that's all; otherwise they pick their name among the
- * ones with no number yet, and the number gets tied to it.
- */
-function Identificacao({
-  livres,
-  entrando,
-  erro,
-  onEntrar,
-}: {
-  livres: string[];
-  entrando: boolean;
-  erro: string | null;
-  onEntrar: (whatsapp: string, nome?: string) => Promise<boolean | 'semNome'>;
-}) {
-  const [numero, setNumero] = useState('');
-  const [erroNumero, setErroNumero] = useState<string | null>(null);
-  // Set once the number turned out not to be on the list.
-  const [pedirNome, setPedirNome] = useState(false);
-  const [nome, setNome] = useState('');
-  const whatsapp = normalizarWhatsapp(numero);
-
-  async function enviar() {
-    if (!whatsapp) {
-      setErroNumero('Esse número não parece um WhatsApp. Confira, por exemplo (21) 99999-9999.');
-      return;
-    }
-    if (pedirNome && !nome) return;
-    const resultado = await onEntrar(whatsapp, pedirNome ? nome : undefined);
-    if (resultado === 'semNome') setPedirNome(true);
-  }
-
-  function corrigir() {
-    setPedirNome(false);
-    setNome('');
-  }
-
-  return (
-    <Card padding="var(--space-7)">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxWidth: 420 }}>
-        <p style={texto}>
-          Digite o seu WhatsApp para entrar. É por ele que o site sabe quem você é e garante um voto por pessoa;
-          ninguém vê em quem você votou.
-        </p>
-        <Input
-          label="Seu WhatsApp"
-          placeholder="(21) 99999-9999"
-          type="tel"
-          inputMode="tel"
-          autoComplete="tel"
-          value={numero}
-          disabled={pedirNome}
-          error={erroNumero ?? undefined}
-          onChange={(e) => {
-            setNumero(e.target.value);
-            setErroNumero(null);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && numero.trim() && !entrando) enviar();
-          }}
-        />
-        {pedirNome ? (
-          livres.length > 0 ? (
-            <>
-              <p style={texto}>Esse número não está na lista da turma. Se ele estiver certo, escolha o seu nome:</p>
-              <Select label="Seu nome" placeholder="Escolha o seu nome" options={livres} value={nome} onChange={(e) => setNome(e.target.value)} />
-            </>
-          ) : (
-            <p style={texto}>Esse número não está na lista da turma. Confira se digitou certo ou fale com a comissão.</p>
-          )
-        ) : null}
-        {erro ? <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--state-error)' }}>{erro}</span> : null}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-          {!pedirNome || livres.length > 0 ? (
-            <Button size="lg" disabled={!numero.trim() || (pedirNome && !nome)} carregando={entrando} onClick={enviar}>
-              {entrando ? 'Entrando…' : 'Entrar para votar'}
-            </Button>
-          ) : null}
-          {pedirNome ? (
-            <Button size="lg" variant="ghost" onClick={corrigir}>
-              Corrigir o número
-            </Button>
-          ) : null}
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-/** What a question's state means, as a small pill next to it. */
 function Situacao({ p, paraComissao }: { p: Pergunta; paraComissao?: boolean }) {
   if (p.pronta) return <Badge>Pronta · a turma ainda não vê</Badge>;
   if (p.resultadoLiberado) return <Badge tone="gild">Resultado</Badge>;

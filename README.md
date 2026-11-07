@@ -72,12 +72,13 @@ Cada parte é uma aba, com endereço próprio (dá para salvar ou mandar):
 | Votação | `/comissao/votacao` | Perguntas, WhatsApp dos formandos, quem falta votar, resultados e o aviso no celular. |
 | Mesas | `/comissao/mesas` | Quantas pessoas cada formando leva, os links pessoais e o mapa. |
 | Fotos de criança | `/comissao/fotos-de-crianca` | A foto de cada formando, para baixar todas juntas. |
+| Músicas | `/comissao/musicas` | A música de cada formando na descida da escada, quem falta e a lista para o DJ. |
 | Álbum e mensagens | `/comissao/album` | Liberar o álbum da festa, moderar as fotos e ler as mensagens. |
 
 As abas ficam presas no topo ao rolar a página. Os endereços antigos
 (`/votacao/comissao`, `/mesas` sem link, `/infancia`) levam para a aba certa.
-As páginas dos formandos continuam separadas: `/votacao` (entram pelo
-WhatsApp) e `/mesas/<link pessoal>`.
+As páginas dos formandos continuam separadas: `/votacao` e `/musica`
+(entram pelo WhatsApp) e `/mesas/<link pessoal>`.
 
 ## Álbum da festa
 
@@ -299,6 +300,42 @@ Rodar o arquivo de novo é seguro (ele só acrescenta o que falta), então,
 quando a votação ganhar algo novo no banco (como as perguntas prontas), rode
 o `votacao.sql` inteiro de novo **antes** de publicar a função.
 
+## Música da descida da escada (`/musica`)
+
+No baile, cada formando desce a escada com uma música. Em `/musica` ele
+escolhe qual e em que minuto ela começa.
+
+- **Um link só para a turma toda**, como a votação: o formando entra com o
+  WhatsApp, e é o mesmo número da votação (quem já votou naquele celular
+  entra direto; quem não está na lista escolhe o nome, como lá).
+- **O link da música:** do YouTube (de preferência) ou do Spotify, colado
+  do jeito que o botão "Compartilhar" dá: youtu.be, music.youtube.com,
+  Shorts, link com `?t=`, link do Spotify com `?si=`, dentro de uma frase
+  ("Ouça … no Spotify: https://…") ou o link curto `spotify.link`, que a
+  função segue até a música. Playlist, álbum e artista são recusados com
+  uma explicação (`lerLinkDaMusica` em `src/lib/musicas.ts`; a função
+  confere de novo).
+- **O minuto:** dois campos, minuto e segundo. No YouTube, o vídeo aparece
+  na página: o formando dá play, pausa onde quer e toca em "Começar daqui",
+  e "Ouvir a partir de 1:30" confere. Um link do YouTube que já traz o
+  tempo (`?t=95`) preenche os campos sozinho. No Spotify, o player da
+  página pode tocar só um trecho, então o minuto é digitado.
+- **O nome da música** vem do próprio YouTube/Spotify (oEmbed) quando a
+  música é salva. Um vídeo que não existe ou é privado é recusado.
+- **Surpresa:** só a comissão vê as músicas. O formando vê só a dele, e um
+  aviso (sem dizer de quem) se outro formando escolheu a mesma.
+- **Aba Músicas** (`/comissao/musicas`): o link para mandar no grupo, quantos
+  já escolheram e quem falta, e a lista de todos, cada um com "Ouvir" (já no
+  minuto escolhido), "Editar" e "Tirar" — a comissão pode colocar a música de
+  quem mandou pelo WhatsApp. "Copiar lista para o DJ" e "Baixar planilha
+  (.csv)" levam nome, música, minuto e link (o do YouTube já abre no
+  minuto). Escolhas iguais aparecem marcadas ("Mesma música de…").
+- **Fechar lista:** congela as escolhas da turma (por exemplo, quando a lista
+  for para o DJ). A comissão continua podendo mexer. Começa aberta.
+
+Para colocar no ar: rode `supabase/musicas.sql` no SQL Editor (depois do
+`votacao.sql`) e publique a função com `supabase functions deploy musicas`.
+
 ## Fotos de criança (`/comissao/fotos-de-crianca`)
 
 Um "drive" só da comissão para juntar a foto de criança de cada formando.
@@ -374,7 +411,7 @@ mudança, use um link que ainda não foi enviado, ou acrescente `?1` no fim.
 src/
   components/   # Badge, Button, Card, Input, Select, NavBar, Dialog, etc.
                  # (porte 1:1 do design system em ../project/_ds)
-  pages/        # Home, Baile, Turma, Album, Mesas, Votacao (formandos) e
+  pages/        # Home, Baile, Turma, Album, Mesas, Votacao, Musica (formandos) e
                  # Comissao (a área da comissão, com as abas: Votacao,
                  # Mesas, Infancia e o álbum e mensagens)
   lib/          # Supabase client, countdown, formandos, hooks de motion/scroll
@@ -387,6 +424,8 @@ supabase/
   functions/votacao/index.ts        # Edge Function da votação
   infancia.sql                      # fotos de criança (rodar depois do mesas.sql)
   functions/infancia/index.ts       # Edge Function das fotos de criança
+  musicas.sql                       # música da descida (rodar depois do votacao.sql)
+  functions/musicas/index.ts        # Edge Function das músicas
 ```
 
 > A Edge Function é publicada à parte (`supabase functions deploy

@@ -10,11 +10,13 @@ import { PageHeader } from '../components/SectionHeading';
 import { lerCodigo, salvarCodigo } from '../lib/codigoComissao';
 import { buscarInfancia } from '../lib/infancia';
 import { buscarMesas, type DadosMesas } from '../lib/mesas';
+import { buscarMusicas } from '../lib/musicas';
 import { buscarDadosComissao, urlDaFoto, type ComissaoData } from '../lib/supabase';
 import { useIsMobile } from '../lib/useViewport';
 import { buscarVotacao, type DadosVotacao } from '../lib/votacao';
 import { Infancia } from './Infancia';
 import { Mesas } from './Mesas';
+import { MusicasComissao } from './Musica';
 import { Votacao } from './Votacao';
 
 const texto = { margin: 0, fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)' };
@@ -24,6 +26,7 @@ const ABAS = [
   { para: '/comissao/votacao', nome: 'Votação' },
   { para: '/comissao/mesas', nome: 'Mesas' },
   { para: '/comissao/fotos-de-crianca', nome: 'Fotos de criança' },
+  { para: '/comissao/musicas', nome: 'Músicas' },
   { para: '/comissao/album', nome: 'Álbum e mensagens' },
 ];
 
@@ -94,7 +97,7 @@ export function Comissao() {
           <Card padding="var(--space-7)">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', maxWidth: 420 }}>
               <p style={texto}>
-                Esta área é só da comissão: a votação, o mapa das mesas, as fotos de criança, o álbum da festa e as
+                Esta área é só da comissão: a votação, o mapa das mesas, as fotos de criança, as músicas da descida, o álbum da festa e as
                 mensagens, tudo num lugar só. Digite o código combinado com a turma.
               </p>
               <Input
@@ -129,6 +132,7 @@ export function Comissao() {
               <Route path="votacao" element={<Votacao codigoComissao={codigoValido} />} />
               <Route path="mesas" element={<Mesas codigoComissao={codigoValido} />} />
               <Route path="fotos-de-crianca" element={<Infancia codigo={codigoValido} />} />
+              <Route path="musicas" element={<MusicasComissao codigo={codigoValido} />} />
               <Route path="album" element={<AlbumEMensagens codigo={codigoValido} />} />
               <Route path="*" element={<Navigate to="/comissao" replace />} />
             </Routes>
@@ -229,6 +233,9 @@ function Inicio({ codigo }: { codigo: string }) {
     buscarInfancia(codigo)
       .then((d) => `${d.formandos.filter((f) => f.fotos.length > 0).length} de ${d.formandos.length} formandos já têm foto`)
       .then(definir('fotos-de-crianca'), console.error);
+    buscarMusicas({ codigo })
+      .then((d) => `${d.musicas?.length ?? 0} de ${d.formandos?.length ?? 0} já escolheram · lista ${d.abertas ? 'aberta' : 'fechada'}`)
+      .then(definir('musicas'), console.error);
     buscarDadosComissao(codigo)
       .then((d) => `Álbum ${d.albumAberto ? 'aberto' : 'fechado'} · ${plural(d.mensagens?.length ?? 0, 'mensagem', 'mensagens')}`)
       .then(definir('album'), console.error);
@@ -241,6 +248,7 @@ function Inicio({ codigo }: { codigo: string }) {
     { aba: 'votacao', titulo: 'Votação', sobre: 'Criar perguntas, ver quem falta votar, liberar o resultado e o aviso no celular.' },
     { aba: 'mesas', titulo: 'Mesas', sobre: 'Quantas pessoas cada formando leva, os links pessoais e o mapa.' },
     { aba: 'fotos-de-crianca', titulo: 'Fotos de criança', sobre: 'A foto de cada formando, para baixar todas juntas no fim.' },
+    { aba: 'musicas', titulo: 'Músicas', sobre: 'A música de cada formando na descida da escada, e a lista para o DJ.' },
     { aba: 'album', titulo: 'Álbum e mensagens', sobre: 'Liberar o álbum da festa, moderar as fotos e ler as mensagens.' },
   ];
 
