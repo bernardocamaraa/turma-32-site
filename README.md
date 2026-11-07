@@ -308,20 +308,20 @@ escolhe qual e em que minuto ela começa.
 - **Um link só para a turma toda**, como a votação: o formando entra com o
   WhatsApp, e é o mesmo número da votação (quem já votou naquele celular
   entra direto; quem não está na lista escolhe o nome, como lá).
-- **O link da música:** do YouTube (de preferência) ou do Spotify, colado
-  do jeito que o botão "Compartilhar" dá: youtu.be, music.youtube.com,
-  Shorts, link com `?t=`, link do Spotify com `?si=`, dentro de uma frase
-  ("Ouça … no Spotify: https://…") ou o link curto `spotify.link`, que a
-  função segue até a música. Playlist, álbum e artista são recusados com
-  uma explicação (`lerLinkDaMusica` em `src/lib/musicas.ts`; a função
-  confere de novo).
-- **O minuto:** dois campos, minuto e segundo. No YouTube, o vídeo aparece
-  na página: o formando dá play, pausa onde quer e toca em "Começar daqui",
-  e "Ouvir a partir de 1:30" confere. Um link do YouTube que já traz o
-  tempo (`?t=95`) preenche os campos sozinho. No Spotify, o player da
-  página pode tocar só um trecho, então o minuto é digitado.
-- **O nome da música** vem do próprio YouTube/Spotify (oEmbed) quando a
-  música é salva. Um vídeo que não existe ou é privado é recusado.
+- **O link da música:** só do YouTube, colado do jeito que o botão
+  "Compartilhar" dá: youtu.be, music.youtube.com, Shorts, link com `?t=`
+  ou dentro de uma frase. Playlist é recusada com uma explicação, e link
+  do Spotify também: o site pede para procurar a música no YouTube. (O
+  Spotify foi aceito no começo e saiu, porque o player dele na página só
+  tocava um trecho.) A regra fica em `lerLinkDaMusica`
+  (`src/lib/musicas.ts`), e a função confere de novo; o banco também só
+  aceita vídeo do YouTube.
+- **O minuto:** dois campos, minuto e segundo. O vídeo aparece na página: o
+  formando dá play, pausa onde quer e toca em "Começar daqui", e "Ouvir a
+  partir de 1:30" confere. Um link que já traz o tempo (`?t=95`) preenche
+  os campos sozinho.
+- **O nome da música** vem do próprio YouTube (oEmbed) quando a música é
+  salva. Um vídeo que não existe ou é privado é recusado.
 - **Surpresa:** só a comissão vê as músicas. O formando vê só a dele, e um
   aviso (sem dizer de quem) se outro formando escolheu a mesma.
 - **Aba Músicas** (`/comissao/musicas`): o link para mandar no grupo, quantos

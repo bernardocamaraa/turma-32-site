@@ -1,7 +1,8 @@
 // Supabase Edge Function: musicas
 //
-// Backs /musica: the song each formando walks down the stairs to, and the
-// second it starts at. One link for the whole class, entered like the vote:
+// Backs /musica: the song each formando walks down the stairs to (a
+// YouTube video — Spotify was dropped), and the second it starts at. One
+// link for the whole class, entered like the vote:
 //   - nobody yet: only whether the choices are open.
 //   - `whatsapp`: a formando, recognised by their number (the committee
 //     fills the numbers in on the vote's tab). A number not on the list
@@ -45,31 +46,28 @@ function json(body: unknown, status = 200) {
   });
 }
 
-type Plataforma = 'youtube' | 'spotify';
+type Plataforma = 'youtube';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-type Lido = { plataforma: Plataforma; codigo: string } | { curto: string } | { erro: string };
+type Lido = { plataforma: Plataforma; codigo: string } | { erro: string };
 
 /**
- * A pasted YouTube/Spotify link → the video or track. The same rules as
- * lerLinkDaMusica in src/lib/musicas.ts (the page checks first; this is
- * the one that counts).
+ * A pasted YouTube link → the video. The same rules as lerLinkDaMusica in
+ * src/lib/musicas.ts (the page checks first; this is the one that counts).
  */
 function lerLink(texto: string): Lido {
   const limpo = texto.trim();
-  const uri = /spotify:track:([A-Za-z0-9]{22})/.exec(limpo);
-  if (uri) return { plataforma: 'spotify', codigo: uri[1] };
+  if (/spotify/i.test(limpo)) return { erro: 'O site só aceita link do YouTube. Procure a música no YouTube e cole o link do vídeo.' };
   const achado = /(https?:\/\/[^\s<>"']+)/i.exec(limpo)?.[1] ?? (/^[\w.-]+\.[a-z]{2,}\//i.test(limpo) ? `https://${limpo.split(/\s/)[0]}` : null);
-  if (!achado) return { erro: 'Cole o link da música, do YouTube ou do Spotify.' };
+  if (!achado) return { erro: 'Cole o link do vídeo da música no YouTube.' };
   let url: URL;
   try {
     url = new URL(achado);
   } catch {
-    return { erro: 'Esse link não parece certo. Copie de novo pelo botão de compartilhar.' };
+    return { erro: 'Esse link não parece certo. Copie de novo pelo botão "Compartilhar" do YouTube.' };
   }
   const host = url.hostname.toLowerCase().replace(/^(www|m|music)\./, '');
   const partes = url.pathname.split('/').filter(Boolean);
-
   if (host === 'youtu.be' || host === 'youtube.com' || host === 'youtube-nocookie.com') {
     let codigo: string | null = null;
     if (host === 'youtu.be') codigo = partes[0] ?? null;
@@ -78,46 +76,16 @@ function lerLink(texto: string): Lido {
     if (codigo && /^[A-Za-z0-9_-]{11}$/.test(codigo)) return { plataforma: 'youtube', codigo };
     return { erro: 'Não achei o vídeo nesse link do YouTube. Abra o vídeo e copie o link pelo botão "Compartilhar".' };
   }
-  if (host === 'spotify.link' || host === 'spotify.app.link') return { curto: url.href };
-  if (host === 'open.spotify.com' || host === 'play.spotify.com') {
-    const resto = partes.filter((p) => !/^intl-/.test(p) && p !== 'embed');
-    if (resto[0] === 'track' && /^[A-Za-z0-9]{22}$/.test(resto[1] ?? '')) return { plataforma: 'spotify', codigo: resto[1] };
-    if (['album', 'playlist', 'artist'].includes(resto[0] ?? '')) {
-      return { erro: 'Esse link é de um álbum, playlist ou artista. Abra a música e copie o link dela.' };
-    }
-    return { erro: 'Não achei a música nesse link do Spotify. Na música, toque em "Compartilhar" e "Copiar link".' };
-  }
-  return { erro: 'O link precisa ser do YouTube (de preferência) ou do Spotify.' };
+  return { erro: 'O link precisa ser do YouTube.' };
 }
 
 /**
- * Spotify's app shares short links (spotify.link/…) that only redirect to
- * the track. Follows them: the final address, or else the first track
- * address in the page it lands on. Null if neither works.
+ * The video's name, from YouTube's oEmbed. 'naoExiste' when YouTube says
+ * there's no such video; null when it couldn't be asked (slow, down) — the
+ * song is kept anyway, without a name.
  */
-async function seguirLinkCurto(curto: string): Promise<string | null> {
-  try {
-    const resposta = await fetch(curto, { redirect: 'follow', signal: AbortSignal.timeout(5000) });
-    const final = lerLink(resposta.url);
-    if ('codigo' in final) return final.codigo;
-    const pagina = await resposta.text();
-    return /open\.spotify\.com\/track\/([A-Za-z0-9]{22})/.exec(pagina)?.[1] ?? null;
-  } catch (e) {
-    console.error(e);
-    return null;
-  }
-}
-
-/**
- * The video's or track's name, from the platform's oEmbed. 'naoExiste'
- * when the platform says there's no such video/track; null when it couldn't
- * be asked (slow, down) — the song is kept anyway, without a name.
- */
-async function buscarTitulo(plataforma: Plataforma, codigo: string): Promise<string | null | 'naoExiste'> {
-  const endereco =
-    plataforma === 'youtube'
-      ? `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(`https://www.youtube.com/watch?v=${codigo}`)}`
-      : `https://open.spotify.com/oembed?url=${encodeURIComponent(`https://open.spotify.com/track/${codigo}`)}`;
+async function buscarTitulo(codigo: string): Promise<string | null | 'naoExiste'> {
+  const endereco = `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(`https://www.youtube.com/watch?v=${codigo}`)}`;
   try {
     const resposta = await fetch(endereco, { signal: AbortSignal.timeout(4000) });
     if (resposta.status === 404 || resposta.status === 400) return 'naoExiste';
@@ -307,21 +275,12 @@ Deno.serve(async (req) => {
     }
 
     if (acao === 'escolher' && alvo) {
-      if (typeof link !== 'string' || link.length > 2000) return recusar('Cole o link da música, do YouTube ou do Spotify.');
+      if (typeof link !== 'string' || link.length > 2000) return recusar('Cole o link do vídeo da música no YouTube.');
       if (!Number.isInteger(inicio) || inicio < 0 || inicio >= 36000) return recusar('Confira o minuto e o segundo em que a música começa.');
-      let lido = lerLink(link);
-      if ('curto' in lido) {
-        const faixa = await seguirLinkCurto(lido.curto);
-        if (!faixa) {
-          return recusar('Não consegui abrir esse link curto do Spotify. Abra a música no navegador e copie o endereço que começa com open.spotify.com/track.');
-        }
-        lido = { plataforma: 'spotify', codigo: faixa };
-      }
+      const lido = lerLink(link);
       if ('erro' in lido) return recusar(lido.erro);
-      const titulo = await buscarTitulo(lido.plataforma, lido.codigo);
-      if (titulo === 'naoExiste') {
-        return recusar(lido.plataforma === 'youtube' ? 'Esse vídeo não existe ou é privado. Confira o link.' : 'Essa música não foi encontrada no Spotify. Confira o link.');
-      }
+      const titulo = await buscarTitulo(lido.codigo);
+      if (titulo === 'naoExiste') return recusar('Esse vídeo não existe ou é privado. Confira o link.');
       const agora = new Date().toISOString();
       if ('grupo' in alvo) {
         const { error } = await supabase

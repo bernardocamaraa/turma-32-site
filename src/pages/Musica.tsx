@@ -23,7 +23,6 @@ import {
   type DadosMusicas,
   type Grupo,
   type MusicaBase,
-  type Plataforma,
 } from '../lib/musicas';
 import { useIsMobile } from '../lib/useViewport';
 
@@ -32,7 +31,6 @@ const pequeno: CSSProperties = { fontSize: 'var(--fs-body-sm)', color: 'var(--te
 const titulo: CSSProperties = { fontFamily: 'var(--font-display)', fontSize: 'var(--fs-h4)', fontWeight: 600, letterSpacing: '-.015em' };
 const erroEstilo: CSSProperties = { fontSize: 'var(--fs-body-sm)', color: 'var(--state-error)' };
 
-const nomeDaPlataforma = (p: Plataforma) => (p === 'youtube' ? 'YouTube' : 'Spotify');
 
 /**
  * /musica: each formando picks the song they walk down the stairs to, and
@@ -155,7 +153,7 @@ export function Musica() {
                 Olá, {dados.voce.split(' ')[0]}.
               </span>
               <p style={texto}>
-                Escolha a música para descer a escada: cole o link do YouTube (de preferência) ou do Spotify e diga em que
+                Escolha a música para descer a escada: cole o link do vídeo no YouTube e diga em que
                 minuto ela deve começar. Vai descer junto com alguém? Montem um grupo (até 3 pessoas) e escolham uma música só.
                 Só a comissão vê as escolhas; para a turma, é surpresa.
               </p>
@@ -624,26 +622,24 @@ function SuaMusica({
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
           <span style={pequeno}>{rotulo}</span>
-          <span style={titulo}>{musica.titulo ?? `Música do ${nomeDaPlataforma(musica.plataforma)}`}</span>
+          <span style={titulo}>{musica.titulo ?? 'Vídeo do YouTube'}</span>
           <span style={{ ...texto, color: 'var(--accent)' }}>
-            Começa em {formatarTempo(musica.inicio)} · {nomeDaPlataforma(musica.plataforma)}
+            Começa em {formatarTempo(musica.inicio)}
           </span>
         </div>
         {aviso ? <p style={pequeno}>{aviso}</p> : null}
-        <Previa plataforma={musica.plataforma} codigo={musica.codigo} inicio={musica.inicio} player={player} />
-        {musica.plataforma === 'youtube' ? (
-          <div style={{ display: 'flex' }}>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                player.current?.seekTo(musica.inicio, true);
-                player.current?.playVideo();
-              }}
-            >
-              Ouvir a partir de {formatarTempo(musica.inicio)}
-            </Button>
-          </div>
-        ) : null}
+        <Previa codigo={musica.codigo} inicio={musica.inicio} player={player} />
+        <div style={{ display: 'flex' }}>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              player.current?.seekTo(musica.inicio, true);
+              player.current?.playVideo();
+            }}
+          >
+            Ouvir a partir de {formatarTempo(musica.inicio)}
+          </Button>
+        </div>
         {repetida ? (
           <p role="note" style={{ ...texto, display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start', color: 'var(--state-warn)' }}>
             <TriangleAlert size={18} strokeWidth={2} aria-hidden style={{ flex: '0 0 auto', marginTop: 3 }} />
@@ -710,7 +706,7 @@ function FormularioMusica({
 
   // Where the video is, for "Começar daqui".
   useEffect(() => {
-    if (musica?.plataforma !== 'youtube') return;
+    if (!musica) return;
     const id = setInterval(() => {
       const p = player.current;
       if (!p || typeof p.getCurrentTime !== 'function') return;
@@ -718,13 +714,13 @@ function FormularioMusica({
       setAgora(Number.isFinite(t) ? Math.floor(t) : null);
     }, 400);
     return () => clearInterval(id);
-  }, [musica?.plataforma, musica?.codigo]);
+  }, [musica?.codigo]);
 
   const m = minuto.trim() === '' ? 0 : Number(minuto);
   const s = segundo.trim() === '' ? 0 : Number(segundo);
   const tempoValido = Number.isInteger(m) && Number.isInteger(s) && m >= 0 && m < 600 && s >= 0 && s < 60;
   const inicio = tempoValido ? m * 60 + s : null;
-  const pode = (musica !== null || (lido !== null && 'curto' in lido)) && inicio !== null && !salvando;
+  const pode = musica !== null && inicio !== null && !salvando;
 
   function usarAgora() {
     if (agora === null) return;
@@ -742,19 +738,11 @@ function FormularioMusica({
           placeholder="https://www.youtube.com/watch?v=…"
           inputMode="url"
           value={link}
-          hint="No YouTube ou no Spotify, toque em Compartilhar e em Copiar link. YouTube é melhor: dá para ouvir aqui a partir do minuto escolhido."
+          hint="No vídeo do YouTube, toque em Compartilhar e em Copiar link."
           error={lido && 'erro' in lido ? lido.erro : undefined}
           onChange={(e) => setLink(e.target.value)}
         />
-        {lido && 'curto' in lido ? (
-          <p style={pequeno}>Link curto do Spotify: o site descobre a música quando você salvar.</p>
-        ) : null}
-        {musica ? <Previa plataforma={musica.plataforma} codigo={musica.codigo} inicio={inicio ?? 0} player={player} /> : null}
-        {musica?.plataforma === 'spotify' ? (
-          <p style={pequeno}>
-            O player do Spotify aqui pode tocar só um trecho. Para conferir o minuto, ouça no app do Spotify.
-          </p>
-        ) : null}
+        {musica ? <Previa codigo={musica.codigo} inicio={inicio ?? 0} player={player} /> : null}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
           <span style={{ fontSize: 'var(--fs-body-sm)', fontWeight: 500, color: 'var(--text-muted)' }}>Em que minuto a música começa?</span>
@@ -780,7 +768,7 @@ function FormularioMusica({
             />
           </div>
           {!tempoValido ? <span style={erroEstilo}>O segundo vai de 0 a 59.</span> : null}
-          {musica?.plataforma === 'youtube' ? (
+          {musica ? (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
               <Button variant="secondary" size="sm" disabled={agora === null} onClick={usarAgora}>
                 {agora === null ? 'Começar daqui' : `Começar daqui (${formatarTempo(agora)})`}
@@ -798,7 +786,7 @@ function FormularioMusica({
               </Button>
             </div>
           ) : null}
-          {musica?.plataforma === 'youtube' ? (
+          {musica ? (
             <span style={pequeno}>Dê play no vídeo, pause onde quer que comece e toque em "Começar daqui".</span>
           ) : null}
         </div>
@@ -880,34 +868,11 @@ const moldura: CSSProperties = {
 };
 
 /**
- * The video (YouTube, through its API, so the page can jump to the start
- * and read where it is) or the track (Spotify's embed). If YouTube's script
- * can't load, a plain embed that starts at `inicio`.
+ * The video, through YouTube's API, so the page can jump to the start and
+ * read where it is. If YouTube's script can't load, a plain embed that
+ * starts at `inicio`.
  */
-function Previa({
-  plataforma,
-  codigo,
-  inicio,
-  player,
-}: {
-  plataforma: Plataforma;
-  codigo: string;
-  inicio: number;
-  player: MutableRefObject<PlayerYT | null>;
-}) {
-  if (plataforma === 'spotify') {
-    return (
-      <iframe
-        title="Player do Spotify"
-        src={`https://open.spotify.com/embed/track/${codigo}`}
-        width="100%"
-        height="152"
-        loading="lazy"
-        allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-        style={{ border: 0, borderRadius: 12, maxWidth: 560 }}
-      />
-    );
-  }
+function Previa({ codigo, inicio, player }: { codigo: string; inicio: number; player: MutableRefObject<PlayerYT | null> }) {
   return <PlayerYoutube key={codigo} codigo={codigo} inicio={inicio} player={player} />;
 }
 
@@ -1034,7 +999,7 @@ export function MusicasComissao({ codigo }: { codigo: string }) {
       .map((o) => juntarNomes(o.nomes));
 
   const linhasDJ = comMusica.map(
-    (e) => `${juntarNomes(e.nomes)} — ${e.musica.titulo ?? nomeDaPlataforma(e.musica.plataforma)} — começa em ${formatarTempo(e.musica.inicio)} — ${linkDaMusica(e.musica)}`,
+    (e) => `${juntarNomes(e.nomes)} — ${e.musica.titulo ?? 'Vídeo do YouTube'} — começa em ${formatarTempo(e.musica.inicio)} — ${linkDaMusica(e.musica)}`,
   );
 
   async function copiarLista() {
@@ -1051,8 +1016,8 @@ export function MusicasComissao({ codigo }: { codigo: string }) {
   function baixarPlanilha() {
     const celula = (v: string) => `"${v.replace(/"/g, '""')}"`;
     const linhas = [
-      ['Formando(s)', 'Música', 'Plataforma', 'Começa em', 'Link'],
-      ...comMusica.map((e) => [juntarNomes(e.nomes), e.musica.titulo ?? '', nomeDaPlataforma(e.musica.plataforma), formatarTempo(e.musica.inicio), linkDaMusica(e.musica)]),
+      ['Formando(s)', 'Música', 'Começa em', 'Link'],
+      ...comMusica.map((e) => [juntarNomes(e.nomes), e.musica.titulo ?? '', formatarTempo(e.musica.inicio), linkDaMusica(e.musica)]),
     ];
     // The BOM makes Excel read the accents right.
     const csv = '﻿' + linhas.map((l) => l.map(celula).join(';')).join('\r\n');
@@ -1213,7 +1178,7 @@ export function MusicasComissao({ codigo }: { codigo: string }) {
                         <span style={{ overflowWrap: 'anywhere' }}>{m.titulo ?? linkDaMusica(m)}</span>
                       </a>
                       <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--accent)' }}>
-                        Começa em {formatarTempo(m.inicio)} · {nomeDaPlataforma(m.plataforma)}
+                        Começa em {formatarTempo(m.inicio)}
                       </span>
                       {repetidaCom.length > 0 ? (
                         <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--state-warn)' }}>Mesma música de {repetidaCom.join('; ')}</span>
@@ -1293,23 +1258,19 @@ function OuvirDaComissao({ musica }: { musica: MusicaBase }) {
   const player = useRef<PlayerYT | null>(null);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-      <Previa plataforma={musica.plataforma} codigo={musica.codigo} inicio={musica.inicio} player={player} />
-      {musica.plataforma === 'youtube' ? (
-        <div style={{ display: 'flex' }}>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              player.current?.seekTo(musica.inicio, true);
-              player.current?.playVideo();
-            }}
-          >
-            Tocar a partir de {formatarTempo(musica.inicio)}
-          </Button>
-        </div>
-      ) : (
-        <span style={pequeno}>No Spotify, o player daqui toca só um trecho: confira o minuto no app.</span>
-      )}
+      <Previa codigo={musica.codigo} inicio={musica.inicio} player={player} />
+      <div style={{ display: 'flex' }}>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => {
+            player.current?.seekTo(musica.inicio, true);
+            player.current?.playVideo();
+          }}
+        >
+          Tocar a partir de {formatarTempo(musica.inicio)}
+        </Button>
+      </div>
     </div>
   );
 }

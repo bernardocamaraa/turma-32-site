@@ -5,8 +5,7 @@
 -- Running it again is safe.
 --
 -- Each formando picks the song they walk down the stairs to — a YouTube
--- video (preferred: the DJ can play any of them) or a Spotify track — and
--- the second it starts at. One song per formando; picking again replaces it.
+-- video (the DJ can play any of them) — and the second it starts at. One song per formando; picking again replaces it.
 -- The committee sees everyone's in the "Músicas" tab and hands the list to
 -- the DJ.
 
@@ -248,3 +247,14 @@ grant execute on function public.musica_convidar(text, text) to service_role;
 grant execute on function public.musica_responder(text, uuid, boolean) to service_role;
 grant execute on function public.musica_desconvidar(text, text) to service_role;
 grant execute on function public.musica_sair_do_grupo(text) to service_role;
+
+-- YouTube only (Spotify was accepted at first and dropped: its player on the
+-- page only played a preview). Safe to run again.
+alter table public.musicas_formando drop constraint if exists musicas_formando_plataforma_check;
+alter table public.musicas_formando add constraint musicas_formando_plataforma_check check (plataforma = 'youtube');
+alter table public.musicas_formando drop constraint if exists musicas_formando_codigo_check;
+alter table public.musicas_formando add constraint musicas_formando_codigo_check check (codigo ~ '^[A-Za-z0-9_-]{11}$');
+alter table public.musicas_grupos drop constraint if exists musicas_grupos_plataforma_check;
+alter table public.musicas_grupos add constraint musicas_grupos_plataforma_check check (plataforma = 'youtube');
+alter table public.musicas_grupos drop constraint if exists musicas_grupos_codigo_check;
+alter table public.musicas_grupos add constraint musicas_grupos_codigo_check check (codigo ~ '^[A-Za-z0-9_-]{11}$');
