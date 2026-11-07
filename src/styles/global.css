@@ -1173,6 +1173,7 @@ g[role="button"]:focus-visible .mesa-alvo {
   position: absolute;
   inset: 30%;
   border-radius: 50%;
+  background-color: #0b0b0c;
   background-size: cover;
   background-position: center;
   border: 3px solid var(--gild-400);
@@ -1213,4 +1214,13 @@ g[role="button"]:focus-visible .mesa-alvo {
 @keyframes confete-musica {
   0% { opacity: 1; transform: translate(-50%, -50%) rotate(0) scale(.6); }
   100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(var(--giro)) scale(1); }
+}
+/* No childhood photo (or a group): the class logo on the record, on black. */
+.vinil-logo {
+  background-color: #0b0b0c;
+  background-size: 72% !important;
+  background-repeat: no-repeat;
+}
+.vinil-logo::after {
+  display: none;
 }

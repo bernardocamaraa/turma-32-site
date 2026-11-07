@@ -74,6 +74,12 @@ export type DadosMusicas = {
   semGrupo: boolean;
   /** Committee only: every group. */
   grupos: Grupo[] | null;
+  /**
+   * A link (valid a day) to the formando's own childhood photo, the one the
+   * committee collected — for the record's label on the last step. Null when
+   * there's none yet, or for a complete group (the class logo goes there).
+   */
+  fotoInfancia?: string | null;
 };
 
 export type AcessoMusicas = { whatsapp: string; nome?: string } | { codigo: string } | Record<string, never>;

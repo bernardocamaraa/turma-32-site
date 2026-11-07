@@ -563,6 +563,12 @@ function PassoAPasso({
   // Just saved: step 4 throws the confetti (not when coming back later).
   const [festa, setFesta] = useState(0);
   const topo = useRef<HTMLDivElement>(null);
+  // The photo's link is signed anew on every read: keep the first one, so
+  // the record's label doesn't reload every few seconds.
+  const foto = useRef<string | null>(null);
+  if (!foto.current && dados.fotoInfancia) foto.current = dados.fotoInfancia;
+  // A group's record carries the class logo; so does a formando without a photo yet.
+  const rotulo = fechado ? null : foto.current;
 
   function ir(para: Etapa) {
     const de = ETAPAS.findIndex((e) => e.id === etapa);
@@ -589,7 +595,7 @@ function PassoAPasso({
 
   if (!dados.abertas) {
     return musica ? (
-      <PassoPronto musica={musica} paraGrupo={fechado} grupo={grupo} repetida={dados.repetida} abertas={false} salvando={salvando} convites={0} festa={0} />
+      <PassoPronto musica={musica} paraGrupo={fechado} grupo={grupo} repetida={dados.repetida} abertas={false} salvando={salvando} convites={0} festa={0} foto={rotulo} />
     ) : (
       <Card padding="var(--space-7)">
         <p style={texto}>A comissão já fechou a lista de músicas. Se você ainda não mandou a sua, fale com ela.</p>
@@ -650,6 +656,7 @@ function PassoAPasso({
             salvando={salvando}
             convites={grupo ? 0 : (dados.convites ?? []).length}
             festa={festa}
+            foto={rotulo}
             erro={erro}
             onMudarMinuto={() => {
               setLink(linkDaMusica({ ...musica, inicio: 0 }));
@@ -1218,7 +1225,11 @@ function Confete({ vez }: { vez: number }) {
   );
 }
 
-/** Step 4: the song is saved — a spinning record of it, to play, change or take out. */
+/**
+ * Step 4: the song is saved — a spinning record of it, to play, change or
+ * take out. The record's label is the formando's childhood photo, or the
+ * class logo (a group, or no photo sent to the committee yet).
+ */
 function PassoPronto({
   musica,
   paraGrupo,
@@ -1228,6 +1239,7 @@ function PassoPronto({
   salvando,
   convites,
   festa,
+  foto,
   erro,
   onMudarMinuto,
   onTrocar,
@@ -1244,6 +1256,8 @@ function PassoPronto({
   convites: number;
   /** Goes up when the song was just saved: throw the confetti. */
   festa: number;
+  /** Their childhood photo for the record's label — or null for the class logo. */
+  foto: string | null;
   erro?: string | null;
   onMudarMinuto?: () => void;
   onTrocar?: () => void;
@@ -1270,7 +1284,10 @@ function PassoPronto({
         </div>
 
         <div className="vinil" aria-hidden style={{ margin: 'var(--space-3) 0' }}>
-          <span className="vinil-rotulo" style={{ backgroundImage: `url(https://i.ytimg.com/vi/${musica.codigo}/hqdefault.jpg)` }} />
+          <span
+            className={`vinil-rotulo${foto ? '' : ' vinil-logo'}`}
+            style={{ backgroundImage: `url(${foto ?? '/assets/logo-32-pequena.png'})` }}
+          />
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', maxWidth: '30rem' }}>
@@ -1487,13 +1504,20 @@ type PlayerYT = {
   playVideo: () => void;
   getCurrentTime: () => number;
   getDuration?: () => number;
+  cueVideoById?: (opcoes: { videoId: string; startSeconds?: number }) => void;
   destroy: () => void;
 };
 
 type ApiYT = {
   Player: new (
     el: HTMLElement,
-    opcoes: { videoId: string; width?: string; height?: string; playerVars?: Record<string, number | string>; events?: Record<string, () => void> },
+    opcoes: {
+      videoId: string;
+      width?: string;
+      height?: string;
+      playerVars?: Record<string, number | string>;
+      events?: { onReady?: () => void; onStateChange?: (e: { data: number }) => void; onError?: (e: { data: number }) => void };
+    },
   ) => PlayerYT;
 };
 
@@ -1549,13 +1573,46 @@ function Previa({ codigo, inicio, player, tocar }: { codigo: string; inicio: num
   return <PlayerYoutube key={codigo} codigo={codigo} inicio={inicio} player={player} tocar={tocar} />;
 }
 
+/**
+ * In place of a video YouTube won't play inside other sites (VEVO and some
+ * labels turn that off): its cover, why, and a button that opens it on
+ * YouTube already at the chosen second. The song still counts — on the
+ * night the DJ plays it from YouTube itself.
+ */
+function VideoForaDoSite({ codigo, inicio }: { codigo: string; inicio: number }) {
+  return (
+    <div className="aparece" style={{ ...moldura, aspectRatio: 'auto', minHeight: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <span
+        aria-hidden
+        style={{ position: 'absolute', inset: 0, backgroundImage: `url(https://i.ytimg.com/vi/${codigo}/hqdefault.jpg)`, backgroundSize: 'cover', backgroundPosition: 'center', filter: 'blur(6px) brightness(.35)', transform: 'scale(1.1)' }}
+      />
+      <div style={{ position: 'relative', width: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 'var(--space-3)', padding: 'var(--space-6) var(--space-5)' }}>
+        <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text-primary)' }}>Esse vídeo não toca aqui no site</span>
+        <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--chalk-100)', maxWidth: '26rem' }}>
+          Quem publicou (a Vevo, por exemplo) não deixa ele tocar fora do YouTube. Mas pode escolher sem medo: no baile, o DJ toca
+          direto do YouTube. Para conferir o minuto, ouça por lá.
+        </span>
+        <Button as="a" href={linkDaMusica({ codigo, inicio })} target="_blank" rel="noreferrer" iconLeft={<Youtube size={18} aria-hidden />}>
+          {inicio > 0 ? `Abrir no YouTube em ${formatarTempo(inicio)}` : 'Abrir no YouTube'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 /** `tocar`: start playing as soon as it's ready (it was opened by a tap on "Ouvir"). */
 function PlayerYoutube({ codigo, inicio, player, tocar }: { codigo: string; inicio: number; player: MutableRefObject<PlayerYT | null>; tocar?: boolean }) {
   const lugar = useRef<HTMLDivElement>(null);
   const [falhou, setFalhou] = useState(false);
+  // YouTube refused to play it here: the owner (often VEVO) doesn't allow
+  // other sites to embed it (errors 101/150), or it's gone (100).
+  const [bloqueado, setBloqueado] = useState(false);
   // The start when the video was first shown: later changes only move the
   // "Ouvir a partir de" button, not the video under the formando's finger.
   const inicioInicial = useRef(inicio);
+  // The start as it is now, for when the video ends (below).
+  const inicioAtual = useRef(inicio);
+  inicioAtual.current = inicio;
 
   useEffect(() => {
     let ativo = true;
@@ -1576,6 +1633,18 @@ function PlayerYoutube({ codigo, inicio, player, tocar }: { codigo: string; inic
               player.current = criado;
               if (tocar) criado?.playVideo();
             },
+            // Played to the end, YouTube's own play button would start over
+            // from 0:00. Put the video back at the chosen second instead, so
+            // playing it again starts where the song starts on the night.
+            onStateChange: (e) => {
+              if (ativo && e.data === 0) criado?.cueVideoById?.({ videoId: codigo, startSeconds: inicioAtual.current });
+            },
+            onError: (e) => {
+              if (ativo && [100, 101, 150].includes(e.data)) {
+                if (player.current === criado) player.current = null;
+                setBloqueado(true);
+              }
+            },
           },
         });
       },
@@ -1588,6 +1657,7 @@ function PlayerYoutube({ codigo, inicio, player, tocar }: { codigo: string; inic
     };
   }, [codigo]);
 
+  if (bloqueado) return <VideoForaDoSite codigo={codigo} inicio={inicio} />;
   if (falhou) {
     return (
       <div style={moldura}>

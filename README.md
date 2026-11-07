@@ -316,6 +316,17 @@ escolhe qual e em que minuto ela começa.
   dourado ao salvar). Quem já tem música cai direto no passo 4. No passo 3
   o tempo fica em dois campos grandes (minuto e segundo), e "Começar daqui"
   pega o ponto onde o vídeo está pausado.
+- **O disco do "Pronto"** tem no meio a foto de criança da pessoa (a
+  primeira que a comissão colocou na aba Fotos de criança). A função
+  `musicas` manda um link temporário (vale 1 dia) só da foto de quem entrou,
+  nunca a de outra pessoa. Em grupo, ou para quem ainda não tem foto, vai a
+  logo da turma.
+- **O player volta para o minuto escolhido** quando o vídeo termina: tocar
+  de novo começa dali, não do 0:00.
+- **Vídeos que não tocam fora do YouTube** (a Vevo e algumas gravadoras
+  bloqueiam): no lugar do player aparece a capa do vídeo com a explicação
+  e o botão "Abrir no YouTube em 1:30". A música vale normalmente, porque o
+  DJ toca direto do YouTube.
 - **Notificações em tela cheia** (`src/components/Popups.tsx`): uma de cada
   vez, no meio da tela. As confirmações das próprias ações ("Música
   salva!", "Convite enviado!") fecham sozinhas em ~2,5 s; as novidades que

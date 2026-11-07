@@ -21,6 +21,9 @@
 //     stay, and their creators see it. Once
 //     everyone invited has accepted, any of them picks the group's song
 //     (`escolher` with `paraGrupo`). The rules live in musicas.sql.
+//     Also gets a link to their own childhood photo (`fotoInfancia`, from
+//     the committee's private `fotos-infancia` bucket — infancia.sql), for
+//     the record on the last step; never anyone else's.
 //   - `codigo`: COMMITTEE_CODE. Sees every song and group, picks or clears
 //     anyone's song (`formando`) or a group's (`grupo`), undoes a group
 //     (`desfazerGrupo`), and opens/freezes the choices (`abertas`), even
@@ -132,6 +135,16 @@ const grupoParaPagina = (g: Grupo, semGrupo: Set<string>, emGrupo: Set<string>) 
       ? { plataforma: g.plataforma, codigo: g.codigo, titulo: g.titulo, inicio: g.inicio, atualizadoEm: g.musica_em ?? '' }
       : null,
 });
+
+/** Same slug rule as middleware.ts and the infancia function: each formando's folder of childhood photos. */
+function slug(nome: string): string {
+  return nome
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
 
 type Linha = { formando: string; plataforma: Plataforma; codigo: string; titulo: string | null; inicio: number; atualizado_em: string };
 
@@ -327,7 +340,7 @@ Deno.serve(async (req) => {
         if (error) throw error;
         livres = data.map((f) => f.formando as string);
       }
-      return json({ comissao, voce, livres, abertas, minha: null, repetida: false, musicas: null, formandos: null, grupo: null, convites: [], emGrupo: [], semGrupo: false, grupos: null });
+      return json({ comissao, voce, livres, abertas, minha: null, repetida: false, musicas: null, formandos: null, grupo: null, convites: [], emGrupo: [], semGrupo: false, grupos: null, fotoInfancia: null });
     }
 
     const [musicas, formandos, grupos, semGrupoLido] = await Promise.all([
@@ -379,6 +392,25 @@ Deno.serve(async (req) => {
     const repetida =
       !!minhaAgora?.codigo && tocando.some((t) => t.dono !== minhaAgora.dono && t.plataforma === minhaAgora.plataforma && t.codigo === minhaAgora.codigo);
 
+    // Their own childhood photo (the first one sent), for the record's label
+    // on the last step. A group's record shows the class logo instead, so
+    // it's not even looked up then. Never breaks the page if it fails.
+    let fotoInfancia: string | null = null;
+    if (!(meuGrupo && completo(meuGrupo))) {
+      try {
+        const { data: arquivos } = await supabase.storage
+          .from('fotos-infancia')
+          .list(slug(voce!), { limit: 1, sortBy: { column: 'created_at', order: 'asc' } });
+        const arquivo = (arquivos ?? []).find((a) => a.id);
+        if (arquivo) {
+          const { data } = await supabase.storage.from('fotos-infancia').createSignedUrl(`${slug(voce!)}/${arquivo.name}`, 60 * 60 * 24);
+          fotoInfancia = data?.signedUrl ?? null;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
     return json({
       comissao,
       voce,
@@ -395,6 +427,7 @@ Deno.serve(async (req) => {
       emGrupo: [...emGrupo],
       semGrupo: semGrupo.has(voce!),
       grupos: null,
+      fotoInfancia,
     });
   } catch (error) {
     console.error(error);
