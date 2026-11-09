@@ -285,7 +285,7 @@ function PaginaMusica() {
                 justifyContent: 'center',
                 fontWeight: 700,
                 fontSize: 18,
-                color: '#000',
+                color: '#fff',
                 background: 'linear-gradient(135deg, var(--gild-200), var(--gild-500))',
               }}
             >
@@ -756,7 +756,7 @@ function Etapas({ atual, onIr }: { atual: number; onIr: (i: number) => void }) {
                   cursor: feita ? 'pointer' : 'default',
                   border: agora || feita ? 'none' : '1px solid var(--stroke-muted)',
                   background: agora ? 'var(--chalk-050)' : feita ? 'linear-gradient(135deg, var(--gild-200), var(--gild-500))' : 'var(--ink-850)',
-                  color: agora || feita ? '#000' : 'var(--text-faint)',
+                  color: agora || feita ? '#fff' : 'var(--text-faint)',
                   transition: 'background var(--dur) var(--ease-out), transform var(--dur) var(--ease-out)',
                 }}
               >
@@ -847,7 +847,7 @@ function Opcao({ icone, titulo: t, sobre, ativa, onClick }: { icone: ReactNode; 
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: '#000',
+          color: '#fff',
           background: 'linear-gradient(135deg, var(--gild-200), var(--gild-500))',
           boxShadow: '0 8px 24px rgba(201,169,106,.25)',
         }}
@@ -1302,7 +1302,7 @@ function PassoPronto({
         <span
           className="check-pop"
           aria-hidden
-          style={{ width: 52, height: 52, borderRadius: '50%', background: 'var(--state-ok)', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 40px rgba(127,185,138,.45)' }}
+          style={{ width: 52, height: 52, borderRadius: '50%', background: 'var(--state-ok)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 40px rgba(127,185,138,.45)' }}
         >
           <Check size={30} strokeWidth={3} />
         </span>

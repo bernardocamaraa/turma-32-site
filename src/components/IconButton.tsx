@@ -48,7 +48,7 @@ export function IconButton({
         justifyContent: 'center',
         width: dim,
         height: dim,
-        background: solid ? 'var(--chalk-050)' : hover && !disabled ? 'rgba(244,247,250,.08)' : 'transparent',
+        background: solid ? 'var(--chalk-050)' : hover && !disabled ? 'rgba(46,46,46,.08)' : 'transparent',
         color: solid ? 'var(--ink-900)' : 'var(--chalk-050)',
         border: variant === 'ghost' ? '2px solid transparent' : '2px solid ' + (solid ? 'var(--chalk-050)' : 'var(--stroke-muted)'),
         borderRadius: 'var(--radius-sm)',

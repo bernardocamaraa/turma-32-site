@@ -1164,7 +1164,7 @@ function Barras({ resultado, brancos }: { resultado: Resultado[]; brancos: numbe
                 {plural(votos(r), 'voto', 'votos')} · {Math.round(fracao * 100)}%
               </span>
             </div>
-            <div style={{ height: 8, borderRadius: 4, background: 'rgba(245,245,247,.08)', overflow: 'hidden' }}>
+            <div style={{ height: 8, borderRadius: 4, background: 'rgba(46,46,46,.08)', overflow: 'hidden' }}>
               <div
                 style={{
                   height: '100%',
@@ -1319,7 +1319,7 @@ function FormularioPergunta({
           <div
             role="radiogroup"
             aria-label="Tipo de pergunta"
-            style={{ display: 'inline-flex', alignSelf: 'flex-start', flexWrap: 'wrap', gap: 2, padding: 3, borderRadius: 'var(--radius-pill)', background: 'rgba(245,245,247,.08)' }}
+            style={{ display: 'inline-flex', alignSelf: 'flex-start', flexWrap: 'wrap', gap: 2, padding: 3, borderRadius: 'var(--radius-pill)', background: 'rgba(46,46,46,.08)' }}
           >
             {(
               [
@@ -1643,7 +1643,7 @@ function PerguntaComissao({
                 </span>
                 <span style={{ color: 'var(--text-muted)' }}>{total ? Math.round((votaram / total) * 100) : 0}%</span>
               </div>
-              <div style={{ height: 6, borderRadius: 3, background: 'rgba(245,245,247,.08)', overflow: 'hidden' }}>
+              <div style={{ height: 6, borderRadius: 3, background: 'rgba(46,46,46,.08)', overflow: 'hidden' }}>
                 <div style={{ height: '100%', width: `${total ? (votaram / total) * 100 : 0}%`, background: 'var(--ice-300)', transition: 'width var(--dur-slow) var(--ease-out)' }} />
               </div>
               {p.aberta && p.faltam && p.faltam.length > 0 ? (
@@ -1842,7 +1842,7 @@ function CargoEVagas({
         padding: 'clamp(16px, 3vw, 24px)',
         borderRadius: 'var(--radius-md)',
         border: '1px solid var(--stroke-hair)',
-        background: 'rgba(245,245,247,.03)',
+        background: 'rgba(46,46,46,.03)',
       }}
     >
       <span style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-h4)', fontWeight: 600, letterSpacing: '-.015em' }}>Cargo e vagas</span>
@@ -1885,7 +1885,7 @@ function CargoEVagas({
                   gap: 'var(--space-3)',
                   padding: '4px 4px 4px 14px',
                   borderRadius: 'var(--radius-pill)',
-                  background: 'rgba(245,245,247,.08)',
+                  background: 'rgba(46,46,46,.08)',
                   fontSize: 'var(--fs-body)',
                 }}
               >
@@ -1963,7 +1963,7 @@ function ExibicaoResultado({
         padding: 'clamp(16px, 3vw, 24px)',
         borderRadius: 'var(--radius-md)',
         border: '1px solid var(--stroke-hair)',
-        background: 'rgba(245,245,247,.03)',
+        background: 'rgba(46,46,46,.03)',
       }}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>

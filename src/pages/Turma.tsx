@@ -71,6 +71,7 @@ export function Turma() {
                   <img
                     src={assinatura}
                     alt={`Assinatura de ${nome}`}
+                    className="assinatura-tinta"
                     style={{ flex: '0 0 auto', maxWidth: 110, maxHeight: 32, objectFit: 'contain' }}
                   />
                 ) : null}

@@ -17,9 +17,9 @@ const LINKS = [
 const ALTURA = 52;
 
 /**
- * A thin translucent bar, the way Apple's global nav sits over the page:
- * whatever scrolls under it shows through, blurred. On a phone the links
- * open as a full-screen sheet, each one sliding in after the last.
+ * A thin bar of the same paper, translucent so whatever scrolls under it
+ * shows through, blurred. On a phone the links open as a full-screen sheet,
+ * each one sliding in after the last.
  */
 export function NavBar() {
   const location = useLocation();
@@ -38,9 +38,10 @@ export function NavBar() {
   }, [open]);
 
   const link = (on: boolean) => ({
-    fontSize: 13,
-    fontWeight: on ? 500 : 400,
-    color: on ? 'var(--chalk-050)' : 'rgba(245,245,247,.72)',
+    fontFamily: 'var(--font-display)',
+    fontSize: 15,
+    fontWeight: on ? 600 : 400,
+    color: on ? 'var(--chalk-050)' : 'rgba(46,46,46,.72)',
     textDecoration: 'none',
     transition: 'color var(--dur) var(--ease-out)',
   });
@@ -52,7 +53,7 @@ export function NavBar() {
         position: 'sticky',
         top: 0,
         zIndex: 40,
-        background: open ? '#000' : 'rgba(22,22,23,.72)',
+        background: open ? 'var(--ink-900)' : 'rgba(241,239,234,.84)',
         backdropFilter: 'var(--blur-scrim)',
         WebkitBackdropFilter: 'var(--blur-scrim)',
         borderBottom: '1px solid var(--stroke-hair)',
@@ -72,7 +73,7 @@ export function NavBar() {
         }}
       >
         <Link to="/" aria-label="Início" style={{ display: 'flex', alignItems: 'center', flex: '0 0 auto' }}>
-          <img src="/assets/logo-terceirao.png" alt="Terceirão 32" style={{ height: 26, width: 'auto', display: 'block' }} />
+          <span style={{ fontFamily: 'var(--font-script)', fontSize: 24, lineHeight: 1, color: 'var(--text-primary)' }}>Turma 32</span>
         </Link>
 
         {!mobile ? (
@@ -88,7 +89,9 @@ export function NavBar() {
         {/* The site is informational only — no CTA here; the date is the
             one thing worth carrying on every screen. */}
         {!mobile ? (
-          <span style={{ fontSize: 13, color: 'rgba(245,245,247,.56)', whiteSpace: 'nowrap' }}>10 de dezembro · 19h</span>
+          <span className="numeros-antigos" style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 15, color: 'var(--accent)', whiteSpace: 'nowrap' }}>
+            10 de dezembro · 19h
+          </span>
         ) : (
           <button
             aria-label={open ? 'Fechar menu' : 'Abrir menu'}
@@ -120,7 +123,7 @@ export function NavBar() {
             left: 0,
             right: 0,
             bottom: 0,
-            background: '#000',
+            background: 'var(--ink-900)',
             display: 'flex',
             flexDirection: 'column',
             gap: 'var(--space-5)',
@@ -133,10 +136,10 @@ export function NavBar() {
               to={l.to}
               style={{
                 fontFamily: 'var(--font-display)',
-                fontSize: 32,
-                fontWeight: 600,
-                letterSpacing: '-.02em',
-                color: location.pathname === l.to ? 'var(--chalk-050)' : 'rgba(245,245,247,.72)',
+                fontSize: 34,
+                fontWeight: 500,
+                letterSpacing: '-.01em',
+                color: location.pathname === l.to ? 'var(--chalk-050)' : 'rgba(46,46,46,.72)',
                 textDecoration: 'none',
                 animation: `om-fade-up 600ms var(--ease-out) ${80 + i * 60}ms both`,
               }}

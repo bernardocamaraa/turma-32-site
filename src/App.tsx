@@ -111,7 +111,7 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <div className="app" style={{ background: 'var(--ink-950)', fontFamily: 'var(--font-core)' }}>
+    <div className="app com-grao" style={{ background: 'var(--ink-950)', fontFamily: 'var(--font-core)' }}>
       <ScrollToTop />
       <NavBar />
       <div className="app-conteudo">
