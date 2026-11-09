@@ -2,12 +2,13 @@ import { useState, type CSSProperties, type HTMLAttributes, type ReactNode } fro
 
 type Variant = 'wall' | 'outline' | 'invert' | 'tagged';
 
-// Rounded tiles of lighter card stock laid on the paper. 'tagged' (the old graffiti-sticker card) now reads as the same
+// Rounded tiles on a raised surface, the way Apple's dark pages group
+// content. 'tagged' (the old graffiti-sticker card) now reads as the same
 // tile with a slightly brighter edge, so existing callers keep working.
 const SKINS: Record<Variant, { background: string; border: string; color: string }> = {
   wall: { background: 'var(--ink-850)', border: '1px solid var(--stroke-hair)', color: 'var(--text-primary)' },
   outline: { background: 'transparent', border: '1px solid var(--stroke-muted)', color: 'var(--text-primary)' },
-  invert: { background: 'var(--chalk-050)', border: '1px solid var(--chalk-050)', color: '#ffffff' },
+  invert: { background: 'var(--chalk-050)', border: '1px solid var(--chalk-050)', color: '#000000' },
   tagged: { background: 'var(--ink-850)', border: '1px solid var(--stroke-muted)', color: 'var(--text-primary)' },
 };
 
@@ -45,7 +46,7 @@ export function Card({
         padding,
         borderRadius: 'var(--radius-lg)',
         ...k,
-        border: accent ? '1px solid rgba(31,50,86,.45)' : k.border,
+        border: accent ? '1px solid rgba(169,211,232,.45)' : k.border,
         transform: interactive && hover ? 'scale(1.015)' : 'none',
         boxShadow: interactive && hover ? '0 24px 60px rgba(0,0,0,.5)' : 'none',
         transition: 'transform var(--dur-slow) var(--ease-out), box-shadow var(--dur-slow) var(--ease-out), border-color var(--dur) var(--ease-out)',

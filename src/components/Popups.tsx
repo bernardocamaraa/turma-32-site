@@ -44,11 +44,11 @@ const ICONES: Record<TipoPopup, ReactNode> = {
 };
 
 const CORES: Record<TipoPopup, string> = {
-  ok: '#3f7a4c',
-  info: '#1f3256',
-  grupo: '#8a6a2c',
-  festa: '#8a6a2c',
-  aviso: '#8a6a2c',
+  ok: '#7fb98a',
+  info: '#a9d3e8',
+  grupo: '#dcc48c',
+  festa: '#dcc48c',
+  aviso: '#dcc48c',
 };
 
 export function Popups({ children }: { children: ReactNode }) {

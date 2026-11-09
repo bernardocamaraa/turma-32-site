@@ -6,7 +6,7 @@ import { trecho, useProgressoRolagem } from '../lib/motion';
 import { useReveal } from '../lib/useReveal';
 import { useIsMobile, usePrefersReducedMotion } from '../lib/useViewport';
 
-/** Building blocks shared by the invitation-style pages (Home, Baile). */
+/** Building blocks shared by the Apple-style pages (Home, Baile). */
 
 /** Rises into place the first time it scrolls into view. */
 export function Revela({ children, style, atraso = 0 }: { children: ReactNode; style?: CSSProperties; atraso?: number }) {
@@ -69,12 +69,10 @@ export function Bloco({
           minHeight: 'clamp(150px, 22vw, 240px)',
           padding: 'clamp(28px, 4vw, 44px)',
           borderRadius: 'var(--radius-lg)',
-          background: 'var(--ink-850)',
+          background: destaque
+            ? 'radial-gradient(120% 140% at 0% 0%, rgba(169,211,232,.16) 0%, rgba(169,211,232,0) 55%), var(--ink-850)'
+            : 'var(--ink-850)',
           border: '1px solid var(--stroke-hair)',
-          // The invitation's thin inner frame, doubled in navy on the highlighted tile.
-          boxShadow: destaque
-            ? 'inset 0 0 0 6px var(--ink-850), inset 0 0 0 7px rgba(31,50,86,.35), 0 18px 40px -28px rgba(46,46,46,.35)'
-            : 'inset 0 0 0 6px var(--ink-850), inset 0 0 0 7px var(--stroke-hair), 0 18px 40px -28px rgba(46,46,46,.3)',
         }}
       >
         {children}
@@ -87,63 +85,15 @@ export function Pequeno({ children }: { children: ReactNode }) {
   return <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{children}</span>;
 }
 
-/**
- * The name on the invitation: brush script in ink with the navy stroke
- * swept under it. Used for the page's big names and section titles.
- */
-export function NomeComPincelada({
-  children,
-  tamanho,
-  como = 'span',
-}: {
-  children: ReactNode;
-  tamanho: string;
-  como?: 'span' | 'h2';
-}) {
-  const Tag = como;
-  return (
-    <Tag
-      style={{
-        position: 'relative',
-        display: 'inline-block',
-        margin: 0,
-        paddingBottom: '.22em',
-        fontFamily: 'var(--font-script)',
-        fontWeight: 400,
-        fontSize: tamanho,
-        lineHeight: 1.05,
-        letterSpacing: 0,
-        color: 'var(--text-primary)',
-        textWrap: 'balance' as never,
-      }}
-    >
-      {children}
-      <svg
-        aria-hidden
-        viewBox="0 0 400 24"
-        preserveAspectRatio="none"
-        className="pincelada"
-        style={{ position: 'absolute', left: '-4%', right: '-2%', bottom: 0, width: '106%', height: '.2em' }}
-      >
-        <path
-          d="M4 16 C 90 6, 200 3, 300 6 C 340 7, 372 10, 396 15 C 372 13, 330 12, 300 12 C 200 11, 100 13, 6 20 Z"
-          fill="var(--accent-strong)"
-        />
-      </svg>
-    </Tag>
-  );
-}
-
 export function Grande({ children, tamanho }: { children: ReactNode; tamanho: string }) {
   return (
     <span
-      className="numeros-antigos"
       style={{
         fontFamily: 'var(--font-display)',
-        fontWeight: 500,
+        fontWeight: 700,
         fontSize: tamanho,
-        lineHeight: 1.06,
-        letterSpacing: '-.01em',
+        lineHeight: 1.02,
+        letterSpacing: '-.035em',
         textWrap: 'balance' as never,
       }}
     >
@@ -152,7 +102,7 @@ export function Grande({ children, tamanho }: { children: ReactNode; tamanho: st
   );
 }
 
-/** A text link in the navy accent with a small chevron. Opens `href` in a new tab, or runs `onClick`. */
+/** Apple's text link: accent color with a small chevron. Opens `href` in a new tab, or runs `onClick`. */
 export function LinkSeta({ children, href, onClick }: { children: ReactNode; href?: string; onClick?: () => void }) {
   const estilo: CSSProperties = {
     display: 'inline-flex',
@@ -217,7 +167,7 @@ export function MapaInclinado() {
   );
 }
 
-/** A big section headline in the invitation's serif. */
+/** A big section headline with the silver fade. */
 export function Titulo({ children, como = 'h2', tamanho = 'var(--fs-display-3)' }: { children: ReactNode; como?: 'h1' | 'h2'; tamanho?: string }) {
   const Tag = como;
   return (
@@ -226,9 +176,9 @@ export function Titulo({ children, como = 'h2', tamanho = 'var(--fs-display-3)' 
       style={{
         margin: 0,
         fontFamily: 'var(--font-display)',
-        fontWeight: 500,
+        fontWeight: 700,
         fontSize: tamanho,
-        lineHeight: 'var(--lh-snug)',
+        lineHeight: 'var(--lh-tight)',
         letterSpacing: 'var(--tracking-display)',
         textWrap: 'balance' as never,
       }}

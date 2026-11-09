@@ -10,12 +10,12 @@ const SIZES: Record<Size, { h: string; px: number; fs: number }> = {
   lg: { h: 'var(--control-h-lg)', px: 28, fs: 17 },
 };
 
-// Pill buttons in the invitation's colors: navy for the main action, an
-// ink outline for the alternative, and a plain text link for the rest.
+// Pill buttons, Apple-style: one solid light pill for the main action, a
+// translucent one for the alternative, and a plain text link for the rest.
 const SKINS: Record<Variant, { background: string; hover: string; color: string; border: string }> = {
-  primary: { background: 'var(--ice-300)', hover: 'var(--ice-600)', color: '#ffffff', border: 'transparent' },
-  gild: { background: 'var(--gild-400)', hover: 'var(--gild-500)', color: '#ffffff', border: 'transparent' },
-  secondary: { background: 'transparent', hover: 'rgba(46,46,46,.06)', color: 'var(--chalk-050)', border: 'rgba(46,46,46,.3)' },
+  primary: { background: 'var(--chalk-050)', hover: '#ffffff', color: '#000000', border: 'transparent' },
+  gild: { background: 'var(--gild-400)', hover: 'var(--gild-300)', color: '#000000', border: 'transparent' },
+  secondary: { background: 'rgba(245,245,247,.1)', hover: 'rgba(245,245,247,.16)', color: 'var(--chalk-050)', border: 'transparent' },
   ghost: { background: 'transparent', hover: 'transparent', color: 'var(--accent)', border: 'transparent' },
 };
 

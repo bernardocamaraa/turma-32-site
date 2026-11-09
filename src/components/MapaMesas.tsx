@@ -109,7 +109,7 @@ function CorpoMesa({ d, clipId }: { d: MesaDesenhada; clipId: string }) {
         y={meiaAltura - nivel * meiaAltura * 2}
         width={RET.w * 2}
         height={nivel * meiaAltura * 2}
-        style={{ fill: minha ? 'rgba(201,169,106,.2)' : 'rgba(31,50,86,.16)', transition: 'y var(--dur-slow) var(--ease-out), height var(--dur-slow) var(--ease-out)' }}
+        style={{ fill: minha ? 'rgba(201,169,106,.2)' : 'rgba(169,211,232,.16)', transition: 'y var(--dur-slow) var(--ease-out), height var(--dur-slow) var(--ease-out)' }}
       />
       {redonda ? (
         <circle r={R_MESA} style={contorno} />
@@ -195,7 +195,7 @@ export function MapaMesas({
         y={(PISTA.y / 100) * H}
         width={(PISTA.w / 100) * W}
         height={(PISTA.h / 100) * H}
-        style={{ fill: 'rgba(31,50,86,.06)', stroke: 'var(--stroke-hair)', strokeWidth: 1 }}
+        style={{ fill: 'rgba(169,211,232,.06)', stroke: 'var(--stroke-hair)', strokeWidth: 1 }}
       />
       <text
         x={((PISTA.x + PISTA.w / 2) / 100) * W}

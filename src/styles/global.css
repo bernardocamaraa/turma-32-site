@@ -64,7 +64,7 @@ body {
 }
 
 ::selection {
-  background: rgba(31, 50, 86, .18);
+  background: rgba(169, 211, 232, .35);
 }
 
 /* Keyboard focus is always visible; mouse clicks don't draw it. */
@@ -74,7 +74,7 @@ body {
   border-radius: 6px;
 }
 
-/* Headlines: plain ink now (the class names stay for their callers). */
+/* Headlines with the silver fade used on Apple's dark pages. */
 .texto-prata {
   background: var(--grad-headline);
   -webkit-background-clip: text;
@@ -98,77 +98,8 @@ a {
    the hover look until the next tap somewhere else. */
 @media (hover: hover) {
   a:hover {
-    color: var(--ice-600);
+    color: var(--chalk-050);
   }
-}
-
-/* ---- The invitation (see tokens.css) ---- */
-
-/* Paper with the class's signatures faint behind it, as on the printed
-   invitations. The wall image is white strokes, so it is inverted to ink. */
-.papel-assinaturas {
-  position: relative;
-  isolation: isolate;
-}
-
-.papel-assinaturas::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background-image: url("/assets/assinaturas-mural.png");
-  background-size: 1150px;
-  background-position: center top;
-  filter: invert(1);
-  opacity: var(--assinaturas-opacidade);
-  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 9%, #000 88%, transparent 100%);
-  mask-image: linear-gradient(180deg, transparent 0, #000 9%, #000 88%, transparent 100%);
-}
-
-@media (max-width: 759px) {
-  .papel-assinaturas::before {
-    background-size: 720px;
-  }
-}
-
-/* A graduate's signature (white strokes) written in the invitation's ink. */
-.assinatura-tinta {
-  filter: invert(1) brightness(.18);
-  opacity: .85;
-}
-
-/* The class logo printed small and gray at the foot, like a stamp. */
-.logo-carimbo {
-  filter: grayscale(1) contrast(.9);
-  opacity: .55;
-}
-
-/* The address line of the invitation: small, spaced capitals. */
-.versalete {
-  font-family: var(--font-display);
-  font-size: 15px;
-  letter-spacing: .16em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-
-/* Playfair's old-style figures, as in "10 de dezembro de 2026" on the
-   invitation (the body asks for tabular ones everywhere else). */
-.numeros-antigos {
-  font-variant-numeric: oldstyle-nums proportional-nums;
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
 }
 
 button {
@@ -212,8 +143,8 @@ button {
 }
 
 @keyframes om-glow {
-  0%, 100% { filter: drop-shadow(0 0 34px rgba(31, 50, 86, .14)); }
-  50% { filter: drop-shadow(0 0 56px rgba(31, 50, 86, .26)); }
+  0%, 100% { filter: drop-shadow(0 0 34px rgba(169, 211, 232, .14)); }
+  50% { filter: drop-shadow(0 0 56px rgba(169, 211, 232, .26)); }
 }
 
 @keyframes om-sheen {
@@ -265,8 +196,8 @@ button {
   height: 1em;
   border-radius: 50%;
   background:
-    conic-gradient(transparent 0deg, rgba(31,63,91, 0) 40deg, var(--ice-500) 170deg, var(--ice-300) 290deg, var(--chalk-050) 360deg),
-    rgba(46, 46, 46, .1);
+    conic-gradient(transparent 0deg, rgba(75, 150, 189, 0) 40deg, var(--ice-500) 170deg, var(--ice-300) 290deg, var(--chalk-050) 360deg),
+    rgba(245, 245, 247, .1);
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--espessura) - .5px), #000 calc(100% - var(--espessura)));
   mask: radial-gradient(farthest-side, transparent calc(100% - var(--espessura) - .5px), #000 calc(100% - var(--espessura)));
   animation: roda-gira 900ms linear infinite;
@@ -461,7 +392,7 @@ g[role="button"]:focus-visible .mesa-alvo {
 }
 
 .revela-nome {
-  background: linear-gradient(100deg, var(--gild-400) 40%, #d9c08a 50%, var(--gild-400) 60%) 100% 0 / 300% 100%;
+  background: linear-gradient(100deg, var(--gild-300) 40%, #fff8e7 50%, var(--gild-300) 60%) 100% 0 / 300% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -506,7 +437,7 @@ g[role="button"]:focus-visible .mesa-alvo {
   right: -30%;
   top: -48px;
   bottom: 30%;
-  background: linear-gradient(180deg, rgba(168, 135, 74, .14) 0%, rgba(168, 135, 74, .04) 55%, rgba(168, 135, 74, 0) 90%);
+  background: linear-gradient(180deg, rgba(255, 242, 210, .22) 0%, rgba(255, 242, 210, .06) 55%, rgba(255, 242, 210, 0) 90%);
   clip-path: polygon(43% 0, 57% 0, 100% 100%, 0 100%);
   pointer-events: none;
 }
@@ -529,8 +460,7 @@ g[role="button"]:focus-visible .mesa-alvo {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
-  filter: invert(1) brightness(.2);
-  opacity: .14;
+  opacity: .16;
   transform: rotate(-6deg);
 }
 
@@ -548,7 +478,7 @@ g[role="button"]:focus-visible .mesa-alvo {
   height: 16px;
   border-radius: 6px 6px 3px 3px;
   background: linear-gradient(180deg, #4b4b50 0%, #2b2b2e 55%, #1b1b1d 100%);
-  box-shadow: inset 0 1px 0 rgba(46, 46, 46, .2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .2);
 }
 
 .pulpito-corpo {
@@ -694,17 +624,17 @@ g[role="button"]:focus-visible .mesa-alvo {
 
 /* Then its glow switches on like a neon sign: two flickers, then steady. */
 .logo-neon {
-  filter: drop-shadow(0 0 60px rgba(31, 50, 86, .3));
+  filter: drop-shadow(0 0 60px rgba(169, 211, 232, .3));
   animation: logo-neon 1600ms linear 1300ms both;
 }
 
 @keyframes logo-neon {
-  0% { filter: drop-shadow(0 0 0 rgba(31, 50, 86, 0)); }
-  10% { filter: drop-shadow(0 0 50px rgba(31, 50, 86, .55)); }
-  16% { filter: drop-shadow(0 0 0 rgba(31, 50, 86, 0)); }
-  26% { filter: drop-shadow(0 0 64px rgba(31, 50, 86, .6)); }
-  32% { filter: drop-shadow(0 0 12px rgba(31, 50, 86, .1)); }
-  100% { filter: drop-shadow(0 0 60px rgba(31, 50, 86, .3)); }
+  0% { filter: drop-shadow(0 0 0 rgba(169, 211, 232, 0)); }
+  10% { filter: drop-shadow(0 0 50px rgba(169, 211, 232, .55)); }
+  16% { filter: drop-shadow(0 0 0 rgba(169, 211, 232, 0)); }
+  26% { filter: drop-shadow(0 0 64px rgba(169, 211, 232, .6)); }
+  32% { filter: drop-shadow(0 0 12px rgba(169, 211, 232, .1)); }
+  100% { filter: drop-shadow(0 0 60px rgba(169, 211, 232, .3)); }
 }
 
 /* The flashlight over the wall of signatures: only a circle around
@@ -791,7 +721,7 @@ g[role="button"]:focus-visible .mesa-alvo {
 .bloco-vivo::before {
   inset: -1px;
   padding: 1px;
-  background: radial-gradient(280px circle at var(--luz-x) var(--luz-y), rgba(31, 50, 86, .75), transparent 70%);
+  background: radial-gradient(280px circle at var(--luz-x) var(--luz-y), rgba(169, 211, 232, .75), transparent 70%);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
@@ -799,7 +729,7 @@ g[role="button"]:focus-visible .mesa-alvo {
 
 .bloco-vivo::after {
   inset: 0;
-  background: radial-gradient(420px circle at var(--luz-x) var(--luz-y), rgba(46, 46, 46, .05), transparent 65%);
+  background: radial-gradient(420px circle at var(--luz-x) var(--luz-y), rgba(245, 245, 247, .05), transparent 65%);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -813,9 +743,12 @@ g[role="button"]:focus-visible .mesa-alvo {
   }
 }
 
-/* Formerly the gold of the home page's close; now the invitation's navy. */
+/* The close of the home page is the one place the night turns gold. */
 .texto-ouro {
-  color: var(--accent);
+  background: linear-gradient(180deg, #fff8e6 15%, var(--gild-300) 60%, var(--gild-500) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .brilho {
@@ -834,16 +767,16 @@ g[role="button"]:focus-visible .mesa-alvo {
   50% { opacity: 1; transform: scale(1); }
 }
 
-/* Paper grain over the whole site (App.tsx), so the off-white reads as
-   card stock rather than a flat screen. */
+/* Film grain over the whole home page, so the black reads as a surface
+   rather than an empty screen. */
 .com-grao::after {
   content: "";
   position: fixed;
   inset: 0;
   z-index: 1;
   pointer-events: none;
-  opacity: .07;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .25 0 0 0 0 .22 0 0 0 0 .18 0 0 0 1 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  opacity: .045;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -968,7 +901,7 @@ g[role="button"]:focus-visible .mesa-alvo {
   align-items: center;
   justify-content: center;
   padding: max(24px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom));
-  background: radial-gradient(80% 60% at 50% 45%, color-mix(in srgb, var(--popup-cor) 14%, transparent), rgba(241, 239, 234, .86) 70%);
+  background: radial-gradient(80% 60% at 50% 45%, color-mix(in srgb, var(--popup-cor) 22%, transparent), rgba(0, 0, 0, .82) 70%);
   backdrop-filter: blur(14px) saturate(1.3);
   -webkit-backdrop-filter: blur(14px) saturate(1.3);
   animation: popup-fundo 320ms ease-out both;
@@ -986,9 +919,9 @@ g[role="button"]:focus-visible .mesa-alvo {
   gap: 14px;
   padding: 40px 28px 28px;
   border-radius: 28px;
-  background: var(--ink-850);
-  border: 1px solid var(--stroke-hair);
-  box-shadow: 0 40px 100px -20px rgba(40, 34, 24, .3), inset 0 0 0 6px var(--ink-850), inset 0 0 0 7px var(--stroke-hair);
+  background: linear-gradient(180deg, rgba(44, 44, 46, .92), rgba(22, 22, 24, .96));
+  border: 1px solid rgba(245, 245, 247, .12);
+  box-shadow: 0 40px 100px rgba(0, 0, 0, .7), inset 0 1px 0 rgba(255, 255, 255, .06);
   animation: popup-entra 560ms var(--ease-snap) both;
 }
 .popup-fundo.sai .popup-cartao {
@@ -1001,7 +934,7 @@ g[role="button"]:focus-visible .mesa-alvo {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: #000;
   background: var(--popup-cor);
   box-shadow: 0 0 0 10px color-mix(in srgb, var(--popup-cor) 18%, transparent), 0 0 60px color-mix(in srgb, var(--popup-cor) 60%, transparent);
   animation: popup-icone 700ms 120ms var(--ease-snap) both;
@@ -1011,8 +944,8 @@ g[role="button"]:focus-visible .mesa-alvo {
   margin: 0;
   font-family: var(--font-display);
   font-size: 28px;
-  font-weight: 600;
-  letter-spacing: -.01em;
+  font-weight: 800;
+  letter-spacing: -.03em;
   line-height: 1.12;
   color: var(--text-primary);
   text-wrap: balance;
@@ -1037,8 +970,8 @@ g[role="button"]:focus-visible .mesa-alvo {
   border: none;
   font: 600 17px var(--font-core);
   cursor: pointer;
-  background: var(--ice-300);
-  color: #fff;
+  background: var(--chalk-050);
+  color: #000;
   transition: transform var(--dur-fast) var(--ease-out);
 }
 .popup-botao:active {
@@ -1120,11 +1053,11 @@ g[role="button"]:focus-visible .mesa-alvo {
   margin: 0;
   font-family: var(--font-display);
   font-size: clamp(40px, 9vw, 80px);
-  font-weight: 600;
-  letter-spacing: -.02em;
-  line-height: 1.02;
+  font-weight: 800;
+  letter-spacing: -.045em;
+  line-height: .98;
   padding-bottom: .06em;
-  background: linear-gradient(100deg, var(--chalk-050) 0%, var(--chalk-050) 45%, var(--gild-400) 100%);
+  background: linear-gradient(100deg, #ffffff 0%, #f5f5f7 35%, var(--gild-200) 62%, var(--gild-400) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -1151,8 +1084,8 @@ g[role="button"]:focus-visible .mesa-alvo {
   animation: etapa-atual 2.4s ease-in-out infinite;
 }
 @keyframes etapa-atual {
-  0%, 100% { box-shadow: 0 0 0 4px rgba(46, 46, 46, .12); }
-  50% { box-shadow: 0 0 0 8px rgba(46, 46, 46, .05); }
+  0%, 100% { box-shadow: 0 0 0 4px rgba(245, 245, 247, .12); }
+  50% { box-shadow: 0 0 0 8px rgba(245, 245, 247, .05); }
 }
 
 /* Step 1's two big choices. */
@@ -1223,9 +1156,9 @@ g[role="button"]:focus-visible .mesa-alvo {
   aspect-ratio: 1;
   border-radius: 50%;
   background:
-    radial-gradient(circle, transparent 0 31%, rgba(46, 46, 46, .05) 31.5% 32%, transparent 32.5%),
+    radial-gradient(circle, transparent 0 31%, rgba(255, 255, 255, .05) 31.5% 32%, transparent 32.5%),
     repeating-radial-gradient(circle, #111 0 2px, #1b1b1d 2px 4px);
-  box-shadow: 0 30px 70px rgba(0, 0, 0, .7), 0 0 0 1px rgba(46, 46, 46, .06), 0 0 60px rgba(201, 169, 106, .12);
+  box-shadow: 0 30px 70px rgba(0, 0, 0, .7), 0 0 0 1px rgba(255, 255, 255, .06), 0 0 60px rgba(201, 169, 106, .12);
   animation: vinil-gira 7s linear infinite;
 }
 .vinil::after {
@@ -1233,7 +1166,7 @@ g[role="button"]:focus-visible .mesa-alvo {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: conic-gradient(from 40deg, transparent 0 10%, rgba(46, 46, 46, .1) 14%, transparent 20% 60%, rgba(46, 46, 46, .07) 64%, transparent 70%);
+  background: conic-gradient(from 40deg, transparent 0 10%, rgba(255, 255, 255, .1) 14%, transparent 20% 60%, rgba(255, 255, 255, .07) 64%, transparent 70%);
   animation: vinil-gira 7s linear infinite reverse;
 }
 .vinil-rotulo {

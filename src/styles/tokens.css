@@ -1,40 +1,37 @@
-/* The look of the class's own invitations: off-white paper with the
-   signatures of the class faint behind, the guest's name in a brush script
-   underlined in navy, the details in a classic serif with old-style
-   figures, the address in spaced small caps. */
-@import url("https://fonts.googleapis.com/css2?family=Kaushan+Script&family=Lora:ital,wght@0,400..700;1,400..700&family=Playfair+Display:ital,wght@0,400..800;1,400..800&display=swap");
+/* Inter is only the fallback: on iPhone/Mac the stacks below resolve to
+   the system's SF Pro first, which is what an "Apple-like" page is set in. */
+@import url("https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..800&display=swap");
 
 :root {
-  /* paper — the page and two surfaces laid on it. The names stay from the
-     old dark theme (ink = the ground, wall = raised controls) so every
-     component keeps its meaning. */
-  --ink-950: #f1efea;
-  --ink-900: #f1efea;
-  --ink-850: #faf9f6;
-  --ink-800: #ffffff;
-  --wall-700: #e7e4dd;
-  --wall-600: #e1ddd4;
-  --wall-500: #d3cec3;
-  --wall-400: #bdb7ab;
-  /* ink — the dark gray the invitations are printed in */
-  --chalk-050: #2e2e2e;
-  --chalk-100: #3a3a3a;
-  --smoke-300: #5c5a56;
-  --smoke-400: #6f6c66;
-  --smoke-500: #8a867e;
-  /* navy — the brush stroke under the name and the italic "às 19 horas";
-     kept under the old "ice" names, 300 being the everyday accent */
-  --ice-100: #e3e8f0;
-  --ice-200: #c5cfdf;
-  --ice-300: #1f3256;
-  --ice-400: #2a4470;
-  --ice-500: #1f3f5b;
-  --ice-600: #152540;
-  /* gild — only for "yours" (your seats, your tables) */
-  --gild-200: #b8954f;
-  --gild-300: #9c7a37;
-  --gild-400: #8a6a2c;
-  --gild-500: #6e5321;
+  /* base — true black, like Apple's dark product pages, with two raised
+     surfaces for tiles and controls */
+  --ink-950: #000000;
+  --ink-900: #000000;
+  --ink-850: #111113;
+  --ink-800: #1c1c1e;
+  --wall-700: #232325;
+  --wall-600: #2c2c2e;
+  --wall-500: #3a3a3c;
+  --wall-400: #48484a;
+  /* neutrals */
+  --chalk-050: #f5f5f7;
+  --chalk-100: #e8e8ed;
+  --smoke-300: #a1a1a6;
+  --smoke-400: #86868b;
+  --smoke-500: #6e6e73;
+  /* ice — the blue of the class logo's offset shadow, the one accent */
+  --ice-100: #e8f3fa;
+  --ice-200: #d0e7f4;
+  --ice-300: #a9d3e8;
+  --ice-400: #84bcda;
+  --ice-500: #4b96bd;
+  --ice-600: #2f7099;
+  /* gild — only for "yours" (your seats, your tables), and for the gala
+     close of the home page */
+  --gild-200: #efe0bd;
+  --gild-300: #dcc48c;
+  --gild-400: #c9a96a;
+  --gild-500: #a4854a;
   /* semantic */
   --bg-base: var(--ink-900);
   --bg-wall: var(--wall-600);
@@ -43,31 +40,29 @@
   --text-primary: var(--chalk-050);
   --text-muted: var(--smoke-300);
   --text-faint: var(--smoke-400);
-  --text-on-invert: #ffffff;
+  --text-on-invert: #000000;
   --accent: var(--ice-300);
   --accent-strong: var(--ice-500);
-  --accent-ink: #ffffff;
+  --accent-ink: #000000;
   --gild: var(--gild-400);
-  --stroke-hair: rgba(46, 46, 46, .12);
+  --stroke-hair: rgba(245, 245, 247, .1);
   --stroke-solid: var(--chalk-050);
-  --stroke-muted: rgba(46, 46, 46, .28);
-  --state-ok: #3f7a4c;
-  --state-warn: #8a6a1f;
-  --state-error: #b3261e;
+  --stroke-muted: rgba(245, 245, 247, .22);
+  --state-ok: #7fb98a;
+  --state-warn: var(--gild-300);
+  --state-error: #ff6961;
   --state-info: var(--ice-300);
-  --overlay-scrim: rgba(30, 28, 24, .55);
-  /* headlines are plain ink now; the gradients stay as names so old
-     callers keep working */
-  --grad-headline: linear-gradient(180deg, #2e2e2e 0%, #2e2e2e 100%);
-  --grad-ice: linear-gradient(100deg, #1f3256 0%, #1f3f5b 100%);
-  /* the signature wall behind the invitation, gray on paper */
-  --assinaturas-opacidade: .12;
+  --overlay-scrim: rgba(0, 0, 0, .72);
+  /* headline text fades from white into the silver of the page */
+  --grad-headline: linear-gradient(180deg, #ffffff 30%, #a1a1a6 100%);
+  --grad-ice: linear-gradient(100deg, #f5f5f7 0%, #a9d3e8 55%, #4b96bd 100%);
 
-  /* fonts — the invitation's three voices */
-  --font-script: "Kaushan Script", "Brush Script MT", cursive;
-  --font-display: "Playfair Display", Georgia, "Times New Roman", serif;
+  /* fonts — one family, two optical sizes */
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Helvetica Neue", Arial, sans-serif;
   --font-wordmark: var(--font-display);
-  --font-core: "Lora", Georgia, "Times New Roman", serif;
+  --font-core: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Helvetica Neue", Arial, sans-serif;
+  /* There's no monospace in this design any more: small data reads in the
+     text face with tabular figures (set globally on body). */
   --font-mono: var(--font-core);
 
   /* spacing */
@@ -117,8 +112,8 @@
   --lh-snug: 1.14;
   --lh-normal: 1.47;
   --lh-loose: 1.6;
-  --tracking-display: -.01em;
-  --tracking-normal: 0;
+  --tracking-display: -.025em;
+  --tracking-normal: -.01em;
   --tracking-wide: 0;
   --tracking-label: 0;
   --fw-regular: 400;
@@ -132,9 +127,9 @@
   --shadow-tag: none;
   --shadow-tag-ink: none;
   --shadow-tag-gild: none;
-  --glow-spray: 0 0 40px rgba(31, 50, 86, .12);
-  --glow-spray-tight: 0 0 0 4px rgba(31, 50, 86, .18);
-  --shadow-overlay: 0 30px 80px rgba(40, 34, 24, .22);
+  --glow-spray: 0 0 40px rgba(169, 211, 232, .25);
+  --glow-spray-tight: 0 0 0 4px rgba(169, 211, 232, .28);
+  --shadow-overlay: 0 30px 80px rgba(0, 0, 0, .55);
   --blur-scrim: saturate(180%) blur(20px);
   /* Apple's own easing for page motion: a long, soft landing */
   --ease-out: cubic-bezier(.28, .11, .32, 1);

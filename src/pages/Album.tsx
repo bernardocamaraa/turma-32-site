@@ -150,7 +150,7 @@ export function Album() {
                 height: 520,
                 margin: '-260px 0 0 -260px',
                 pointerEvents: 'none',
-                background: 'radial-gradient(circle,rgba(31,50,86,.13),rgba(31,50,86,0) 66%)',
+                background: 'radial-gradient(circle,rgba(169,211,232,.13),rgba(169,211,232,0) 66%)',
                 animation: 'om-sheen 9s ease-in-out infinite',
               }}
             />

@@ -218,7 +218,7 @@ export function Mesas({ codigoComissao }: { codigoComissao?: string }) {
                 height: 34,
                 padding: '0 14px',
                 borderRadius: 'var(--radius-pill)',
-                background: 'rgba(46,46,46,.08)',
+                background: 'rgba(245,245,247,.08)',
                 fontSize: 'var(--fs-body-sm)',
                 fontWeight: 500,
                 animation: `om-fade-up 600ms var(--ease-out) ${200 + i * 50}ms both`,
@@ -243,7 +243,7 @@ export function Mesas({ codigoComissao }: { codigoComissao?: string }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-4)' }}>
             <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Seus lugares aqui</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: 4, borderRadius: 'var(--radius-pill)', background: 'rgba(46,46,46,.08)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: 4, borderRadius: 'var(--radius-pill)', background: 'rgba(245,245,247,.08)' }}>
               <BotaoPasso rotulo="Menos um lugar" disabled={quantidade <= 0 || salvando} onClick={() => setQuantidade((q) => q - 1)}>
                 <Minus size={16} strokeWidth={2} />
               </BotaoPasso>
@@ -472,7 +472,7 @@ function BotaoPasso({ rotulo, disabled, onClick, children }: { rotulo: string; d
         height: 40,
         borderRadius: '50%',
         border: 'none',
-        background: disabled ? 'transparent' : 'rgba(46,46,46,.12)',
+        background: disabled ? 'transparent' : 'rgba(245,245,247,.12)',
         color: 'var(--chalk-050)',
         opacity: disabled ? 0.3 : 1,
         cursor: disabled ? 'not-allowed' : 'pointer',
@@ -543,7 +543,7 @@ function PainelMesa({
       }}
     >
       {modo === 'folha' ? (
-        <span aria-hidden style={{ alignSelf: 'center', width: 36, height: 5, borderRadius: 3, background: 'rgba(46,46,46,.24)', marginTop: -8 }} />
+        <span aria-hidden style={{ alignSelf: 'center', width: 36, height: 5, borderRadius: 3, background: 'rgba(245,245,247,.24)', marginTop: -8 }} />
       ) : null}
       <button
         type="button"
@@ -560,7 +560,7 @@ function PainelMesa({
           height: 32,
           borderRadius: '50%',
           border: 'none',
-          background: 'rgba(46,46,46,.12)',
+          background: 'rgba(245,245,247,.12)',
           color: 'var(--chalk-050)',
           cursor: 'pointer',
         }}
@@ -683,7 +683,7 @@ function PainelComissao({
                   height: 32,
                   width: '100%',
                   padding: '0 var(--space-3)',
-                  background: 'rgba(46,46,46,.04)',
+                  background: 'rgba(244,247,250,.04)',
                   border: '1px solid var(--stroke-muted)',
                   borderRadius: 'var(--radius-sm)',
                   color: 'var(--text-primary)',

@@ -1,11 +1,11 @@
-import type { CSSProperties } from 'react';
+import { useRef, useState, type CSSProperties, type PointerEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CalendarPlus, ChevronDown } from 'lucide-react';
 import { Button } from '../components/Button';
 import { MAPS_LINK } from '../components/MapEmbed';
 import { SectionEyebrowRule } from '../components/SectionHeading';
 import { AvisoConfirmacao } from '../components/AvisoConfirmacao';
-import { Bloco, Grande, LinkSeta, MapaInclinado, NomeComPincelada, Pequeno, Revela, Titulo } from '../components/Cena';
+import { Bloco, Grande, LinkSeta, MapaInclinado, Pequeno, Revela, Titulo } from '../components/Cena';
 import { EVENTO_ICS, LINK_GOOGLE_AGENDA } from '../lib/calendario';
 import { useCountdown } from '../lib/countdown';
 import { assinaturaDe, FORMANDOS } from '../lib/formandos';
@@ -13,12 +13,13 @@ import { trecho, useProgressoRolagem } from '../lib/motion';
 import { useIsMobile, usePrefersReducedMotion } from '../lib/useViewport';
 
 /**
- * The page opens as the class's printed invitation and keeps its paper,
- * serif and navy all the way down.
+ * The page builds up like the night itself: it opens in black with the ice
+ * blue of the logo, the countdown glows bluer as the date gets closer, and
+ * it closes in gold.
  */
 export function Home() {
   return (
-    <main>
+    <main className="com-grao">
       <Abertura />
       <TextoQueAcende />
       <FaixaDeAssinaturas />
@@ -38,120 +39,162 @@ export function Home() {
 }
 
 /**
- * Scene 1. The invitation itself, as the class printed it: the signatures of
- * the class faint on paper, a name in brush script underlined in navy, the
- * classic serif for the date, the italic navy time, the address in spaced
- * small caps and the logo, small and gray, at the foot.
+ * Scene 1. The class logo sprayed onto the wall of signatures, then the
+ * headline. A flashlight moves over the wall — following the mouse, or
+ * wandering on its own on a phone — and lights up the signatures under it.
+ * The section is taller than the screen and its content is pinned, so the
+ * first stretch of scrolling plays the scene: the logo shrinks back and
+ * fades, the signatures drift up, and the page hands over to scene 2.
  */
 function Abertura() {
   const mobile = useIsMobile();
-  const entra = (atraso: number): CSSProperties => ({ animation: `om-rise 1400ms var(--ease-out) ${atraso}ms both` });
+  const reduzido = usePrefersReducedMotion();
+  const { ref, progresso } = useProgressoRolagem<HTMLElement>('fixo');
+  // Under reduced motion the scene stays in its opening, readable state.
+  const p = reduzido ? 0 : progresso;
+  const saida = trecho(p, 0.1, 0.75);
+  const parede = useRef<HTMLDivElement>(null);
+  // The light wanders until a mouse shows up, then stays with the mouse.
+  const [seguindo, setSeguindo] = useState(false);
+
+  const moverLuz = (e: PointerEvent<HTMLElement>) => {
+    const el = parede.current;
+    if (e.pointerType !== 'mouse' || !el) return;
+    const r = el.getBoundingClientRect();
+    el.style.setProperty('--luz-x', `${(e.clientX - r.left).toFixed(0)}px`);
+    el.style.setProperty('--luz-y', `${(e.clientY - r.top).toFixed(0)}px`);
+    if (!seguindo) setSeguindo(true);
+  };
+
+  const mural: CSSProperties = {
+    position: 'absolute',
+    inset: 0,
+    backgroundImage: 'url(/assets/assinaturas-mural.png)',
+    backgroundSize: mobile ? '760px' : '1150px',
+    animation: 'om-drift 90s linear infinite',
+  };
 
   return (
     <section
-      className="papel-assinaturas"
-      style={{
-        position: 'relative',
-        minHeight: 'calc(100svh - 52px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: `${mobile ? 'var(--space-9)' : 'var(--space-10)'} var(--gutter-page)`,
-      }}
+      ref={ref}
+      onPointerMove={moverLuz}
+      style={{ height: reduzido ? 'auto' : mobile ? '130vh' : '140vh', position: 'relative' }}
     >
-      <div
-        style={{
-          position: 'relative',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          textAlign: 'center',
-          maxWidth: 760,
-        }}
-      >
-        <h1 style={{ margin: 0, ...entra(100) }}>
-          <NomeComPincelada tamanho={mobile ? 'clamp(64px, 19vw, 96px)' : 'clamp(96px, 11vw, 150px)'}>Turma 32</NomeComPincelada>
-        </h1>
-        <p
+      <div className="cena-fixa" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {/* The signatures of the class, faint and drifting, fading to black at the edges. */}
+        <div
+          ref={parede}
+          aria-hidden
+          className={seguindo ? undefined : 'lanterna-auto'}
           style={{
-            margin: `${mobile ? 'var(--space-6)' : 'var(--space-7)'} 0 0`,
-            maxWidth: 560,
-            fontFamily: 'var(--font-display)',
-            fontSize: mobile ? 21 : 26,
-            lineHeight: 1.4,
-            color: 'var(--text-primary)',
-            textWrap: 'balance' as never,
-            ...entra(500),
+            position: 'absolute',
+            inset: '-10%',
+            ['--luz-r' as string]: mobile ? '170px' : '260px',
+            transform: `translateY(${(-p * 120).toFixed(1)}px) scale(${(1 + p * 0.08).toFixed(3)})`,
+            opacity: 1 - saida * 0.6,
+            WebkitMaskImage: 'radial-gradient(ellipse 60% 55% at 50% 50%, #000 20%, transparent 75%)',
+            maskImage: 'radial-gradient(ellipse 60% 55% at 50% 50%, #000 20%, transparent 75%)',
+            pointerEvents: 'none',
           }}
         >
-          Com muito carinho, os formandos da Turma 32 convidam você para a cerimônia de formatura, no dia
-        </p>
-        <p
-          className="numeros-antigos"
+          <div style={{ ...mural, opacity: 0.2 }} />
+          {/* The light itself: a soft blue pool, and the wall at full strength
+              inside it. Left out under reduced motion, where it would just
+              stand still behind the headline. */}
+          {reduzido ? null : (
+            <>
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  background: 'radial-gradient(circle calc(var(--luz-r) * 1.4) at var(--luz-x) var(--luz-y), rgba(169,211,232,.12), transparent 70%)',
+                }}
+              />
+              <div className="lanterna" style={{ ...mural, opacity: 0.85 }} />
+            </>
+          )}
+        </div>
+        <div
           style={{
-            margin: 'var(--space-6) 0 0',
-            fontFamily: 'var(--font-display)',
-            fontSize: mobile ? 'clamp(38px, 11vw, 48px)' : 'clamp(52px, 6vw, 76px)',
-            lineHeight: 1.05,
-            color: 'var(--text-primary)',
-            textWrap: 'balance' as never,
-            ...entra(750),
+            position: 'relative',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            textAlign: 'center',
+            gap: mobile ? 'var(--space-6)' : 'var(--space-7)',
+            padding: '0 var(--gutter-page)',
+            transform: `translateY(${(-saida * 80).toFixed(1)}px)`,
+            opacity: 1 - saida,
           }}
         >
-          10 de dezembro de 2026
-        </p>
-        <p
+          {/* The entrance animations and the scroll-driven shrink live on
+              different elements: an animation that holds its end state
+              would otherwise override the inline transform. */}
+          <div className="logo-neon">
+            <div className="logo-spray">
+              <img
+                src="/assets/logo-32.png"
+                alt="Turma 32"
+                style={{
+                  display: 'block',
+                  height: mobile ? 168 : 240,
+                  width: 'auto',
+                  transform: `scale(${(1 - saida * 0.18).toFixed(3)})`,
+                }}
+              />
+            </div>
+          </div>
+          <h1
+            className="texto-prata"
+            style={{
+              margin: 0,
+              fontFamily: 'var(--font-display)',
+              fontWeight: 700,
+              fontSize: 'var(--fs-display-1)',
+              lineHeight: 0.98,
+              letterSpacing: '-.035em',
+              animation: 'om-rise 1600ms var(--ease-out) 700ms both',
+            }}
+          >
+            Três anos.
+            <br />
+            Uma noite.
+          </h1>
+          <p
+            style={{
+              margin: 0,
+              fontSize: 'var(--fs-body-lg)',
+              color: 'var(--text-muted)',
+              animation: 'om-rise 1600ms var(--ease-out) 1000ms both',
+            }}
+          >
+            Baile de formatura da Turma 32
+            {mobile ? <br /> : ' · '}
+            <span style={{ whiteSpace: 'nowrap' }}>10 de dezembro de 2026</span>
+          </p>
+        </div>
+        {/* "There's more below", gone as soon as the scroll starts. */}
+        <div
+          aria-hidden
           style={{
-            margin: 'var(--space-3) 0 0',
-            fontFamily: 'var(--font-display)',
-            fontStyle: 'italic',
-            fontSize: mobile ? 24 : 30,
-            color: 'var(--accent)',
-            ...entra(900),
+            position: 'absolute',
+            bottom: 'max(28px, env(safe-area-inset-bottom))',
+            left: 0,
+            right: 0,
+            display: 'flex',
+            justifyContent: 'center',
+            opacity: 1 - trecho(p, 0, 0.06),
+            pointerEvents: 'none',
           }}
         >
-          às 19 horas
-        </p>
-        <address
-          className="versalete"
-          style={{ margin: `${mobile ? 'var(--space-7)' : 'var(--space-8)'} 0 0`, fontStyle: 'normal', lineHeight: 1.9, ...entra(1050) }}
-        >
-          Ballroom Casa de Festas
-          <br />
-          R. Dr. Barros Júnior, 1301
-          <br />
-          Moquetá, Nova Iguaçu - RJ
-        </address>
-        <p className="versalete" style={{ margin: 'var(--space-5) 0 0', ...entra(1150) }}>
-          Traje passeio completo
-        </p>
-        <img
-          src="/assets/logo-32-pequena.png"
-          alt=""
-          className="logo-carimbo"
-          style={{ height: mobile ? 64 : 76, width: 'auto', marginTop: mobile ? 'var(--space-8)' : 'var(--space-9)', ...entra(1300) }}
-        />
-      </div>
-      {/* "There's more below". */}
-      <div
-        aria-hidden
-        style={{
-          position: 'absolute',
-          bottom: 'max(20px, env(safe-area-inset-bottom))',
-          left: 0,
-          right: 0,
-          display: 'flex',
-          justifyContent: 'center',
-          pointerEvents: 'none',
-        }}
-      >
-        <div style={{ animation: 'om-fade-in 900ms var(--ease-out) 2200ms both' }}>
-          <ChevronDown
-            size={26}
-            strokeWidth={1.4}
-            color="var(--text-faint)"
-            style={{ display: 'block', animation: 'dica-rolar 2200ms var(--ease-in-out) infinite' }}
-          />
+          <div style={{ animation: 'om-fade-in 900ms var(--ease-out) 2600ms both' }}>
+            <ChevronDown
+              size={28}
+              strokeWidth={1.6}
+              color="var(--text-muted)"
+              style={{ display: 'block', animation: 'dica-rolar 2200ms var(--ease-in-out) infinite' }}
+            />
+          </div>
         </div>
       </div>
     </section>
@@ -184,19 +227,17 @@ function TextoQueAcende() {
             margin: '0 auto',
             padding: '0 var(--gutter-page)',
             fontFamily: 'var(--font-display)',
-            fontStyle: 'italic',
-            fontWeight: 400,
-            fontSize: mobile ? 30 : 'clamp(38px, 4.2vw, 58px)',
-            lineHeight: 1.22,
-            letterSpacing: '-.01em',
-            textAlign: 'center',
+            fontWeight: 700,
+            fontSize: mobile ? 32 : 'clamp(40px, 4.6vw, 64px)',
+            lineHeight: 1.12,
+            letterSpacing: '-.03em',
           }}
         >
           {palavras.map((palavra, i) => (
             <span
               key={i}
               style={{
-                color: i < acesas ? 'var(--text-primary)' : 'var(--wall-500)',
+                color: i < acesas ? 'var(--chalk-050)' : '#2c2c2e',
                 transition: 'color 400ms var(--ease-out)',
               }}
             >
@@ -239,8 +280,7 @@ function FaixaDeAssinaturas() {
             src={assinatura}
             alt={nome}
             loading="lazy"
-            className="assinatura-tinta"
-            style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+            style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', opacity: 0.92 }}
           />
         ) : (
           <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{nome}</span>
@@ -296,7 +336,7 @@ function Contagem() {
         justifyContent: 'center',
         padding: 'var(--space-10) var(--gutter-page)',
         textAlign: 'center',
-        background: `radial-gradient(70% 55% at 50% 55%, rgba(31,63,91,${(0.12 * brilho).toFixed(3)}) 0%, rgba(31,63,91,0) 70%)`,
+        background: `radial-gradient(70% 55% at 50% 55%, rgba(75,150,189,${(0.38 * brilho).toFixed(3)}) 0%, rgba(75,150,189,0) 70%)`,
       }}
     >
       <Revela style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-7)', width: '100%' }}>
@@ -366,8 +406,7 @@ function Placa({ valor, rotulo }: { valor: string; rotulo: string }) {
         gap: 'var(--space-3)',
         padding: 'clamp(20px, 3vw, 36px) 8px clamp(16px, 2.4vw, 28px)',
         borderRadius: 'var(--radius-lg)',
-        background: 'linear-gradient(180deg, var(--ink-850) 0%, var(--ink-850) 50%, #f4f2ed 50%, #f4f2ed 100%)',
-        boxShadow: '0 1px 2px rgba(46,46,46,.06), 0 12px 32px -18px rgba(46,46,46,.25)',
+        background: 'linear-gradient(180deg, #17171a 0%, var(--ink-850) 50%, #0c0c0e 50%, #0c0c0e 100%)',
         border: '1px solid var(--stroke-hair)',
         overflow: 'hidden',
       }}
@@ -376,10 +415,10 @@ function Placa({ valor, rotulo }: { valor: string; rotulo: string }) {
         style={{
           display: 'flex',
           fontFamily: 'var(--font-display)',
-          fontWeight: 500,
+          fontWeight: 700,
           fontSize: 'clamp(64px, 11vw, 148px)',
           lineHeight: 1,
-          letterSpacing: '-.02em',
+          letterSpacing: '-.04em',
         }}
       >
         {/* Keyed by position and value, so only a digit that changed remounts and turns over. */}
@@ -389,7 +428,7 @@ function Placa({ valor, rotulo }: { valor: string; rotulo: string }) {
           </span>
         ))}
       </span>
-      <span className="versalete" style={{ fontSize: 12 }}>{rotulo}</span>
+      <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-faint)' }}>{rotulo}</span>
     </div>
   );
 }
@@ -415,7 +454,7 @@ function MiniCalendario() {
         dia === 10 ? (
           <span
             key={i}
-            style={{ ...celula, background: 'var(--ice-300)', color: 'var(--accent-ink)', fontWeight: 700 }}
+            style={{ ...celula, background: 'var(--ice-300)', color: 'var(--accent-ink)', fontWeight: 700, boxShadow: '0 0 24px rgba(169,211,232,.5)' }}
           >
             {dia}
           </span>
@@ -436,8 +475,8 @@ function ANoite() {
 
   return (
     <section style={{ maxWidth: 'var(--maxw-page)', margin: '0 auto', padding: 'var(--space-9) var(--gutter-page) 0' }}>
-      <Revela style={{ marginBottom: 'var(--space-8)', display: 'flex', justifyContent: 'center' }}>
-        <NomeComPincelada tamanho="var(--fs-display-3)" como="h2">A noite, em resumo</NomeComPincelada>
+      <Revela style={{ marginBottom: 'var(--space-8)' }}>
+        <Titulo>A noite, em resumo.</Titulo>
       </Revela>
       <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : 'repeat(6, 1fr)', gap: mobile ? 12 : 20 }}>
         <Bloco atraso={0} coluna={mobile ? undefined : 'span 4'} destaque>
@@ -477,35 +516,64 @@ function ANoite() {
   );
 }
 
-/** The close: the class's sign-off, in the invitation's script, and the way to everything else. */
+// Where the sparks of the close sit, as % of the section, with each one's
+// own pace — fixed, so the page looks the same on every visit.
+const BRILHOS: [number, number, number, number][] = [
+  [8, 22, 3.2, 0], [17, 64, 2.6, 1.1], [26, 38, 3.8, 0.4], [34, 80, 2.9, 2], [41, 16, 3.4, 1.6],
+  [58, 20, 3, 0.7], [66, 72, 3.6, 1.9], [73, 34, 2.7, 0.2], [82, 58, 3.3, 1.3], [91, 26, 2.8, 0.9],
+  [12, 86, 3.5, 2.4], [48, 90, 3.1, 0.6], [87, 84, 2.5, 1.7], [4, 50, 3.7, 1], [96, 48, 3.2, 2.2],
+];
+
+/** The close: the night turns gold, one line, and the way to everything else. */
 function Fechamento() {
   const navigate = useNavigate();
   return (
     <section
-      className="papel-assinaturas"
       style={{
         position: 'relative',
+        overflow: 'hidden',
         marginTop: 'var(--space-10)',
         padding: 'var(--space-11) var(--gutter-page)',
         textAlign: 'center',
+        background: 'radial-gradient(90% 70% at 50% 100%, rgba(201,169,106,.22) 0%, rgba(201,169,106,.06) 45%, rgba(201,169,106,0) 75%)',
       }}
     >
+      <div aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+        {BRILHOS.map(([x, y, dur, atraso], i) => (
+          <span
+            key={i}
+            className="brilho"
+            style={{ left: `${x}%`, top: `${y}%`, ['--dur-brilho' as string]: `${dur}s`, ['--atraso-brilho' as string]: `${atraso}s` }}
+          />
+        ))}
+      </div>
       <Revela style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-7)' }}>
-        <h2 style={{ margin: 0 }}>
-          <NomeComPincelada tamanho="var(--fs-display-1)">Até lá</NomeComPincelada>
+        <img
+          src="/assets/logo-32-pequena.png"
+          alt=""
+          style={{ height: 72, width: 'auto', filter: 'drop-shadow(0 0 32px rgba(220,196,140,.35))' }}
+        />
+        <h2
+          className="texto-ouro"
+          style={{
+            margin: 0,
+            fontFamily: 'var(--font-display)',
+            fontWeight: 700,
+            fontSize: 'var(--fs-display-1)',
+            lineHeight: 'var(--lh-tight)',
+            letterSpacing: '-.04em',
+          }}
+        >
+          Até lá.
         </h2>
-        <p style={{ margin: 0, fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 'var(--fs-body-lg)', color: 'var(--text-muted)' }}>
-          Com carinho, os formandos da Turma 32.
-        </p>
         <div style={{ display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap', justifyContent: 'center' }}>
-          <Button size="lg" onClick={() => navigate('/baile')}>
+          <Button size="lg" variant="gild" onClick={() => navigate('/baile')}>
             Detalhes da noite
           </Button>
           <Button size="lg" variant="secondary" onClick={() => navigate('/baile#duvidas')}>
             Perguntas frequentes
           </Button>
         </div>
-        <img src="/assets/logo-32-pequena.png" alt="" className="logo-carimbo" style={{ height: 64, width: 'auto' }} />
       </Revela>
     </section>
   );

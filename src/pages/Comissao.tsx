@@ -164,7 +164,7 @@ function Abas() {
     fontWeight: 500,
     whiteSpace: 'nowrap',
     textDecoration: 'none',
-    background: ativa ? 'var(--chalk-050)' : 'rgba(46,46,46,.1)',
+    background: ativa ? 'var(--chalk-050)' : 'rgba(245,245,247,.1)',
     color: ativa ? '#000000' : 'var(--chalk-050)',
     transition: 'background var(--dur) var(--ease-out)',
   });
