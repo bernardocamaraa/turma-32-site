@@ -5,7 +5,8 @@
 //
 // Same look as the link previews (scripts/gerar-previas.mjs): black, the
 // signature wall faded behind, the 32 logo with the ice-blue glow. Kept
-// short on purpose — the logo, the name and the three facts of the night.
+// short on purpose — the logo, the name, one line of invitation and the
+// three facts of the night.
 //
 //   node scripts/gerar-convite.mjs
 //
@@ -37,19 +38,19 @@ body { width: 1080px; height: 1920px; background: #000; overflow: hidden; positi
           border-radius: 50%; background: radial-gradient(circle, rgba(169,211,232,.26), rgba(169,211,232,0) 62%); }
 .tudo { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
         justify-content: center; text-align: center; padding: 0 90px 40px; }
-.sobre { font-size: 32px; font-weight: 600; letter-spacing: .22em; text-transform: uppercase; color: #a9d3e8; }
-.logo { height: 420px; margin: 60px 0 44px; filter: drop-shadow(0 0 60px rgba(169,211,232,.35)); }
+.logo { height: 420px; margin: 0 0 44px; filter: drop-shadow(0 0 60px rgba(169,211,232,.35)); }
 h1 { font-size: 156px; font-weight: 800; line-height: .95; letter-spacing: -.045em; padding-bottom: .06em;
      background: linear-gradient(180deg, #fff 40%, #a1a1a6 100%); -webkit-background-clip: text; color: transparent; }
-.regua { width: 120px; height: 2px; background: #a9d3e8; opacity: .6; margin: 80px 0; }
+.mensagem { margin-top: 44px; font-size: 42px; line-height: 1.4; color: #d2d2d7; max-width: 800px; text-wrap: balance; }
+.regua { width: 120px; height: 2px; background: #a9d3e8; opacity: .6; margin: 70px 0; }
 .data { font-size: 60px; font-weight: 700; letter-spacing: -.02em; }
 .linha { margin-top: 22px; font-size: 38px; color: #a1a1a6; letter-spacing: -.005em; }
 </style></head><body>
 <div class="mural"></div><div class="brilho"></div>
 <div class="tudo">
-  <div class="sobre">Baile de formatura</div>
   <img class="logo" src="${LOGO}">
   <h1>Turma 32</h1>
+  <p class="mensagem">Com muito carinho, te convido para comemorar comigo a nossa formatura.</p>
   <div class="regua"></div>
   <div class="data">10 de dezembro · 19h</div>
   <div class="linha">Ballroom Casa de Festas, Nova Iguaçu</div>
