@@ -13,15 +13,18 @@ import { lerEleitor, salvarEleitor } from '../lib/eleitor';
 import {
   buscarAlternativas,
   buscarMusicas,
+  conferirMusica,
   formatarTempo,
   juntarNomes,
   lerLinkDaMusica,
   membrosDentro,
   linkDaMusica,
+  nomeDaMusica,
   urlDaMusica,
   type AcaoMusicas,
   type AcessoMusicas,
   type Alternativa,
+  type Conferida,
   type DadosMusicas,
   type Grupo,
   type MusicaBase,
@@ -83,7 +86,7 @@ function novidades(antes: DadosMusicas, agora: DadosMusicas): (Popup & { ir?: Et
       }
     }
     if (g1.completo && g0.completo && g1.musica && (g1.musica.codigo !== g0.musica?.codigo || g1.musica.inicio !== g0.musica?.inicio)) {
-      saida.push({ tipo: 'festa', titulo: g0.musica ? 'A música do grupo mudou' : 'A música do grupo foi escolhida!', texto: g1.musica.titulo ?? undefined, ir: 'pronto' });
+      saida.push({ tipo: 'festa', titulo: g0.musica ? 'A música do grupo mudou' : 'A música do grupo foi escolhida!', texto: nomeDaMusica(g1.musica), ir: 'pronto' });
     }
   }
   if (g1?.completo && !(g0?.id === g1.id && g0.completo)) {
@@ -307,6 +310,7 @@ function PaginaMusica() {
             agir={agir}
             pedido={pedido}
             buscarAlternativas={(video) => buscarAlternativas(eleitor!, video)}
+            conferir={(link) => conferirMusica(eleitor!, link)}
           />
         </>
       )}
@@ -548,6 +552,7 @@ function PassoAPasso({
   agir,
   pedido,
   buscarAlternativas: buscarAlt,
+  conferir,
 }: {
   dados: DadosMusicas & { voce: string };
   salvando: boolean;
@@ -555,6 +560,8 @@ function PassoAPasso({
   pedido: PedidoEtapa;
   /** Other versions of a video that won't play inside the site. */
   buscarAlternativas: (video: string) => Promise<Alternativa[]>;
+  /** Whether the song in a link is still free (nobody else picked it), and which it is. */
+  conferir: (link: string) => Promise<Conferida>;
 }) {
   const popup = usePopup();
   const grupo = dados.grupo;
@@ -626,6 +633,7 @@ function PassoAPasso({
           <PassoLink
             link={link}
             paraGrupo={fechado}
+            conferir={conferir}
             onLink={setLink}
             onVoltar={() => ir('modo')}
             onProximo={(inicioDoLink) => {
@@ -990,12 +998,15 @@ function PassoModo({
 function PassoLink({
   link,
   paraGrupo,
+  conferir,
   onLink,
   onVoltar,
   onProximo,
 }: {
   link: string;
   paraGrupo: boolean;
+  /** Whether the song is still free, and which artist and song it is — asked as soon as a video is found. */
+  conferir: (link: string) => Promise<Conferida>;
   onLink: (link: string) => void;
   onVoltar: () => void;
   /** On to step 3, with the start the link itself carries (YouTube's ?t=), if any. */
@@ -1004,6 +1015,26 @@ function PassoLink({
   const lido = lerLinkDaMusica(link);
   const video = lido && 'codigo' in lido ? lido : null;
   const [podeColar] = useState(() => typeof navigator !== 'undefined' && !!navigator.clipboard?.readText);
+
+  // Songs can't repeat: as soon as a video is found, ask whether someone
+  // else already walks down to the same song by the same artist (yes or no
+  // — never who), and which song the site read in it. If the question
+  // fails, let them go on: saving checks again.
+  const [conferido, setConferido] = useState<(Conferida & { codigo: string }) | null>(null);
+  useEffect(() => {
+    if (!video) return;
+    let ativo = true;
+    const codigo = video.codigo;
+    conferir(link).then(
+      (r) => ativo && setConferido({ codigo, ...r }),
+      () => ativo && setConferido({ codigo, livre: true, artista: null, nomeMusica: null }),
+    );
+    return () => {
+      ativo = false;
+    };
+  }, [video?.codigo]);
+  const situacao = !video ? null : conferido?.codigo !== video.codigo ? 'conferindo' : conferido.livre ? 'livre' : 'ocupada';
+  const lida = situacao !== 'conferindo' && conferido?.artista && conferido.nomeMusica ? `${conferido.artista} — ${conferido.nomeMusica}` : null;
 
   async function colar() {
     try {
@@ -1050,14 +1081,18 @@ function PassoLink({
           <div
             key={video.codigo}
             className="aparece"
+            role="status"
+            aria-live="polite"
             style={{
               display: 'flex',
-              gap: 'var(--space-5)',
+              flexWrap: 'wrap',
+              gap: 'var(--space-4) var(--space-5)',
               alignItems: 'center',
               padding: 'var(--space-4)',
               borderRadius: 'var(--radius-md)',
-              background: 'rgba(127,185,138,.08)',
-              border: '1px solid rgba(127,185,138,.3)',
+              background: situacao === 'ocupada' ? 'rgba(255,105,97,.08)' : situacao === 'livre' ? 'rgba(127,185,138,.08)' : 'rgba(245,245,247,.04)',
+              border: `1px solid ${situacao === 'ocupada' ? 'rgba(255,105,97,.35)' : situacao === 'livre' ? 'rgba(127,185,138,.3)' : 'var(--stroke-hair)'}`,
+              transition: 'background var(--dur) var(--ease-out), border-color var(--dur) var(--ease-out)',
             }}
           >
             <img
@@ -1067,13 +1102,29 @@ function PassoLink({
               height={79}
               style={{ width: 140, aspectRatio: '16 / 9', objectFit: 'cover', borderRadius: 10, background: '#000', flex: '0 0 auto' }}
             />
-            <span style={{ ...texto, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--state-ok)', fontWeight: 600 }}>
-              <Check size={20} strokeWidth={3} aria-hidden className="check-pop" /> Achamos o vídeo!
-            </span>
+            {/* Beside the picture when there's room, under it on a narrow phone. */}
+            {situacao === 'ocupada' ? (
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '1 1 200px' }}>
+                <span style={{ ...texto, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--state-error)', fontWeight: 600 }}>
+                  <TriangleAlert size={20} strokeWidth={2.4} aria-hidden style={{ flex: '0 0 auto' }} /> Alguém já escolheu essa música
+                </span>
+                {lida ? <span style={{ ...texto, fontWeight: 600, color: 'var(--text-primary)' }}>{lida}</span> : null}
+                <span style={pequeno}>As músicas não podem se repetir. Procure outra no YouTube e cole o link aqui.</span>
+              </span>
+            ) : situacao === 'livre' ? (
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '1 1 160px' }}>
+                <span style={{ ...texto, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--state-ok)', fontWeight: 600 }}>
+                  <Check size={20} strokeWidth={3} aria-hidden className="check-pop" /> Achamos o vídeo!
+                </span>
+                {lida ? <span style={{ ...texto, fontWeight: 600, color: 'var(--text-primary)' }}>{lida}</span> : null}
+              </span>
+            ) : (
+              <span style={{ ...texto, flex: '1 1 160px' }}>Conferindo se ninguém escolheu essa música…</span>
+            )}
           </div>
         ) : null}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-          <Button size="lg" disabled={!video} iconRight={<ArrowRight size={18} aria-hidden />} onClick={() => video && onProximo(video.inicio)}>
+          <Button size="lg" disabled={!video || situacao !== 'livre'} iconRight={<ArrowRight size={18} aria-hidden />} onClick={() => video && onProximo(video.inicio)}>
             Próximo: o minuto
           </Button>
           <Button size="lg" variant="ghost" iconLeft={<ArrowLeft size={18} aria-hidden />} onClick={onVoltar}>
@@ -1320,7 +1371,7 @@ function PassoPronto({
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', maxWidth: '30rem' }}>
-          <span style={{ ...titulo, fontSize: 'var(--fs-h4)' }}>{musica.titulo ?? 'Vídeo do YouTube'}</span>
+          <span style={{ ...titulo, fontSize: 'var(--fs-h4)' }}>{nomeDaMusica(musica)}</span>
           <span style={{ display: 'inline-flex', alignSelf: 'center', alignItems: 'center', gap: 8, padding: '6px 14px', borderRadius: 980, background: 'rgba(201,169,106,.14)', color: 'var(--gild-200)', fontWeight: 600 }}>
             <Clock size={16} aria-hidden /> Começa em {formatarTempo(musica.inicio)}
           </span>
@@ -1339,7 +1390,7 @@ function PassoPronto({
         {repetida ? (
           <p role="note" style={{ ...texto, display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start', color: 'var(--state-warn)', textAlign: 'left' }}>
             <TriangleAlert size={18} strokeWidth={2} aria-hidden style={{ flex: '0 0 auto', marginTop: 3 }} />
-            <span>Outro formando escolheu essa mesma música. Pode manter, mas talvez valha escolher outra.</span>
+            <span>Alguém escolheu essa música antes, e as músicas não podem se repetir. Toque em "Trocar a música" e escolha outra.</span>
           </p>
         ) : null}
         {erro ? <span style={erroEstilo}>{erro}</span> : null}
@@ -1852,13 +1903,18 @@ export function MusicasComissao({ codigo }: { codigo: string }) {
   const faltam = entradas.filter((e) => !e.musica).flatMap((e) => e.nomes);
   const prontos = formandos.length - faltam.length;
   const seFormando = grupos.filter((g) => !g.completo);
+  // Shared songs, as the server sees them (the same video, or the same song
+  // in another one); a function from before that only compares the videos.
+  const nomesDe = new Map(entradas.map((e) => [e.chave, juntarNomes(e.nomes)]));
   const mesmaQue = (e: Entrada) =>
-    comMusica
-      .filter((o) => o.chave !== e.chave && e.musica && o.musica.plataforma === e.musica.plataforma && o.musica.codigo === e.musica.codigo)
-      .map((o) => juntarNomes(o.nomes));
+    dados.iguais
+      ? dados.iguais.filter(([a]) => a === e.chave).map(([, b]) => nomesDe.get(b) ?? b)
+      : comMusica
+          .filter((o) => o.chave !== e.chave && e.musica && o.musica.plataforma === e.musica.plataforma && o.musica.codigo === e.musica.codigo)
+          .map((o) => juntarNomes(o.nomes));
 
   const linhasDJ = comMusica.map(
-    (e) => `${juntarNomes(e.nomes)} — ${e.musica.titulo ?? 'Vídeo do YouTube'} — começa em ${formatarTempo(e.musica.inicio)} — ${linkDaMusica(e.musica)}`,
+    (e) => `${juntarNomes(e.nomes)} — ${nomeDaMusica(e.musica)} — começa em ${formatarTempo(e.musica.inicio)} — ${linkDaMusica(e.musica)}`,
   );
 
   async function copiarLista() {
@@ -1876,7 +1932,7 @@ export function MusicasComissao({ codigo }: { codigo: string }) {
     const celula = (v: string) => `"${v.replace(/"/g, '""')}"`;
     const linhas = [
       ['Formando(s)', 'Música', 'Começa em', 'Link'],
-      ...comMusica.map((e) => [juntarNomes(e.nomes), e.musica.titulo ?? '', formatarTempo(e.musica.inicio), linkDaMusica(e.musica)]),
+      ...comMusica.map((e) => [juntarNomes(e.nomes), nomeDaMusica(e.musica), formatarTempo(e.musica.inicio), linkDaMusica(e.musica)]),
     ];
     // The BOM makes Excel read the accents right.
     const csv = '﻿' + linhas.map((l) => l.map(celula).join(';')).join('\r\n');
@@ -2034,7 +2090,7 @@ export function MusicasComissao({ codigo }: { codigo: string }) {
                         style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', textDecoration: 'none', display: 'flex', gap: 8, alignItems: 'baseline' }}
                       >
                         <Music size={14} aria-hidden style={{ flex: '0 0 auto', transform: 'translateY(2px)' }} />
-                        <span style={{ overflowWrap: 'anywhere' }}>{m.titulo ?? linkDaMusica(m)}</span>
+                        <span style={{ overflowWrap: 'anywhere' }}>{m.artista && m.nomeMusica ? nomeDaMusica(m) : m.titulo ?? linkDaMusica(m)}</span>
                       </a>
                       <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--accent)' }}>
                         Começa em {formatarTempo(m.inicio)}
