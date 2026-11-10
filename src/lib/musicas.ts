@@ -58,8 +58,14 @@ export type DadosMusicas = {
   abertas: boolean;
   /** The formando's own song, if they picked one. */
   minha: Musica | null;
-  /** Someone else picked the same video/track as `minha` (who isn't said: it's a surprise). */
+  /**
+   * Songs can't repeat (the server refuses one someone else has). True only
+   * for a song saved before that rule that someone else picked first: this
+   * one is the repeat and should change. Who has it isn't said.
+   */
   repetida: boolean;
+  /** Committee only: entries sharing a song (a formando's name, or a group's id), each pair both ways. */
+  iguais?: [string, string][] | null;
   /** Committee only: every formando's own song. */
   musicas: Musica[] | null;
   /** Every formando's name (to the committee, and to a formando to pick who to invite). */
@@ -206,6 +212,16 @@ export type Alternativa = { codigo: string; titulo: string; canal: string | null
  * For a video YouTube won't play inside other sites (VEVO…): up to 3 other
  * versions of the same song that do. Empty if none was found.
  */
+/**
+ * Whether the song in `link` can still be picked: nobody else walks down to
+ * it (the same video, or the same song in another video). Only yes or no:
+ * whose it is is never said. The server checks again when saving.
+ */
+export async function conferirMusica(acesso: AcessoMusicas, link: string): Promise<boolean> {
+  const r = await chamarFuncao<{ livre?: boolean }>('musicas', { ...acesso, acao: 'conferir', link });
+  return r.livre !== false;
+}
+
 export async function buscarAlternativas(acesso: AcessoMusicas, video: string): Promise<Alternativa[]> {
   const r = await chamarFuncao<{ alternativas?: Alternativa[] }>('musicas', { ...acesso, acao: 'alternativas', video });
   return r.alternativas ?? [];

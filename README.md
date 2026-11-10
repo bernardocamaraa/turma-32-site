@@ -360,6 +360,28 @@ escolhe qual e em que minuto ela começa.
   os campos sozinho.
 - **O nome da música** vem do próprio YouTube (oEmbed) quando a música é
   salva. Um vídeo que não existe ou é privado é recusado.
+- **Música não se repete:** duas pessoas (ou dois grupos) não descem com a
+  mesma música. Assim que o formando cola o link, o passo 2 confere e, se
+  alguém já tem a música, mostra "Alguém já escolheu essa música" e não
+  deixa seguir. Nunca diz quem. O servidor confere de novo ao salvar, uma
+  escolha por vez, para dois não pegarem a mesma música no mesmo segundo
+  (`musica_salvar` em `supabase/musicas.sql`).
+  - "A mesma música" é o mesmo vídeo ou a mesma música em outro vídeo
+    (clipe oficial, com letra, só o áudio, ao vivo…). Compara as palavras do
+    título sem o que está entre parênteses ou colchetes e sem palavras como
+    "oficial", "lyrics", "áudio" e "ao vivo" (`musica_chave`). Conta se
+    sobram as mesmas palavras, ou se as de um título estão todas no outro
+    (pelo menos 2 palavras, e no máximo 2 a mais do outro lado, como o nome
+    do artista). "Coldplay - Viva La Vida (Official Video)" e "Viva La Vida -
+    Coldplay [Lyrics]" são a mesma; "Coldplay - Yellow" e "Coldplay - Fix
+    You", não.
+  - Só contam as músicas que vão tocar: a do grupo completo e a de quem não
+    está num grupo completo. A música própria de quem está num grupo
+    completo fica de lado e não bloqueia ninguém.
+  - Músicas repetidas de antes dessa regra: quem escolheu depois vê no passo
+    4 que precisa trocar, e na aba Músicas a comissão vê "Mesma música de…".
+  - A comissão também não consegue repetir, mas para ela a mensagem diz de
+    quem é ("Essa música já é de Bia").
 - **Surpresa:** só a comissão vê as músicas. O formando vê só a dele, e um
   aviso (sem dizer de quem) se outro formando escolheu a mesma.
 - **Aba Músicas** (`/comissao/musicas`): o link para mandar no grupo, quantos

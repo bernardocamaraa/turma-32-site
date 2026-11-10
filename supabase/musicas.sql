@@ -258,3 +258,182 @@ alter table public.musicas_grupos drop constraint if exists musicas_grupos_plata
 alter table public.musicas_grupos add constraint musicas_grupos_plataforma_check check (plataforma = 'youtube');
 alter table public.musicas_grupos drop constraint if exists musicas_grupos_codigo_check;
 alter table public.musicas_grupos add constraint musicas_grupos_codigo_check check (codigo ~ '^[A-Za-z0-9_-]{11}$');
+
+-- ---------------------------------------------------------------------------
+-- No repeated songs: two formandos (or groups) can't walk down to the same
+-- song. "The same" is the same video, or the same song in another video
+-- (the official clip, a lyrics or audio upload, a live one…), told by the
+-- words of the titles once the noise is gone (musica_chave). A formando is
+-- told someone already has it, never who; the committee is told whose.
+-- Safe to run again.
+-- ---------------------------------------------------------------------------
+
+-- The words of a video's title that name the song: lowercase, no accents,
+-- without what's in brackets ("(Official Video)", "[Lyrics]") or words like
+-- "oficial", "lyrics", "audio", "ao vivo"; each word once, sorted.
+create or replace function public.musica_chave(p_titulo text)
+returns text[]
+language sql
+immutable
+set search_path = public
+as $$
+  select coalesce(array_agg(distinct w order by w), '{}')
+  from unnest(regexp_split_to_array(
+    regexp_replace(
+      regexp_replace(
+        regexp_replace(
+          lower(translate(coalesce(p_titulo, ''),
+            'ÁÀÂÃÄáàâãäÉÈÊËéèêëÍÌÎÏíìîïÓÒÔÕÖóòôõöÚÙÛÜúùûüÇçÑñ',
+            'AAAAAaaaaaEEEEeeeeIIIIiiiiOOOOOoooooUUUUuuuuCcNn')),
+          '[([][^)\]]*[)\]]', ' ', 'g'),
+        '\m(official|oficial|video|videoclipe|clipe|clip|lyrics?|letra|legendad[oa]|traducao|audio|visualizer|hd|4k|vevo|mv|ft|feat|remaster(ed)?|live|ao vivo)\M', ' ', 'g'),
+      '[^a-z0-9]+', ' ', 'g'),
+    ' ')) as w
+  where w <> '';
+$$;
+
+-- Whether two picks are the same song: the same video; or titles with the
+-- same words; or the words of one all in the other (2 words or more, and at
+-- most 2 more there — an artist's name, a "feat."). Titles that can't be
+-- read (null) only count by the video.
+create or replace function public.musica_mesma(a_codigo text, a_titulo text, b_codigo text, b_titulo text)
+returns boolean
+language plpgsql
+immutable
+set search_path = public
+as $$
+declare
+  a text[] := musica_chave(a_titulo);
+  b text[] := musica_chave(b_titulo);
+  menor text[];
+  maior text[];
+begin
+  if a_codigo = b_codigo then
+    return true;
+  end if;
+  if cardinality(a) = 0 or cardinality(b) = 0 then
+    return false;
+  end if;
+  if a = b then
+    return true;
+  end if;
+  if cardinality(a) <= cardinality(b) then
+    menor := a; maior := b;
+  else
+    menor := b; maior := a;
+  end if;
+  return cardinality(menor) >= 2 and menor <@ maior and cardinality(maior) - cardinality(menor) <= 2;
+end;
+$$;
+
+-- The songs that will play on the night: each complete group's, and the own
+-- song of everyone not in a complete group. `dono`, ready for a sentence:
+-- "de Bia", or "do grupo de Duda e Enzo".
+create or replace function public.musicas_tocando()
+returns table (formando text, grupo uuid, dono text, codigo text, titulo text, em timestamptz)
+language sql
+stable
+set search_path = public
+as $$
+  with completos as (
+    select g.id from musicas_grupos g
+    where (select count(*) from musicas_grupo_membros m where m.grupo = g.id and m.status = 'aceito') >= 2
+      and not exists (select 1 from musicas_grupo_membros m where m.grupo = g.id and m.status = 'convidado')
+  )
+  select f.formando, null::uuid, 'de ' || f.formando, f.codigo, f.titulo, f.atualizado_em
+  from musicas_formando f
+  where not exists (
+    select 1 from musicas_grupo_membros m join completos c on c.id = m.grupo
+    where m.formando = f.formando and m.status = 'aceito'
+  )
+  union all
+  select null, g.id,
+    'do grupo de ' || regexp_replace(
+      (select string_agg(m.formando, ', ' order by m.formando) from musicas_grupo_membros m where m.grupo = g.id and m.status = 'aceito'),
+      ', ([^,]*)$', ' e \1'),
+    g.codigo, g.titulo, g.musica_em
+  from musicas_grupos g join completos c on c.id = g.id
+  where g.codigo is not null;
+$$;
+
+-- Who already walks down to the same song as (p_codigo, p_titulo) — "de
+-- Bia", "do grupo de Duda e Enzo" — or null.
+-- Leaves out p_formando's own song and p_grupo's. With p_antes, only songs
+-- saved before it: of two equal songs, the one picked later is the repeat.
+create or replace function public.musica_dona(p_codigo text, p_titulo text, p_formando text, p_grupo uuid, p_antes timestamptz default null)
+returns text
+language sql
+stable
+set search_path = public
+as $$
+  select t.dono
+  from musicas_tocando() t
+  where coalesce(t.formando <> p_formando, true)
+    and coalesce(t.grupo <> p_grupo, true)
+    and (p_antes is null or t.em < p_antes)
+    and musica_mesma(p_codigo, p_titulo, t.codigo, t.titulo)
+  order by t.em
+  limit 1;
+$$;
+
+-- For the committee's list: every pair of entries (a formando's name, or a
+-- group's id) walking down to the same song.
+create or replace function public.musicas_iguais()
+returns table (a text, b text)
+language sql
+stable
+set search_path = public
+as $$
+  with t as (select coalesce(formando, grupo::text) as chave, codigo, titulo from musicas_tocando())
+  select x.chave, y.chave from t x join t y on x.chave <> y.chave and musica_mesma(x.codigo, x.titulo, y.codigo, y.titulo);
+$$;
+
+-- Saves a song — a formando's own (p_grupo null) or a group's — unless
+-- someone else already has it. One save at a time (the lock), so two people
+-- picking the same song at the same moment can't both get it.
+create or replace function public.musica_salvar(p_formando text, p_grupo uuid, p_codigo text, p_titulo text, p_inicio int, p_comissao boolean)
+returns void
+language plpgsql
+set search_path = public
+as $$
+declare
+  v_dono text;
+begin
+  perform pg_advisory_xact_lock(hashtext('musicas_escolha'));
+  v_dono := musica_dona(p_codigo, p_titulo, p_formando, p_grupo);
+  if v_dono is not null then
+    if p_comissao then
+      raise exception 'Essa música já é %. Tire de lá antes, ou escolha outra.', v_dono;
+    end if;
+    raise exception 'Alguém já escolheu essa música, e ela não pode se repetir. Escolha outra.';
+  end if;
+  if p_grupo is not null then
+    update musicas_grupos
+    set plataforma = 'youtube', codigo = p_codigo, titulo = p_titulo, inicio = p_inicio, musica_em = now()
+    where id = p_grupo;
+  else
+    begin
+      insert into musicas_formando (formando, plataforma, codigo, titulo, inicio, atualizado_em)
+      values (p_formando, 'youtube', p_codigo, p_titulo, p_inicio, now())
+      on conflict (formando) do update
+      set plataforma = excluded.plataforma, codigo = excluded.codigo, titulo = excluded.titulo,
+          inicio = excluded.inicio, atualizado_em = excluded.atualizado_em;
+    exception when foreign_key_violation then
+      raise exception 'Esse nome não está na lista da turma.';
+    end;
+  end if;
+end;
+$$;
+
+revoke all on function public.musica_chave(text) from public, anon, authenticated;
+revoke all on function public.musica_mesma(text, text, text, text) from public, anon, authenticated;
+revoke all on function public.musicas_tocando() from public, anon, authenticated;
+revoke all on function public.musica_dona(text, text, text, uuid, timestamptz) from public, anon, authenticated;
+revoke all on function public.musicas_iguais() from public, anon, authenticated;
+revoke all on function public.musica_salvar(text, uuid, text, text, int, boolean) from public, anon, authenticated;
+grant execute on function public.musica_chave(text) to service_role;
+grant execute on function public.musica_mesma(text, text, text, text) to service_role;
+grant execute on function public.musicas_tocando() to service_role;
+grant execute on function public.musica_dona(text, text, text, uuid, timestamptz) to service_role;
+grant execute on function public.musicas_iguais() to service_role;
+grant execute on function public.musica_salvar(text, uuid, text, text, int, boolean) to service_role;

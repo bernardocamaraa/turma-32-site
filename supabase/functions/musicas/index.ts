@@ -11,8 +11,12 @@
 //     tied to that name (identificar_eleitor in votacao.sql) — the same
 //     number then enters the vote too. Sees and changes only their own
 //     song, while the committee keeps the choices open. Never sees a
-//     classmate's song: only that someone else picked the same one
-//     (`repetida`).
+//     classmate's song. Songs can't repeat (musica_salvar in musicas.sql):
+//     a song someone else already walks down to — the same video, or the
+//     same song in another video — is refused, without saying whose.
+//     `conferir` (with a `link`) asks that before saving, as the link is
+//     pasted: only `livre`, yes or no. `repetida`: their song was saved
+//     before the rule and someone else picked it first.
 //     Can also walk down in a group of up to 3, to one song: creates it
 //     (`criarGrupo`), invites more (`convidar`) or withdraws an invitation
 //     (`desconvidar`) if they created it, answers an invitation
@@ -29,9 +33,11 @@
 //     the committee's private `fotos-infancia` bucket — infancia.sql), for
 //     the record on the last step; never anyone else's.
 //   - `codigo`: COMMITTEE_CODE. Sees every song and group, picks or clears
-//     anyone's song (`formando`) or a group's (`grupo`), undoes a group
+//     anyone's song (`formando`) or a group's (`grupo`) — not one someone
+//     else has, and then it's told whose —, undoes a group
 //     (`desfazerGrupo`), and opens/freezes the choices (`abertas`), even
-//     while frozen.
+//     while frozen. `iguais`: which entries share a song (from before the
+//     rule).
 //
 // The anon key can't touch musicas_formando (musicas.sql): this is the only
 // way in.
@@ -152,7 +158,11 @@ type Alternativa = { codigo: string; titulo: string; canal: string | null; durac
 /** A video's title even when oEmbed refuses it (videos that can't be embedded): from its page. */
 async function tituloDaPagina(codigo: string): Promise<string | null> {
   const doOembed = await buscarTitulo(codigo);
-  if (typeof doOembed === 'string') return doOembed;
+  return typeof doOembed === 'string' ? doOembed : await tituloPelaPagina(codigo);
+}
+
+/** The title on the video's own page, for when oEmbed won't say it. */
+async function tituloPelaPagina(codigo: string): Promise<string | null> {
   try {
     const resposta = await fetch(`https://www.youtube.com/watch?v=${codigo}`, { headers: CABECALHOS_YOUTUBE, signal: AbortSignal.timeout(5000) });
     const html = await resposta.text();
@@ -339,6 +349,27 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Whether a pasted song can still be picked: nobody else walks down to
+    // it. Only yes or no — never whose it is. Nothing changes.
+    if (acao === 'conferir') {
+      if (!voce) return json({ error: 'Entre de novo com o seu WhatsApp.' }, 401);
+      if (typeof link !== 'string' || link.length > 2000) return recusar('Cole o link do vídeo da música no YouTube.');
+      const lido = lerLink(link);
+      if ('erro' in lido) return recusar(lido.erro);
+      const titulo = await buscarTitulo(lido.codigo);
+      const nomeDoVideo = titulo === 'naoExiste' ? null : titulo ?? (await tituloPelaPagina(lido.codigo));
+      // Choosing for their complete group, if they're in one: that group's own song doesn't count.
+      const meuGrupo = (await lerGrupos()).find((g) => completo(g) && g.musicas_grupo_membros.some((m) => m.formando === voce && m.status === 'aceito'));
+      const { data: dono, error } = await supabase.rpc('musica_dona', {
+        p_codigo: lido.codigo,
+        p_titulo: nomeDoVideo,
+        p_formando: voce,
+        p_grupo: meuGrupo?.id ?? null,
+      });
+      if (error) throw error;
+      return json({ livre: dono === null });
+    }
+
     const acoesDeGrupo = ['criarGrupo', 'convidar', 'desconvidar', 'responder', 'sairDoGrupo', 'semGrupo'];
     const mexendo = acao === 'escolher' || acao === 'apagar' || (!comissao && acoesDeGrupo.includes(acao));
     if (mexendo && !comissao && !voce) return json({ error: 'Entre de novo com o seu WhatsApp.' }, 401);
@@ -411,28 +442,20 @@ Deno.serve(async (req) => {
       if ('erro' in lido) return recusar(lido.erro);
       const titulo = await buscarTitulo(lido.codigo);
       if (titulo === 'naoExiste') return recusar('Esse vídeo não existe ou é privado. Confira o link.');
-      const agora = new Date().toISOString();
-      if ('grupo' in alvo) {
-        const { error } = await supabase
-          .from('musicas_grupos')
-          .update({ plataforma: lido.plataforma, codigo: lido.codigo, titulo, inicio, musica_em: agora })
-          .eq('id', alvo.grupo);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from('musicas_formando').upsert({
-          formando: alvo.formando,
-          plataforma: lido.plataforma,
-          codigo: lido.codigo,
-          titulo,
-          inicio,
-          atualizado_em: agora,
-        });
-        if (error) {
-          // Not a formando's name (foreign key): only the committee can send one.
-          if (error.code === '23503') return recusar('Esse nome não está na lista da turma.');
-          throw error;
-        }
-      }
+      // A video that can't be embedded has no oEmbed title: take it from its
+      // page, so the same song in another video is still told apart.
+      const nomeDoVideo = titulo ?? (await tituloPelaPagina(lido.codigo));
+      // Saved in Postgres, unless someone else already has the song — one
+      // save at a time, so two can't take the same song at once.
+      const falha = await rpc('musica_salvar', {
+        p_formando: 'grupo' in alvo ? voce : alvo.formando,
+        p_grupo: 'grupo' in alvo ? alvo.grupo : null,
+        p_codigo: lido.codigo,
+        p_titulo: nomeDoVideo,
+        p_inicio: inicio,
+        p_comissao: comissao,
+      });
+      if (falha) return falha;
     }
 
     if (acao === 'apagar' && alvo) {
@@ -476,7 +499,11 @@ Deno.serve(async (req) => {
     const nomes = formandos.data.map((f) => f.formando as string);
 
     if (comissao) {
+      // Entries (a formando's name, or a group's id) sharing a song — from before the rule.
+      const { data: iguais, error: erroIguais } = await supabase.rpc('musicas_iguais');
+      if (erroIguais) throw erroIguais;
       return json({
+        iguais: (iguais as { a: string; b: string }[]).map((p) => [p.a, p.b]),
         comissao,
         voce: null,
         livres: null,
@@ -497,17 +524,25 @@ Deno.serve(async (req) => {
     const convites = grupos.filter((g) => g.musicas_grupo_membros.some((m) => m.formando === voce && m.status === 'convidado'));
     const minha = linhas.find((l) => l.formando === voce) ?? null;
 
-    // The songs that will actually play: complete groups' and everyone
-    // else's own. `repetida`: someone else's is the same as yours.
-    const fechados = grupos.filter(completo);
-    const emFechado = new Set(fechados.flatMap((g) => g.musicas_grupo_membros.filter((m) => m.status === 'aceito').map((m) => m.formando)));
-    const tocando = [
-      ...linhas.filter((l) => !emFechado.has(l.formando)).map((l) => ({ dono: l.formando, plataforma: l.plataforma, codigo: l.codigo })),
-      ...fechados.filter((g) => g.codigo).map((g) => ({ dono: g.id, plataforma: g.plataforma, codigo: g.codigo })),
-    ];
-    const minhaAgora = meuGrupo && completo(meuGrupo) ? { dono: meuGrupo.id, plataforma: meuGrupo.plataforma, codigo: meuGrupo.codigo } : minha && { dono: minha.formando, plataforma: minha.plataforma, codigo: minha.codigo };
-    const repetida =
-      !!minhaAgora?.codigo && tocando.some((t) => t.dono !== minhaAgora.dono && t.plataforma === minhaAgora.plataforma && t.codigo === minhaAgora.codigo);
+    // `repetida`: their song (or their complete group's) is one someone else
+    // picked earlier — only possible for songs saved before the rule. The
+    // later one is the repeat; who has it is never said.
+    const atual =
+      meuGrupo && completo(meuGrupo)
+        ? { codigo: meuGrupo.codigo, titulo: meuGrupo.titulo, em: meuGrupo.musica_em }
+        : minha && { codigo: minha.codigo, titulo: minha.titulo, em: minha.atualizado_em };
+    let repetida = false;
+    if (atual?.codigo) {
+      const { data: antes, error } = await supabase.rpc('musica_dona', {
+        p_codigo: atual.codigo,
+        p_titulo: atual.titulo,
+        p_formando: voce,
+        p_grupo: meuGrupo?.id ?? null,
+        p_antes: atual.em,
+      });
+      if (error) console.error(error);
+      else repetida = antes !== null;
+    }
 
     // Their own childhood photo (the first one sent), for the record's label
     // on the last step. A group's record shows the class logo instead, so
