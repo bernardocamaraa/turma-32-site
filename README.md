@@ -359,22 +359,30 @@ escolhe qual e em que minuto ela começa.
   partir de 1:30" confere. Um link que já traz o tempo (`?t=95`) preenche
   os campos sozinho.
 - **O nome da música** vem do próprio YouTube (oEmbed) quando a música é
-  salva. Um vídeo que não existe ou é privado é recusado.
+  salva. Um vídeo que não existe ou é privado é recusado. O site também lê o
+  **artista e o nome da música** (veja abaixo) e mostra "Artista — Música"
+  no passo 2, no passo 4, na lista da comissão e na lista para o DJ.
 - **Música não se repete:** duas pessoas (ou dois grupos) não descem com a
   mesma música. Assim que o formando cola o link, o passo 2 confere e, se
   alguém já tem a música, mostra "Alguém já escolheu essa música" e não
   deixa seguir. Nunca diz quem. O servidor confere de novo ao salvar, uma
   escolha por vez, para dois não pegarem a mesma música no mesmo segundo
-  (`musica_salvar` em `supabase/musicas.sql`).
-  - "A mesma música" é o mesmo vídeo ou a mesma música em outro vídeo
-    (clipe oficial, com letra, só o áudio, ao vivo…). Compara as palavras do
-    título sem o que está entre parênteses ou colchetes e sem palavras como
-    "oficial", "lyrics", "áudio" e "ao vivo" (`musica_chave`). Conta se
-    sobram as mesmas palavras, ou se as de um título estão todas no outro
-    (pelo menos 2 palavras, e no máximo 2 a mais do outro lado, como o nome
-    do artista). "Coldplay - Viva La Vida (Official Video)" e "Viva La Vida -
-    Coldplay [Lyrics]" são a mesma; "Coldplay - Yellow" e "Coldplay - Fix
-    You", não.
+  (`musica_gravar` em `supabase/musicas.sql`).
+  - Compara **o artista e o nome da música**, não o link: outro vídeo da
+    mesma música (clipe oficial, com letra, só o áudio, ao vivo…) também é
+    recusado. O artista e a música vêm, nessa ordem, da seção "Música" que o
+    YouTube mostra embaixo de muitos vídeos; do título no formato "Artista -
+    Música"; ou do canal ("Coldplay - Topic", "ColdplayVEVO") com o título
+    como nome da música (`musica_identificar`).
+  - Na comparação, maiúsculas, acentos, o que está entre parênteses ou
+    colchetes, "feat." e palavras como "oficial", "lyrics", "áudio" e "ao
+    vivo" não contam; "&" e "and" valem "e" (`musica_normal`). O nome da
+    música tem que ser igual; o artista pode ter nomes a mais ("Lady Gaga,
+    Bradley Cooper" e "Lady Gaga"), e "Viva La Vida - Coldplay" conta como
+    "Coldplay - Viva La Vida" (`musica_igual`). "Coldplay - Yellow" e
+    "Coldplay - Fix You" não são a mesma; nem "Beyoncé - Halo" e "Depeche
+    Mode - Halo".
+  - Um vídeo em que o site não acha o artista não bloqueia ninguém.
   - Só contam as músicas que vão tocar: a do grupo completo e a de quem não
     está num grupo completo. A música própria de quem está num grupo
     completo fica de lado e não bloqueia ninguém.

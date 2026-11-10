@@ -11,12 +11,15 @@
 //     tied to that name (identificar_eleitor in votacao.sql) — the same
 //     number then enters the vote too. Sees and changes only their own
 //     song, while the committee keeps the choices open. Never sees a
-//     classmate's song. Songs can't repeat (musica_salvar in musicas.sql):
-//     a song someone else already walks down to — the same video, or the
-//     same song in another video — is refused, without saying whose.
-//     `conferir` (with a `link`) asks that before saving, as the link is
-//     pasted: only `livre`, yes or no. `repetida`: their song was saved
-//     before the rule and someone else picked it first.
+//     classmate's song. Songs can't repeat (musica_gravar in musicas.sql):
+//     the same song by the same artist as someone else's — whatever the
+//     video — is refused, without saying whose. The artist and the song's
+//     name come from YouTube (the video's "Música" section, else its title,
+//     else its channel: infoDoVideo here, musica_identificar there).
+//     `conferir` (with a `link`) asks before saving, as the link is pasted:
+//     `livre` (yes or no) and the `artista` and `nomeMusica` read in it.
+//     `repetida`: their song was saved before the rule and someone else
+//     picked it first.
 //     Can also walk down in a group of up to 3, to one song: creates it
 //     (`criarGrupo`), invites more (`convidar`) or withdraws an invitation
 //     (`desconvidar`) if they created it, answers an invitation
@@ -93,22 +96,29 @@ function lerLink(texto: string): Lido {
 }
 
 /**
- * The video's name, from YouTube's oEmbed. 'naoExiste' when YouTube says
- * there's no such video; null when it couldn't be asked (slow, down) — the
- * song is kept anyway, without a name.
+ * The video's name and channel, from YouTube's oEmbed. 'naoExiste' when
+ * YouTube says there's no such video; null when it couldn't be asked (slow,
+ * down) or won't say (videos that can't be embedded).
  */
-async function buscarTitulo(codigo: string): Promise<string | null | 'naoExiste'> {
+async function lerOembed(codigo: string): Promise<{ titulo: string; canal: string | null } | null | 'naoExiste'> {
   const endereco = `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(`https://www.youtube.com/watch?v=${codigo}`)}`;
   try {
     const resposta = await fetch(endereco, { signal: AbortSignal.timeout(4000) });
     if (resposta.status === 404 || resposta.status === 400) return 'naoExiste';
     if (!resposta.ok) return null;
-    const dados = (await resposta.json()) as { title?: unknown };
-    return typeof dados.title === 'string' ? dados.title.slice(0, 300) : null;
+    const dados = (await resposta.json()) as { title?: unknown; author_name?: unknown };
+    if (typeof dados.title !== 'string') return null;
+    return { titulo: dados.title.slice(0, 300), canal: typeof dados.author_name === 'string' ? dados.author_name.slice(0, 200) : null };
   } catch (e) {
     console.error(e);
     return null;
   }
+}
+
+/** Just the name (see lerOembed) — for checking which videos can play here. */
+async function buscarTitulo(codigo: string): Promise<string | null | 'naoExiste'> {
+  const o = await lerOembed(codigo);
+  return o === 'naoExiste' ? o : o?.titulo ?? null;
 }
 
 type Grupo = {
@@ -117,6 +127,8 @@ type Grupo = {
   plataforma: Plataforma | null;
   codigo: string | null;
   titulo: string | null;
+  artista: string | null;
+  musica: string | null;
   inicio: number;
   musica_em: string | null;
   musicas_grupo_membros: { formando: string; status: 'convidado' | 'aceito' | 'recusado' }[];
@@ -142,7 +154,7 @@ const grupoParaPagina = (g: Grupo, semGrupo: Set<string>, emGrupo: Set<string>) 
   completo: completo(g),
   musica:
     g.plataforma && g.codigo
-      ? { plataforma: g.plataforma, codigo: g.codigo, titulo: g.titulo, inicio: g.inicio, atualizadoEm: g.musica_em ?? '' }
+      ? { plataforma: g.plataforma, codigo: g.codigo, titulo: g.titulo, artista: g.artista, nomeMusica: g.musica, inicio: g.inicio, atualizadoEm: g.musica_em ?? '' }
       : null,
 });
 
@@ -158,20 +170,122 @@ type Alternativa = { codigo: string; titulo: string; canal: string | null; durac
 /** A video's title even when oEmbed refuses it (videos that can't be embedded): from its page. */
 async function tituloDaPagina(codigo: string): Promise<string | null> {
   const doOembed = await buscarTitulo(codigo);
-  return typeof doOembed === 'string' ? doOembed : await tituloPelaPagina(codigo);
+  return typeof doOembed === 'string' ? doOembed : (await lerPagina(codigo))?.titulo ?? null;
 }
 
-/** The title on the video's own page, for when oEmbed won't say it. */
-async function tituloPelaPagina(codigo: string): Promise<string | null> {
+type DadosPagina = { titulo: string | null; canal: string | null; artista: string | null; musica: string | null };
+
+/** The text of one of YouTube's text objects ({simpleText}, {runs}, {content}) or a plain string. */
+function textoYt(x: unknown): string | null {
+  if (typeof x === 'string') return x.trim() || null;
+  if (!x || typeof x !== 'object') return null;
+  const o = x as { simpleText?: unknown; runs?: { text?: unknown }[]; content?: unknown };
+  if (typeof o.simpleText === 'string') return o.simpleText.trim() || null;
+  if (Array.isArray(o.runs)) return o.runs.map((r) => (typeof r.text === 'string' ? r.text : '')).join('').trim() || null;
+  if (typeof o.content === 'string') return o.content.trim() || null;
+  return null;
+}
+
+/**
+ * The song and artist in the "Música" section YouTube adds under a music
+ * video (from its ytInitialData), when there is one. YouTube has drawn it
+ * two ways: rows labelled "Música"/"Song" and "Artista"/"Artist"
+ * (infoRowRenderer), or a card with the song as title and the artist under
+ * it (videoAttributeViewModel). Only the first song counts.
+ */
+export function secaoMusica(dados: unknown): { artista: string | null; musica: string | null } {
+  let artista: string | null = null;
+  let musica: string | null = null;
+  const naSecao = (no: unknown): void => {
+    if (!no || typeof no !== 'object' || (artista && musica)) return;
+    if (Array.isArray(no)) return no.forEach(naSecao);
+    const o = no as Record<string, unknown>;
+    const linha = o.infoRowRenderer as Record<string, unknown> | undefined;
+    if (linha) {
+      const rotulo = (textoYt(linha.title) ?? '').toUpperCase();
+      const valor = textoYt(linha.defaultMetadata) ?? textoYt(linha.expandedMetadata);
+      if (valor && !musica && /^(SONG|MÚSICA|MUSICA|CANÇÃO)$/.test(rotulo)) musica = valor;
+      if (valor && !artista && /^(ARTISTS?|ARTISTAS?)$/.test(rotulo)) artista = valor;
+      return;
+    }
+    const cartao = o.videoAttributeViewModel as Record<string, unknown> | undefined;
+    if (cartao) {
+      if (!musica && !artista) {
+        musica = textoYt(cartao.title);
+        artista = textoYt(cartao.subtitle);
+      }
+      return;
+    }
+    Object.values(o).forEach(naSecao);
+  };
+  const procurar = (no: unknown): void => {
+    if (!no || typeof no !== 'object' || (artista && musica)) return;
+    if (Array.isArray(no)) return no.forEach(procurar);
+    const o = no as Record<string, unknown>;
+    if (o.videoDescriptionMusicSectionRenderer) return naSecao(o.videoDescriptionMusicSectionRenderer);
+    // The card version: a horizontal list whose header says it's music.
+    const lista = o.horizontalCardListRenderer as Record<string, unknown> | undefined;
+    if (lista && /m[uú]sica|music/i.test(JSON.stringify(lista.header ?? ''))) return naSecao(lista);
+    Object.values(o).forEach(procurar);
+  };
+  procurar(dados);
+  return { artista: artista && musica ? artista : null, musica: artista && musica ? musica : null };
+}
+
+/**
+ * The video's own page: its title (for when oEmbed won't say it), its
+ * channel, and the song and artist of its "Música" section. Null when the
+ * page couldn't be read; then the title and channel from oEmbed do.
+ */
+async function lerPagina(codigo: string): Promise<DadosPagina | null> {
   try {
-    const resposta = await fetch(`https://www.youtube.com/watch?v=${codigo}`, { headers: CABECALHOS_YOUTUBE, signal: AbortSignal.timeout(5000) });
+    const resposta = await fetch(`https://www.youtube.com/watch?v=${codigo}`, { headers: CABECALHOS_YOUTUBE, signal: AbortSignal.timeout(4500) });
     const html = await resposta.text();
     const m = /<meta property="og:title" content="([^"]+)"/.exec(html) ?? /<title>([^<]+?)(?: - YouTube)?<\/title>/.exec(html);
-    return m ? m[1].replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'") : null;
+    const titulo = m ? m[1].replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'") : null;
+    let canal: string | null = null;
+    const autor = /"videoDetails":\{.*?"author":"((?:[^"\\]|\\.)*)"/s.exec(html);
+    if (autor) {
+      try {
+        canal = JSON.parse(`"${autor[1]}"`);
+      } catch {
+        canal = null;
+      }
+    }
+    let secao: { artista: string | null; musica: string | null } = { artista: null, musica: null };
+    const dados = /var ytInitialData = (\{.*?\});<\/script>/s.exec(html);
+    if (dados) {
+      try {
+        secao = secaoMusica(JSON.parse(dados[1]));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return { titulo, canal, ...secao };
   } catch (e) {
     console.error(e);
     return null;
   }
+}
+
+/**
+ * What YouTube says about a pasted video: title and channel (oEmbed, or the
+ * page when oEmbed won't say), and the song and artist of its "Música"
+ * section if it has one. Postgres turns that into the artist and song's
+ * name (musica_identificar). 'naoExiste' for a video that doesn't exist.
+ */
+async function infoDoVideo(codigo: string): Promise<DadosPagina | 'naoExiste'> {
+  const [oembed, pagina] = await Promise.all([lerOembed(codigo), lerPagina(codigo)]);
+  if (oembed === 'naoExiste') return 'naoExiste';
+  const info = {
+    titulo: oembed?.titulo ?? pagina?.titulo ?? null,
+    canal: oembed?.canal ?? pagina?.canal ?? null,
+    artista: pagina?.artista ?? null,
+    musica: pagina?.musica ?? null,
+  };
+  // One line per video in the function's logs, to see how well the "Música" section is read.
+  console.log(JSON.stringify({ video: codigo, ...info }));
+  return info;
 }
 
 /** "Artista - Música (Official Music Video) [4K]" → "Artista - Música": what to search for. */
@@ -260,13 +374,24 @@ function slug(nome: string): string {
     .replace(/^-|-$/g, '');
 }
 
-type Linha = { formando: string; plataforma: Plataforma; codigo: string; titulo: string | null; inicio: number; atualizado_em: string };
+type Linha = {
+  formando: string;
+  plataforma: Plataforma;
+  codigo: string;
+  titulo: string | null;
+  artista: string | null;
+  musica: string | null;
+  inicio: number;
+  atualizado_em: string;
+};
 
 const paraPagina = (l: Linha) => ({
   formando: l.formando,
   plataforma: l.plataforma,
   codigo: l.codigo,
   titulo: l.titulo,
+  artista: l.artista,
+  nomeMusica: l.musica,
   inicio: l.inicio,
   atualizadoEm: l.atualizado_em,
 });
@@ -330,10 +455,60 @@ Deno.serve(async (req) => {
     async function lerGrupos(): Promise<Grupo[]> {
       const { data, error } = await supabase
         .from('musicas_grupos')
-        .select('id, criado_por, plataforma, codigo, titulo, inicio, musica_em, musicas_grupo_membros (formando, status)')
+        .select('id, criado_por, plataforma, codigo, titulo, artista, musica, inicio, musica_em, musicas_grupo_membros (formando, status)')
         .order('criado_em');
       if (error) throw error;
       return data as Grupo[];
+    }
+
+    // Songs saved before the site kept the artist, whose title doesn't say
+    // it ("New Romantics"): ask YouTube (the channel, the "Música" section)
+    // and keep the names, so they count for the no-repeat rule. Only while
+    // there are such songs, a few per call, in the background (the answer
+    // doesn't wait for YouTube); never breaks the request.
+    const completarNomes = async () => {
+      try {
+        const [f, g] = await Promise.all([
+          supabase.from('musicas_formando').select('formando, codigo').is('artista', null).not('codigo', 'is', null).limit(3),
+          supabase.from('musicas_grupos').select('id, codigo').is('artista', null).not('codigo', 'is', null).limit(3),
+        ]);
+        if (f.error) throw f.error;
+        if (g.error) throw g.error;
+        const faltam = [
+          ...f.data.map((r) => ({ tabela: 'musicas_formando', chave: 'formando', valor: r.formando as string, codigo: r.codigo as string })),
+          ...g.data.map((r) => ({ tabela: 'musicas_grupos', chave: 'id', valor: r.id as string, codigo: r.codigo as string })),
+        ].slice(0, 3);
+        await Promise.all(
+          faltam.map(async (m) => {
+            const info = await infoDoVideo(m.codigo);
+            if (info === 'naoExiste') return;
+            const { data, error } = await supabase.rpc('musica_identificar', {
+              p_titulo: info.titulo,
+              p_canal: info.canal,
+              p_artista: info.artista,
+              p_musica: info.musica,
+            });
+            if (error) throw error;
+            const nomes = (data as { artista: string | null; musica: string | null }[])[0];
+            if (!nomes?.artista || !nomes.musica) return;
+            const { error: erroGravar } = await supabase
+              .from(m.tabela)
+              .update({ artista: nomes.artista, musica: nomes.musica })
+              .eq(m.chave, m.valor)
+              .eq('codigo', m.codigo)
+              .is('artista', null);
+            if (erroGravar) throw erroGravar;
+          }),
+        );
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    if (comissao || voce) {
+      const tarefa = completarNomes();
+      const runtime = (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime;
+      if (runtime) runtime.waitUntil(tarefa);
+      else await tarefa;
     }
 
     // Other versions of a video that won't play here. Only for someone who
@@ -350,24 +525,28 @@ Deno.serve(async (req) => {
     }
 
     // Whether a pasted song can still be picked: nobody else walks down to
-    // it. Only yes or no — never whose it is. Nothing changes.
+    // it. Says which artist and song it read, and yes or no — never whose
+    // it is. Nothing changes.
     if (acao === 'conferir') {
       if (!voce) return json({ error: 'Entre de novo com o seu WhatsApp.' }, 401);
       if (typeof link !== 'string' || link.length > 2000) return recusar('Cole o link do vídeo da música no YouTube.');
       const lido = lerLink(link);
       if ('erro' in lido) return recusar(lido.erro);
-      const titulo = await buscarTitulo(lido.codigo);
-      const nomeDoVideo = titulo === 'naoExiste' ? null : titulo ?? (await tituloPelaPagina(lido.codigo));
+      const info = await infoDoVideo(lido.codigo);
+      if (info === 'naoExiste') return recusar('Esse vídeo não existe ou é privado. Confira o link.');
       // Choosing for their complete group, if they're in one: that group's own song doesn't count.
       const meuGrupo = (await lerGrupos()).find((g) => completo(g) && g.musicas_grupo_membros.some((m) => m.formando === voce && m.status === 'aceito'));
-      const { data: dono, error } = await supabase.rpc('musica_dona', {
-        p_codigo: lido.codigo,
-        p_titulo: nomeDoVideo,
+      const { data, error } = await supabase.rpc('musica_conferir', {
+        p_titulo: info.titulo,
+        p_canal: info.canal,
+        p_artista: info.artista,
+        p_musica: info.musica,
         p_formando: voce,
         p_grupo: meuGrupo?.id ?? null,
       });
       if (error) throw error;
-      return json({ livre: dono === null });
+      const lida = (data as { artista: string | null; musica: string | null; livre: boolean }[])[0];
+      return json({ livre: lida?.livre ?? true, artista: lida?.artista ?? null, nomeMusica: lida?.musica ?? null });
     }
 
     const acoesDeGrupo = ['criarGrupo', 'convidar', 'desconvidar', 'responder', 'sairDoGrupo', 'semGrupo'];
@@ -440,18 +619,19 @@ Deno.serve(async (req) => {
       if (!Number.isInteger(inicio) || inicio < 0 || inicio >= 36000) return recusar('Confira o minuto e o segundo em que a música começa.');
       const lido = lerLink(link);
       if ('erro' in lido) return recusar(lido.erro);
-      const titulo = await buscarTitulo(lido.codigo);
-      if (titulo === 'naoExiste') return recusar('Esse vídeo não existe ou é privado. Confira o link.');
-      // A video that can't be embedded has no oEmbed title: take it from its
-      // page, so the same song in another video is still told apart.
-      const nomeDoVideo = titulo ?? (await tituloPelaPagina(lido.codigo));
-      // Saved in Postgres, unless someone else already has the song — one
-      // save at a time, so two can't take the same song at once.
-      const falha = await rpc('musica_salvar', {
+      const info = await infoDoVideo(lido.codigo);
+      if (info === 'naoExiste') return recusar('Esse vídeo não existe ou é privado. Confira o link.');
+      // Saved in Postgres with its artist and song, unless someone else
+      // already has that song — one save at a time, so two can't take the
+      // same song at once.
+      const falha = await rpc('musica_gravar', {
         p_formando: 'grupo' in alvo ? voce : alvo.formando,
         p_grupo: 'grupo' in alvo ? alvo.grupo : null,
         p_codigo: lido.codigo,
-        p_titulo: nomeDoVideo,
+        p_titulo: info.titulo,
+        p_canal: info.canal,
+        p_artista: info.artista,
+        p_musica: info.musica,
         p_inicio: inicio,
         p_comissao: comissao,
       });
@@ -461,7 +641,7 @@ Deno.serve(async (req) => {
     if (acao === 'apagar' && alvo) {
       const { error } =
         'grupo' in alvo
-          ? await supabase.from('musicas_grupos').update({ plataforma: null, codigo: null, titulo: null, inicio: 0, musica_em: null }).eq('id', alvo.grupo)
+          ? await supabase.from('musicas_grupos').update({ plataforma: null, codigo: null, titulo: null, artista: null, musica: null, inicio: 0, musica_em: null }).eq('id', alvo.grupo)
           : await supabase.from('musicas_formando').delete().eq('formando', alvo.formando);
       if (error) throw error;
     }
@@ -484,7 +664,7 @@ Deno.serve(async (req) => {
     }
 
     const [musicas, formandos, grupos, semGrupoLido] = await Promise.all([
-      supabase.from('musicas_formando').select('formando, plataforma, codigo, titulo, inicio, atualizado_em').order('formando'),
+      supabase.from('musicas_formando').select('formando, plataforma, codigo, titulo, artista, musica, inicio, atualizado_em').order('formando'),
       supabase.from('convidados_formando').select('formando').order('formando'),
       lerGrupos(),
       supabase.from('musicas_sem_grupo').select('formando'),
@@ -500,7 +680,7 @@ Deno.serve(async (req) => {
 
     if (comissao) {
       // Entries (a formando's name, or a group's id) sharing a song — from before the rule.
-      const { data: iguais, error: erroIguais } = await supabase.rpc('musicas_iguais');
+      const { data: iguais, error: erroIguais } = await supabase.rpc('musicas_repetidas');
       if (erroIguais) throw erroIguais;
       return json({
         iguais: (iguais as { a: string; b: string }[]).map((p) => [p.a, p.b]),
@@ -529,13 +709,13 @@ Deno.serve(async (req) => {
     // later one is the repeat; who has it is never said.
     const atual =
       meuGrupo && completo(meuGrupo)
-        ? { codigo: meuGrupo.codigo, titulo: meuGrupo.titulo, em: meuGrupo.musica_em }
-        : minha && { codigo: minha.codigo, titulo: minha.titulo, em: minha.atualizado_em };
+        ? { codigo: meuGrupo.codigo, artista: meuGrupo.artista, musica: meuGrupo.musica, em: meuGrupo.musica_em }
+        : minha && { codigo: minha.codigo, artista: minha.artista, musica: minha.musica, em: minha.atualizado_em };
     let repetida = false;
     if (atual?.codigo) {
-      const { data: antes, error } = await supabase.rpc('musica_dona', {
-        p_codigo: atual.codigo,
-        p_titulo: atual.titulo,
+      const { data: antes, error } = await supabase.rpc('musica_ja_tem', {
+        p_artista: atual.artista,
+        p_musica: atual.musica,
         p_formando: voce,
         p_grupo: meuGrupo?.id ?? null,
         p_antes: atual.em,

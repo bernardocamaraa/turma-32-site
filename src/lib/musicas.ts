@@ -16,6 +16,13 @@ export type MusicaBase = {
   codigo: string;
   /** The video's name, when the function could look it up. */
   titulo: string | null;
+  /**
+   * The artist and the song's name, read from YouTube (the video's "Música"
+   * section, its title, or its channel). Songs can't repeat by these: the
+   * same song by the same artist, whatever the video.
+   */
+  artista?: string | null;
+  nomeMusica?: string | null;
   /** Seconds from the start of the song. */
   inicio: number;
   atualizadoEm: string;
@@ -208,20 +215,29 @@ export function quantosTemMusica(d: DadosMusicas): number {
 /** Another version of a song (lyrics, audio) that plays inside the site. */
 export type Alternativa = { codigo: string; titulo: string; canal: string | null; duracao: string | null };
 
+/** What `conferirMusica` says about a pasted video. */
+export type Conferida = { livre: boolean; artista: string | null; nomeMusica: string | null };
+
+/**
+ * Whether the song in `link` can still be picked: nobody else walks down to
+ * the same song by the same artist. Also says which artist and song the
+ * site read in the video. Never whose it is. The server checks again when
+ * saving.
+ */
+export async function conferirMusica(acesso: AcessoMusicas, link: string): Promise<Conferida> {
+  const r = await chamarFuncao<Partial<Conferida>>('musicas', { ...acesso, acao: 'conferir', link });
+  return { livre: r.livre !== false, artista: r.artista ?? null, nomeMusica: r.nomeMusica ?? null };
+}
+
+/** "Coldplay — Viva La Vida" when the artist and song are known; else the video's name. */
+export function nomeDaMusica(m: Pick<MusicaBase, 'titulo' | 'artista' | 'nomeMusica'>): string {
+  return m.artista && m.nomeMusica ? `${m.artista} — ${m.nomeMusica}` : m.titulo ?? 'Vídeo do YouTube';
+}
+
 /**
  * For a video YouTube won't play inside other sites (VEVO…): up to 3 other
  * versions of the same song that do. Empty if none was found.
  */
-/**
- * Whether the song in `link` can still be picked: nobody else walks down to
- * it (the same video, or the same song in another video). Only yes or no:
- * whose it is is never said. The server checks again when saving.
- */
-export async function conferirMusica(acesso: AcessoMusicas, link: string): Promise<boolean> {
-  const r = await chamarFuncao<{ livre?: boolean }>('musicas', { ...acesso, acao: 'conferir', link });
-  return r.livre !== false;
-}
-
 export async function buscarAlternativas(acesso: AcessoMusicas, video: string): Promise<Alternativa[]> {
   const r = await chamarFuncao<{ alternativas?: Alternativa[] }>('musicas', { ...acesso, acao: 'alternativas', video });
   return r.alternativas ?? [];

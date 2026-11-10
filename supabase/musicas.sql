@@ -261,76 +261,126 @@ alter table public.musicas_grupos add constraint musicas_grupos_codigo_check che
 
 -- ---------------------------------------------------------------------------
 -- No repeated songs: two formandos (or groups) can't walk down to the same
--- song. "The same" is the same video, or the same song in another video
--- (the official clip, a lyrics or audio upload, a live one…), told by the
--- words of the titles once the noise is gone (musica_chave). A formando is
--- told someone already has it, never who; the committee is told whose.
--- Safe to run again.
+-- song — the same song by the same artist, whatever the video (the clip, a
+-- lyrics or audio upload, a live one…). Each pick keeps the artist and the
+-- song's name (`artista`, `musica`): from YouTube's own "Música" section of
+-- the video when it has one, else from the title ("Artista - Música"), else
+-- the channel as the artist (musica_identificar). The link itself isn't
+-- compared. A formando is told someone already has the song, never who;
+-- the committee is told whose. Safe to run again.
 -- ---------------------------------------------------------------------------
 
--- The words of a video's title that name the song: lowercase, no accents,
--- without what's in brackets ("(Official Video)", "[Lyrics]") or words like
--- "oficial", "lyrics", "audio", "ao vivo"; each word once, sorted.
-create or replace function public.musica_chave(p_titulo text)
-returns text[]
+alter table public.musicas_formando add column if not exists artista text check (char_length(artista) <= 200);
+alter table public.musicas_formando add column if not exists musica text check (char_length(musica) <= 300);
+alter table public.musicas_grupos add column if not exists artista text check (char_length(artista) <= 200);
+alter table public.musicas_grupos add column if not exists musica text check (char_length(musica) <= 300);
+
+-- A first version of this rule compared the videos and the words of their
+-- titles; these were its functions.
+drop function if exists public.musica_salvar(text, uuid, text, text, int, boolean);
+drop function if exists public.musicas_iguais();
+drop function if exists public.musica_dona(text, text, text, uuid, timestamptz);
+drop function if exists public.musicas_tocando();
+drop function if exists public.musica_mesma(text, text, text, text);
+drop function if exists public.musica_chave(text);
+
+-- A name as it's compared: lowercase, no accents, without what's in brackets
+-- ("(Official Video)", "[Lyrics]"), the featured artists ("feat. …"), and
+-- words like "oficial", "lyrics", "audio", "ao vivo"; "&" and "and" as "e".
+create or replace function public.musica_normal(p_nome text)
+returns text
 language sql
 immutable
 set search_path = public
 as $$
-  select coalesce(array_agg(distinct w order by w), '{}')
-  from unnest(regexp_split_to_array(
-    regexp_replace(
-      regexp_replace(
-        regexp_replace(
-          lower(translate(coalesce(p_titulo, ''),
-            'ÁÀÂÃÄáàâãäÉÈÊËéèêëÍÌÎÏíìîïÓÒÔÕÖóòôõöÚÙÛÜúùûüÇçÑñ',
-            'AAAAAaaaaaEEEEeeeeIIIIiiiiOOOOOoooooUUUUuuuuCcNn')),
-          '[([][^)\]]*[)\]]', ' ', 'g'),
-        '\m(official|oficial|video|videoclipe|clipe|clip|lyrics?|letra|legendad[oa]|traducao|audio|visualizer|hd|4k|vevo|mv|ft|feat|remaster(ed)?|live|ao vivo)\M', ' ', 'g'),
-      '[^a-z0-9]+', ' ', 'g'),
-    ' ')) as w
-  where w <> '';
+  select btrim(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(
+    lower(translate(coalesce(p_nome, ''),
+      'ÁÀÂÃÄáàâãäÉÈÊËéèêëÍÌÎÏíìîïÓÒÔÕÖóòôõöÚÙÛÜúùûüÇçÑñ',
+      'AAAAAaaaaaEEEEeeeeIIIIiiiiOOOOOoooooUUUUuuuuCcNn')),
+    '[([][^)\]]*[)\]]', ' ', 'g'),
+    '(\mfeat\M|\mfeaturing\M|\mft\.|\mpart\.|\mparticipacao especial\M).*$', ''),
+    '&|\mand\M', ' e ', 'g'),
+    '\m(official|oficial|video|videoclipe|clipe|clip|lyrics?|letra|legendad[oa]|traducao|audio|visualizer|hd|4k|vevo|mv|remaster(ed)?|live|ao vivo|topic)\M', ' ', 'g'),
+    '[^a-z0-9]+', ' ', 'g'),
+    ' {2,}', ' ', 'g'));
 $$;
 
--- Whether two picks are the same song: the same video; or titles with the
--- same words; or the words of one all in the other (2 words or more, and at
--- most 2 more there — an artist's name, a "feat."). Titles that can't be
--- read (null) only count by the video.
-create or replace function public.musica_mesma(a_codigo text, a_titulo text, b_codigo text, b_titulo text)
+-- The artist and the song's name of a video. `p_artista`/`p_musica`: what
+-- YouTube's "Música" section says, when it has one — used as they are.
+-- Else the title split at its first " - " (or "–", "—", "|"): "Coldplay -
+-- Viva La Vida (Official Video)" → Coldplay, Viva La Vida. Else the channel
+-- (without "VEVO", " - Topic") as the artist and the title as the song.
+-- What's in brackets is left out of the names.
+create or replace function public.musica_identificar(p_titulo text, p_canal text, p_artista text, p_musica text)
+returns table (artista text, musica text)
+language plpgsql
+immutable
+set search_path = public
+as $$
+declare
+  v_titulo text := btrim(regexp_replace(regexp_replace(coalesce(p_titulo, ''), '[([][^)\]]*[)\]]', ' ', 'g'), '\s{2,}', ' ', 'g'));
+  v_partes text[];
+begin
+  if nullif(btrim(p_artista), '') is not null and nullif(btrim(p_musica), '') is not null then
+    return query select left(btrim(p_artista), 200), left(btrim(p_musica), 300);
+    return;
+  end if;
+  v_partes := regexp_match(v_titulo, '^(.+?)\s+[-–—|]\s+(.+)$');
+  if v_partes is not null then
+    return query select left(btrim(v_partes[1]), 200), left(btrim(v_partes[2]), 300);
+    return;
+  end if;
+  return query select
+    left(nullif(btrim(regexp_replace(regexp_replace(coalesce(p_canal, ''), '\s*-\s*topic$', '', 'i'), 'vevo$', '', 'i')), ''), 200),
+    left(nullif(v_titulo, ''), 300);
+end;
+$$;
+
+-- Whether one name is inside the other: all its words are in the other's
+-- ("lady gaga" in "lady gaga bradley cooper").
+create or replace function public.musica_dentro(a text, b text)
+returns boolean
+language sql
+immutable
+set search_path = public
+as $$
+  select string_to_array(a, ' ') <@ string_to_array(b, ' ') or string_to_array(b, ' ') <@ string_to_array(a, ' ');
+$$;
+
+-- Whether two picks are the same song: the same name, by an artist that's
+-- the same or one named inside the other ("Lady Gaga" and "Lady Gaga,
+-- Bradley Cooper"). Also the other way round, for a title written "Música -
+-- Artista". A pick without an artist only matches nothing.
+create or replace function public.musica_igual(a_artista text, a_musica text, b_artista text, b_musica text)
 returns boolean
 language plpgsql
 immutable
 set search_path = public
 as $$
 declare
-  a text[] := musica_chave(a_titulo);
-  b text[] := musica_chave(b_titulo);
-  menor text[];
-  maior text[];
+  aa text := musica_normal(a_artista);
+  am text := musica_normal(a_musica);
+  ba text := musica_normal(b_artista);
+  bm text := musica_normal(b_musica);
 begin
-  if a_codigo = b_codigo then
-    return true;
-  end if;
-  if cardinality(a) = 0 or cardinality(b) = 0 then
+  if aa = '' or am = '' or ba = '' or bm = '' then
     return false;
   end if;
-  if a = b then
-    return true;
-  end if;
-  if cardinality(a) <= cardinality(b) then
-    menor := a; maior := b;
-  else
-    menor := b; maior := a;
-  end if;
-  return cardinality(menor) >= 2 and menor <@ maior and cardinality(maior) - cardinality(menor) <= 2;
+  return
+    -- The same song, by artists where one is named inside the other.
+    (am = bm and musica_dentro(aa, ba))
+    -- One of them written "Música - Artista": "Viva La Vida - Coldplay"
+    -- read as artist "Viva La Vida", song "Coldplay".
+    or (am = ba and musica_dentro(aa, bm))
+    or (aa = bm and musica_dentro(am, ba));
 end;
 $$;
 
 -- The songs that will play on the night: each complete group's, and the own
 -- song of everyone not in a complete group. `dono`, ready for a sentence:
 -- "de Bia", or "do grupo de Duda e Enzo".
-create or replace function public.musicas_tocando()
-returns table (formando text, grupo uuid, dono text, codigo text, titulo text, em timestamptz)
+create or replace function public.musicas_tocam()
+returns table (formando text, grupo uuid, dono text, artista text, musica text, em timestamptz)
 language sql
 stable
 set search_path = public
@@ -340,7 +390,7 @@ as $$
     where (select count(*) from musicas_grupo_membros m where m.grupo = g.id and m.status = 'aceito') >= 2
       and not exists (select 1 from musicas_grupo_membros m where m.grupo = g.id and m.status = 'convidado')
   )
-  select f.formando, null::uuid, 'de ' || f.formando, f.codigo, f.titulo, f.atualizado_em
+  select f.formando, null::uuid, 'de ' || f.formando, f.artista, f.musica, f.atualizado_em
   from musicas_formando f
   where not exists (
     select 1 from musicas_grupo_membros m join completos c on c.id = m.grupo
@@ -351,56 +401,74 @@ as $$
     'do grupo de ' || regexp_replace(
       (select string_agg(m.formando, ', ' order by m.formando) from musicas_grupo_membros m where m.grupo = g.id and m.status = 'aceito'),
       ', ([^,]*)$', ' e \1'),
-    g.codigo, g.titulo, g.musica_em
+    g.artista, g.musica, g.musica_em
   from musicas_grupos g join completos c on c.id = g.id
   where g.codigo is not null;
 $$;
 
--- Who already walks down to the same song as (p_codigo, p_titulo) — "de
--- Bia", "do grupo de Duda e Enzo" — or null.
--- Leaves out p_formando's own song and p_grupo's. With p_antes, only songs
--- saved before it: of two equal songs, the one picked later is the repeat.
-create or replace function public.musica_dona(p_codigo text, p_titulo text, p_formando text, p_grupo uuid, p_antes timestamptz default null)
+-- Who already walks down to the same song — "de Bia", "do grupo de Duda e
+-- Enzo" — or null. Leaves out p_formando's own song and p_grupo's. With
+-- p_antes, only songs saved before it: of two equal songs, the one picked
+-- later is the repeat.
+create or replace function public.musica_ja_tem(p_artista text, p_musica text, p_formando text, p_grupo uuid, p_antes timestamptz default null)
 returns text
 language sql
 stable
 set search_path = public
 as $$
   select t.dono
-  from musicas_tocando() t
+  from musicas_tocam() t
   where coalesce(t.formando <> p_formando, true)
     and coalesce(t.grupo <> p_grupo, true)
     and (p_antes is null or t.em < p_antes)
-    and musica_mesma(p_codigo, p_titulo, t.codigo, t.titulo)
+    and musica_igual(p_artista, p_musica, t.artista, t.musica)
   order by t.em
   limit 1;
 $$;
 
+-- For a pasted video, before saving: the artist and song the site reads in
+-- it, and whether it's still free (nobody else walks down to it). Never who.
+create or replace function public.musica_conferir(p_titulo text, p_canal text, p_artista text, p_musica text, p_formando text, p_grupo uuid)
+returns table (artista text, musica text, livre boolean)
+language sql
+stable
+set search_path = public
+as $$
+  select i.artista, i.musica, musica_ja_tem(i.artista, i.musica, p_formando, p_grupo) is null
+  from musica_identificar(p_titulo, p_canal, p_artista, p_musica) i;
+$$;
+
 -- For the committee's list: every pair of entries (a formando's name, or a
 -- group's id) walking down to the same song.
-create or replace function public.musicas_iguais()
+create or replace function public.musicas_repetidas()
 returns table (a text, b text)
 language sql
 stable
 set search_path = public
 as $$
-  with t as (select coalesce(formando, grupo::text) as chave, codigo, titulo from musicas_tocando())
-  select x.chave, y.chave from t x join t y on x.chave <> y.chave and musica_mesma(x.codigo, x.titulo, y.codigo, y.titulo);
+  with t as (select coalesce(formando, grupo::text) as chave, artista, musica from musicas_tocam())
+  select x.chave, y.chave from t x join t y on x.chave <> y.chave and musica_igual(x.artista, x.musica, y.artista, y.musica);
 $$;
 
--- Saves a song — a formando's own (p_grupo null) or a group's — unless
--- someone else already has it. One save at a time (the lock), so two people
--- picking the same song at the same moment can't both get it.
-create or replace function public.musica_salvar(p_formando text, p_grupo uuid, p_codigo text, p_titulo text, p_inicio int, p_comissao boolean)
+-- Saves a song — a formando's own (p_grupo null) or a group's — with its
+-- artist and name, unless someone else already has it. One save at a time
+-- (the lock), so two people picking the same song at the same moment can't
+-- both get it.
+create or replace function public.musica_gravar(
+  p_formando text, p_grupo uuid, p_codigo text, p_titulo text, p_canal text, p_artista text, p_musica text, p_inicio int, p_comissao boolean
+)
 returns void
 language plpgsql
 set search_path = public
 as $$
 declare
+  v_artista text;
+  v_musica text;
   v_dono text;
 begin
   perform pg_advisory_xact_lock(hashtext('musicas_escolha'));
-  v_dono := musica_dona(p_codigo, p_titulo, p_formando, p_grupo);
+  select i.artista, i.musica into v_artista, v_musica from musica_identificar(p_titulo, p_canal, p_artista, p_musica) i;
+  v_dono := musica_ja_tem(v_artista, v_musica, p_formando, p_grupo);
   if v_dono is not null then
     if p_comissao then
       raise exception 'Essa música já é %. Tire de lá antes, ou escolha outra.', v_dono;
@@ -409,15 +477,15 @@ begin
   end if;
   if p_grupo is not null then
     update musicas_grupos
-    set plataforma = 'youtube', codigo = p_codigo, titulo = p_titulo, inicio = p_inicio, musica_em = now()
+    set plataforma = 'youtube', codigo = p_codigo, titulo = p_titulo, artista = v_artista, musica = v_musica, inicio = p_inicio, musica_em = now()
     where id = p_grupo;
   else
     begin
-      insert into musicas_formando (formando, plataforma, codigo, titulo, inicio, atualizado_em)
-      values (p_formando, 'youtube', p_codigo, p_titulo, p_inicio, now())
+      insert into musicas_formando (formando, plataforma, codigo, titulo, artista, musica, inicio, atualizado_em)
+      values (p_formando, 'youtube', p_codigo, p_titulo, v_artista, v_musica, p_inicio, now())
       on conflict (formando) do update
-      set plataforma = excluded.plataforma, codigo = excluded.codigo, titulo = excluded.titulo,
-          inicio = excluded.inicio, atualizado_em = excluded.atualizado_em;
+      set plataforma = excluded.plataforma, codigo = excluded.codigo, titulo = excluded.titulo, artista = excluded.artista,
+          musica = excluded.musica, inicio = excluded.inicio, atualizado_em = excluded.atualizado_em;
     exception when foreign_key_violation then
       raise exception 'Esse nome não está na lista da turma.';
     end;
@@ -425,15 +493,29 @@ begin
 end;
 $$;
 
-revoke all on function public.musica_chave(text) from public, anon, authenticated;
-revoke all on function public.musica_mesma(text, text, text, text) from public, anon, authenticated;
-revoke all on function public.musicas_tocando() from public, anon, authenticated;
-revoke all on function public.musica_dona(text, text, text, uuid, timestamptz) from public, anon, authenticated;
-revoke all on function public.musicas_iguais() from public, anon, authenticated;
-revoke all on function public.musica_salvar(text, uuid, text, text, int, boolean) from public, anon, authenticated;
-grant execute on function public.musica_chave(text) to service_role;
-grant execute on function public.musica_mesma(text, text, text, text) to service_role;
-grant execute on function public.musicas_tocando() to service_role;
-grant execute on function public.musica_dona(text, text, text, uuid, timestamptz) to service_role;
-grant execute on function public.musicas_iguais() to service_role;
-grant execute on function public.musica_salvar(text, uuid, text, text, int, boolean) to service_role;
+-- Songs picked before the names were kept: read them from the titles.
+update public.musicas_formando f set artista = i.artista, musica = i.musica
+from (select formando, (musica_identificar(titulo, null, null, null)).* from public.musicas_formando where musica is null) i
+where i.formando = f.formando;
+update public.musicas_grupos g set artista = i.artista, musica = i.musica
+from (select id, (musica_identificar(titulo, null, null, null)).* from public.musicas_grupos where musica is null and codigo is not null) i
+where i.id = g.id;
+
+revoke all on function public.musica_normal(text) from public, anon, authenticated;
+revoke all on function public.musica_identificar(text, text, text, text) from public, anon, authenticated;
+revoke all on function public.musica_dentro(text, text) from public, anon, authenticated;
+revoke all on function public.musica_igual(text, text, text, text) from public, anon, authenticated;
+revoke all on function public.musicas_tocam() from public, anon, authenticated;
+revoke all on function public.musica_ja_tem(text, text, text, uuid, timestamptz) from public, anon, authenticated;
+revoke all on function public.musica_conferir(text, text, text, text, text, uuid) from public, anon, authenticated;
+revoke all on function public.musicas_repetidas() from public, anon, authenticated;
+revoke all on function public.musica_gravar(text, uuid, text, text, text, text, text, int, boolean) from public, anon, authenticated;
+grant execute on function public.musica_normal(text) to service_role;
+grant execute on function public.musica_identificar(text, text, text, text) to service_role;
+grant execute on function public.musica_dentro(text, text) to service_role;
+grant execute on function public.musica_igual(text, text, text, text) to service_role;
+grant execute on function public.musicas_tocam() to service_role;
+grant execute on function public.musica_ja_tem(text, text, text, uuid, timestamptz) to service_role;
+grant execute on function public.musica_conferir(text, text, text, text, text, uuid) to service_role;
+grant execute on function public.musicas_repetidas() to service_role;
+grant execute on function public.musica_gravar(text, uuid, text, text, text, text, text, int, boolean) to service_role;
