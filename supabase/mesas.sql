@@ -87,7 +87,7 @@ insert into public.convidados_formando (formando) values
   ('Enzo Louro'), ('Geovanna Russo'), ('Guilherme Warrak'), ('Isabella Guimarães'),
   ('Isabella Monteiro'), ('João Pedro Jardim'), ('Laís Boldrim'), ('Laura Viana'),
   ('Lívia Whitaker'), ('Lorenzo Nunes'), ('Lucas Loyola'), ('Lucas Varejão'),
-  ('Luiza Goes'), ('Maian Costa'), ('Maria Clara Bispo'), ('Maria Clara França'),
+  ('Luíza Góes'), ('Maian Costa'), ('Maria Clara Bispo'), ('Maria Clara França'),
   ('Maria Eduarda Barroso'), ('Maria Luiza Pires'), ('Matheus Veiga'), ('Pietra Machado'),
   ('Sophia Afonso'), ('Suellen Bazillio'), ('Susana Liu')
 on conflict (formando) do nothing;
@@ -96,7 +96,7 @@ on conflict (formando) do nothing;
 -- split across tables (e.g. 6 here, 4 next door) — and a table is usually
 -- shared by several formandos with small groups.
 create table if not exists public.reservas_mesa (
-  formando text not null references public.convidados_formando (formando) on delete cascade,
+  formando text not null references public.convidados_formando (formando) on update cascade on delete cascade,
   mesa text not null references public.mesas (id) on delete cascade,
   lugares int not null check (lugares > 0),
   atualizado_em timestamptz not null default now(),
