@@ -27,7 +27,7 @@ export const FORMANDOS: string[] = [
   'Lorenzo Nunes',
   'Lucas Loyola',
   'Lucas Varejão',
-  'Luiza Goes',
+  'Luíza Góes',
   'Maian Costa',
   'Maria Clara Bispo',
   'Maria Clara França',

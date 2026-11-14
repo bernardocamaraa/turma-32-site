@@ -58,7 +58,7 @@ create table if not exists public.votacao_perguntas (
 -- Who has already voted on each question — never what they chose.
 create table if not exists public.votacao_participacao (
   pergunta_id uuid not null references public.votacao_perguntas (id) on delete cascade,
-  formando text not null references public.convidados_formando (formando) on delete cascade,
+  formando text not null references public.convidados_formando (formando) on update cascade on delete cascade,
   primary key (pergunta_id, formando)
 );
 
