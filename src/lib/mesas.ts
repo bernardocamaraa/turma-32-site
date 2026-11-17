@@ -4,9 +4,9 @@ import { chamarFuncao } from './supabase';
  * The venue's table map, traced from the floor plan the venue sent (602×336
  * px). Positions are the center of each table as a percentage of that
  * drawing, so the map scales to any width. Ids follow the layout: E = the
- * grid on the left, R = the long table beside the dance floor (the venue's
- * two rectangles pushed together — the teachers' table), D = the column on
- * the far right, P = the round one below the dance floor.
+ * grid on the left, R1/R2 = the two rectangles beside the dance floor, D =
+ * the column on the far right, P = the round one in front of the dance floor
+ * (the teachers' table).
  *
  * Which tables are reserved (professores/comissão) lives in the database
  * (`mesas.reservada_para`) — that's what's enforced — this file only says
@@ -41,9 +41,8 @@ export const POSICOES_MESAS: PosicaoMesa[] = [
   ...LINHAS_ESQUERDA.flatMap((cy, linha) =>
     COLUNAS_ESQUERDA.slice(0, linha === 3 ? 2 : 4).map((cx, coluna) => redonda(`E${linha * 4 + coluna + 1}`, cx, cy)),
   ),
-  // The venue's two rectangles (84 long each, centered at y 92 and 209),
-  // pushed together end to end, centered where the gap between them was.
-  { id: 'R', formato: 'retangular', x: pct(413, LARGURA), y: pct(150.5, ALTURA), altura: 168 },
+  { id: 'R1', formato: 'retangular', x: pct(413, LARGURA), y: pct(92, ALTURA) },
+  { id: 'R2', formato: 'retangular', x: pct(413, LARGURA), y: pct(209, ALTURA) },
   redonda('D1', 505, 52),
   redonda('D2', 505, 124),
   redonda('D3', 505, 188),
@@ -65,7 +64,7 @@ export type Mesa = {
   reservada_para: 'professores' | 'comissao' | null;
   /**
    * People who aren't formandos but already hold a seat here — the teachers
-   * at table R. One seat each. Optional so the page still works against an
+   * at table P. One seat each. Optional so the page still works against an
    * older `mesas` function that doesn't send it.
    */
   ocupantes_fixos?: string[];
