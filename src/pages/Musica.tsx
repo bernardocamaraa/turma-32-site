@@ -1857,9 +1857,8 @@ export function MusicasComissao({ codigo }: { codigo: string }) {
       .filter((o) => o.chave !== e.chave && e.musica && o.musica.plataforma === e.musica.plataforma && o.musica.codigo === e.musica.codigo)
       .map((o) => juntarNomes(o.nomes));
 
-  const linhasDJ = comMusica.map(
-    (e) => `${juntarNomes(e.nomes)} — ${e.musica.titulo ?? 'Vídeo do YouTube'} — começa em ${formatarTempo(e.musica.inicio)} — ${linkDaMusica(e.musica)}`,
-  );
+  // The DJ's format: NOME DO FORMANDO/GRUPO - LINK DA MÚSICA - MINUTO.
+  const linhasDJ = comMusica.map((e) => `${juntarNomes(e.nomes)} - ${linkDaMusica(e.musica)} - ${formatarTempo(e.musica.inicio)}`);
 
   async function copiarLista() {
     const lista = `Músicas da descida da escada · Turma 32\n\n${linhasDJ.join('\n')}`;
@@ -1875,8 +1874,8 @@ export function MusicasComissao({ codigo }: { codigo: string }) {
   function baixarPlanilha() {
     const celula = (v: string) => `"${v.replace(/"/g, '""')}"`;
     const linhas = [
-      ['Formando(s)', 'Música', 'Começa em', 'Link'],
-      ...comMusica.map((e) => [juntarNomes(e.nomes), e.musica.titulo ?? '', formatarTempo(e.musica.inicio), linkDaMusica(e.musica)]),
+      ['Formando/Grupo', 'Link da música', 'Minuto'],
+      ...comMusica.map((e) => [juntarNomes(e.nomes), linkDaMusica(e.musica), formatarTempo(e.musica.inicio)]),
     ];
     // The BOM makes Excel read the accents right.
     const csv = '﻿' + linhas.map((l) => l.map(celula).join(';')).join('\r\n');

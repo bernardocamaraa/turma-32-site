@@ -366,8 +366,9 @@ escolhe qual e em que minuto ela começa.
   já escolheram e quem falta, e a lista de todos, cada um com "Ouvir" (já no
   minuto escolhido), "Editar" e "Tirar" — a comissão pode colocar a música de
   quem mandou pelo WhatsApp. "Copiar lista para o DJ" e "Baixar planilha
-  (.csv)" levam nome, música, minuto e link (o do YouTube já abre no
-  minuto). Escolhas iguais aparecem marcadas ("Mesma música de…").
+  (.csv)" levam uma linha por formando ou grupo, no formato
+  `NOME DO FORMANDO/GRUPO - LINK DA MÚSICA - MINUTO` (o link do YouTube já
+  abre no minuto). Escolhas iguais aparecem marcadas ("Mesma música de…").
 - **Descer em grupo (até 3 pessoas, uma música só):** em "Vai descer em
   grupo?", o formando escolhe 1 ou 2 colegas e manda o convite. Cada
   convidado vê o convite quando entra em `/musica` e escolhe:
