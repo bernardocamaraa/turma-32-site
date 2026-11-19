@@ -518,8 +518,10 @@ escolhe quantos quer de cada modelo de adesivo para distribuir no baile.
   por combinação, com o arquivo de cada uma.
 - **Arquivo para a gráfica**: um PDF no tamanho real, folhas de 33 × 46 cm
   com margem de 3 cm, todos os adesivos com 6 cm (4 × 6 = 24 por folha), com
-  linha de corte opcional (`src/lib/folhas.ts`). Os de criança saem
-  redondos; os outros, com o lado maior em 6 cm.
+  linha de corte opcional (`src/lib/folhas.ts`). Todos são redondos: uma
+  arte que não é (como o 32) vai encaixada inteira dentro do círculo, sobre
+  branco, com folga para o corte (`src/lib/redondo.ts`) — e aparece assim
+  também na loja.
 - A chave Pix fica em `PIX`, em `src/lib/adesivos.ts`.
 - Para ligar: rode `supabase/adesivos.sql` no SQL Editor (depois de
   `infancia.sql`) e publique a função com `supabase functions deploy adesivos`.

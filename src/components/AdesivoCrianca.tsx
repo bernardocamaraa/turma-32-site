@@ -14,7 +14,7 @@ import { User } from 'lucide-react';
 export const MOLDURA = '/assets/adesivo-crianca-moldura.webp';
 /** The model's size, and where its photo circle is (measured on it). */
 const LADO = 1181;
-const FOTO = { cx: 581.5, cy: 594.5, r: 443 };
+const FOTO = { cx: 590.2, cy: 589.9, r: 442.5 };
 
 export function AdesivoCrianca({
   foto,

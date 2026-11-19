@@ -6,7 +6,7 @@
  */
 import { pngDoAdesivo } from '../components/AdesivoCrianca';
 import { lerChave, type Modelo, type Pedido } from './adesivos';
-import { pintar } from './cores';
+import { adesivoRedondo } from './redondo';
 
 // Everything in millimetres.
 export const FOLHA = { largura: 330, altura: 460 };
@@ -45,8 +45,8 @@ function carregar(src: string): Promise<HTMLImageElement> {
 }
 
 /**
- * A picture fitted in the 6 cm square, on white: the childhood sticker cut
- * to its circle; any other one whole, its longest side 6 cm.
+ * A 6 cm square on white with the round sticker in it: the childhood one
+ * cut to its circle; any other one already round (redondo.ts).
  */
 async function quadrado(src: string, redondo: boolean): Promise<string> {
   const img = await carregar(src);
@@ -64,10 +64,7 @@ async function quadrado(src: string, redondo: boolean): Promise<string> {
     ctx.drawImage(img, 0, 0, PIXELS, PIXELS);
     ctx.restore();
   } else {
-    const k = PIXELS / Math.max(img.naturalWidth, img.naturalHeight);
-    const w = img.naturalWidth * k;
-    const h = img.naturalHeight * k;
-    ctx.drawImage(img, (PIXELS - w) / 2, (PIXELS - h) / 2, w, h);
+    ctx.drawImage(img, 0, 0, PIXELS, PIXELS);
   }
   return canvas.toDataURL('image/jpeg', 0.95);
 }
@@ -123,7 +120,7 @@ export function itensDasFolhas(pedidos: Pedido[], modelos: Modelo[], fotos: Reco
         rotulo: modelo.nome,
         quantidade: q,
         redondo: false,
-        gerar: cores && modelo.camadas.length ? async () => deBlob(await pintar(imagem, modelo.camadas, cores), (url) => quadrado(url, false)) : () => quadrado(imagem, false),
+        gerar: async () => deBlob(await adesivoRedondo(imagem, PIXELS, modelo.camadas, cores), (url) => quadrado(url, false)),
       });
     }
   }

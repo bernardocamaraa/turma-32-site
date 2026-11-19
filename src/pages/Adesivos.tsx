@@ -30,7 +30,8 @@ import {
   type Modelo,
   type Pedido,
 } from '../lib/adesivos';
-import { analisarCores, CORES, nomeDaCor, pintar, type Camada, type CamadaSugerida } from '../lib/cores';
+import { analisarCores, CORES, nomeDaCor, type Camada, type CamadaSugerida } from '../lib/cores';
+import { adesivoRedondo } from '../lib/redondo';
 import { lerEleitor, salvarEleitor } from '../lib/eleitor';
 import { COLUNAS, DIAMETRO, FOLHA, folhasPara, itensDasFolhas, LINHAS, MARGEM, pdfDasFolhas, POR_FOLHA } from '../lib/folhas';
 import { useIsMobile } from '../lib/useViewport';
@@ -55,21 +56,29 @@ function ArteDoModelo({ modelo, foto, nome, cores }: { modelo: Modelo; foto: str
     );
   }
   if (!modelo.imagem) return null;
-  const estilo: CSSProperties = { maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', filter: 'drop-shadow(0 14px 22px rgba(0,0,0,.5))' };
-  return cores && modelo.camadas.length ? (
-    <ImagemNaCor imagem={modelo.imagem} camadas={modelo.camadas} cores={cores} alt={`${modelo.nome} (${descreverCores(modelo, cores)})`} style={estilo} />
-  ) : (
-    <img src={modelo.imagem} alt={modelo.nome} style={estilo} />
+  return (
+    <div style={{ width: '100%', borderRadius: '50%', boxShadow: '0 18px 40px rgba(0,0,0,.55)' }}>
+      <ImagemNaCor
+        imagem={modelo.imagem}
+        camadas={modelo.camadas}
+        cores={cores && modelo.camadas.length ? cores : null}
+        alt={cores && modelo.camadas.length ? `${modelo.nome} (${descreverCores(modelo, cores)})` : modelo.nome}
+      />
+    </div>
   );
 }
 
-/** A custom-colour sticker's picture, painted with `cores` (the original shows meanwhile). */
-function ImagemNaCor({ imagem, camadas, cores, alt, style }: { imagem: string; camadas: Camada[]; cores: string[]; alt: string; style?: CSSProperties }) {
+/**
+ * A sticker as it comes out: round, the picture fitted inside the circle on
+ * white (lib/redondo.ts), painted with `cores` when given. A plain white
+ * circle shows meanwhile.
+ */
+function ImagemNaCor({ imagem, camadas, cores, alt, style }: { imagem: string; camadas: Camada[]; cores: string[] | null; alt: string; style?: CSSProperties }) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
     let ativo = true;
     let criado: string | null = null;
-    pintar(imagem, camadas, cores).then(
+    adesivoRedondo(imagem, 600, camadas, cores).then(
       (blob) => {
         if (!ativo) return;
         criado = URL.createObjectURL(blob);
@@ -81,8 +90,12 @@ function ImagemNaCor({ imagem, camadas, cores, alt, style }: { imagem: string; c
       ativo = false;
       if (criado) URL.revokeObjectURL(criado);
     };
-  }, [imagem, JSON.stringify(camadas), cores.join()]);
-  return <img src={url ?? imagem} alt={alt} style={{ ...style, transition: 'opacity 200ms', opacity: url ? 1 : 0.6 }} />;
+  }, [imagem, JSON.stringify(camadas), cores?.join()]);
+  return url ? (
+    <img src={url} alt={alt} style={{ display: 'block', width: '100%', aspectRatio: '1', ...style }} />
+  ) : (
+    <div role="img" aria-label={alt} style={{ width: '100%', aspectRatio: '1', borderRadius: '50%', background: '#ffffff', opacity: 0.85, ...style }} />
+  );
 }
 
 /**
@@ -863,7 +876,7 @@ function FolhasDaGrafica({ pedidos, modelos, fotos }: { pedidos: Pedido[]; model
         </span>
         <span style={pequeno}>
           Cada adesivo com {DIAMETRO / 10} cm, margem de {MARGEM / 10} cm em volta da folha, {COLUNAS} × {LINHAS} = {POR_FOLHA} adesivos por folha. Um PDF no
-          tamanho real, uma página por folha. Os adesivos de criança saem redondos; os outros, com o lado maior em {DIAMETRO / 10} cm.
+          tamanho real, uma página por folha. Todos redondos: uma arte que não é redonda (como o 32) vai encaixada inteira dentro do círculo, sobre branco, com uma folga para o corte.
         </span>
         {semFoto.length > 0 ? (
           <span style={{ ...pequeno, color: 'var(--gild-300)' }}>
@@ -894,7 +907,7 @@ function LinhaGrafica({ chave, quantidade, modelos }: { chave: string; quantidad
     if (!modelo?.imagem || !cores) return;
     setBaixando(true);
     try {
-      salvarArquivo(await pintar(modelo.imagem, modelo.camadas, cores), `${slugDoNome(modelo.nome)}-${slugDoNome(cores.map((c) => nomeDaCor(c)).join('-'))}.png`);
+      salvarArquivo(await adesivoRedondo(modelo.imagem, 709, modelo.camadas, cores), `${slugDoNome(modelo.nome)}-${slugDoNome(cores.map((c) => nomeDaCor(c)).join('-'))}.png`);
     } catch (e) {
       window.alert(mensagemDe(e, 'Não foi possível baixar agora.'));
     } finally {
@@ -1007,7 +1020,7 @@ function ModelosDaComissao({
                   {m.crianca ? (
                     <AdesivoCrianca foto={null} nome="" />
                   ) : m.imagem ? (
-                    <img src={m.imagem} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                    <ImagemNaCor imagem={m.imagem} camadas={m.camadas} cores={null} alt="" />
                   ) : null}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 }}>
@@ -1235,7 +1248,7 @@ function FormModelo({
               }}
             >
               {previa ? (
-                <img src={previa} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                <ImagemNaCor imagem={previa} camadas={[]} cores={null} alt="" />
               ) : (
                 <>
                   <ImagePlus size={32} />
