@@ -30,7 +30,7 @@ import {
   type Modelo,
   type Pedido,
 } from '../lib/adesivos';
-import { analisarCores, CORES, nomeDaCor, type Camada, type CamadaSugerida } from '../lib/cores';
+import { analisarCores, ARCO_IRIS, CORES, fundoDaCor, nomeDaCor, type Camada, type CamadaSugerida } from '../lib/cores';
 import { adesivoRedondo } from '../lib/redondo';
 import { lerEleitor, salvarEleitor } from '../lib/eleitor';
 import { COLUNAS, DIAMETRO, FOLHA, folhasPara, itensDasFolhas, LINHAS, MARGEM, pdfDasFolhas, POR_FOLHA } from '../lib/folhas';
@@ -132,13 +132,11 @@ function Loja() {
   const [entrando, setEntrando] = useState(false);
   const [erroAcesso, setErroAcesso] = useState<string | null>(null);
   const [itens, setItens] = useState<Itens>({});
-  const [observacao, setObservacao] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
   function comecarDe(d: DadosAdesivos) {
     setItens(d.meu?.itens ?? {});
-    setObservacao(d.meu?.observacao ?? '');
   }
 
   async function carregar(com: AcessoAdesivos): Promise<DadosAdesivos | null> {
@@ -218,8 +216,7 @@ function Loja() {
   const quantidade = quantidadeDoPedido(itens);
   const preco = dados?.preco ?? null;
   const mudou =
-    JSON.stringify(Object.entries(itens).filter(([, q]) => q > 0).sort()) !== JSON.stringify(Object.entries(meu?.itens ?? {}).sort()) ||
-    observacao.trim() !== (meu?.observacao ?? '');
+    JSON.stringify(Object.entries(itens).filter(([, q]) => q > 0).sort()) !== JSON.stringify(Object.entries(meu?.itens ?? {}).sort());
 
   function mudar(id: string, q: number) {
     setErro(null);
@@ -351,18 +348,6 @@ function Loja() {
                 <p style={texto}>{meu ? 'Você tirou todos os adesivos. Salve para cancelar o pedido.' : 'Escolha a quantidade de cada adesivo acima.'}</p>
               )}
 
-              {!travado ? (
-                <Input
-                  label="Alguma observação? (opcional)"
-                  placeholder="Ex.: metade dos adesivos de criança em tamanho menor"
-                  value={observacao}
-                  maxLength={500}
-                  onChange={(e) => setObservacao(e.target.value)}
-                />
-              ) : meu?.observacao ? (
-                <p style={texto}>Observação: {meu.observacao}</p>
-              ) : null}
-
               {erro ? <span style={erroEstilo}>{erro}</span> : null}
 
               {!travado ? (
@@ -374,7 +359,7 @@ function Loja() {
                     carregando={salvando}
                     iconLeft={<Check size={18} />}
                     onClick={() =>
-                      agir({ acao: 'pedir', itens, observacao }, quantidade === 0 ? 'Pedido cancelado' : meu ? 'Pedido atualizado!' : 'Pedido feito!')
+                      agir({ acao: 'pedir', itens }, quantidade === 0 ? 'Pedido cancelado' : meu ? 'Pedido atualizado!' : 'Pedido feito!')
                     }
                   >
                     {quantidade === 0 && meu ? 'Cancelar pedido' : meu ? 'Atualizar pedido' : 'Fazer pedido'}
@@ -464,7 +449,7 @@ function Bolinha({ cor, tamanho = 28, marcada, rotulo, onClick }: { cor: string;
     height: tamanho,
     flex: '0 0 auto',
     borderRadius: '50%',
-    background: cor,
+    background: fundoDaCor(cor),
     border: 'none',
     padding: 0,
     boxShadow: marcada ? '0 0 0 2px var(--ink-850), 0 0 0 4px var(--chalk-050)' : 'inset 0 0 0 1px rgba(255,255,255,.18)',
@@ -479,7 +464,11 @@ function Paleta({ camada, cor, onCor }: { camada: Camada; cor: string; onCor: (c
   // The palette, minus a colour that's practically the original (the 32's black and "Preto").
   const canais = (c: string) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
   const perto = (a: string, b: string) => canais(a).reduce((s, v, i) => s + Math.abs(v - canais(b)[i]), 0) < 40;
-  const opcoes = [{ nome: 'Original', cor: camada.cor.toLowerCase() }, ...CORES.filter((c) => !perto(c.cor, camada.cor))];
+  const opcoes = [
+    { nome: 'Original', cor: camada.cor.toLowerCase() },
+    { nome: 'Arco-íris (LGBT)', cor: ARCO_IRIS },
+    ...CORES.filter((c) => !perto(c.cor, camada.cor)),
+  ];
   const outra = !opcoes.some((c) => c.cor === cor);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
@@ -505,7 +494,7 @@ function Paleta({ camada, cor, onCor }: { camada: Camada; cor: string; onCor: (c
           <input
             type="color"
             aria-label={`${camada.nome}: outra cor`}
-            value={cor}
+            value={cor.startsWith('#') ? cor : '#ffffff'}
             onChange={(e) => onCor(e.target.value.toLowerCase())}
             style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }}
           />

@@ -100,9 +100,13 @@ function lerCamadas(valor: unknown): Camada[] | string {
   return saida;
 }
 
-/** "abc" or "abc@#ff0000+#111111" → the model and its colours (lowercase), or null if malformed. */
+/**
+ * "abc" or "abc@#ff0000+#111111" → the model and its colours (lowercase), or
+ * null if malformed. A colour can also be "arcoiris": the LGBT pride flag's
+ * stripes across that part.
+ */
 function lerChave(chave: string): { id: string; cores: string[] | null } | null {
-  const m = /^([A-Za-z0-9_-]{1,64})(?:@(#[0-9a-fA-F]{6}(?:\+#[0-9a-fA-F]{6}){0,3}))?$/.exec(chave);
+  const m = /^([A-Za-z0-9_-]{1,64})(?:@((?:#[0-9a-fA-F]{6}|arcoiris)(?:\+(?:#[0-9a-fA-F]{6}|arcoiris)){0,3}))?$/i.exec(chave);
   return m ? { id: m[1], cores: m[2] ? m[2].toLowerCase().split('+') : null } : null;
 }
 type Enquadramento = { x: number; y: number; zoom: number };
