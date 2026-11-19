@@ -30,10 +30,12 @@ create table if not exists public.modelos_adesivos (
   criado_em timestamptz not null default now()
 );
 
--- Custom colour: the formando picks the colour of the picture's coloured
--- part (the 32's blue shadow, say); the order keeps each colour apart
--- ("<model id>@#rrggbb" in pedidos_adesivos.itens).
-alter table public.modelos_adesivos add column if not exists personalizavel boolean not null default false;
+-- Custom colour: the parts of the picture whose colour the formando picks
+-- (the 32's blue shadow, its black fill…), as found by the site when the
+-- committee uploads it (src/lib/cores.ts): [{ tipo, nome, cor, h0?, h1? }].
+-- Empty: sold as it is. The order keeps each combination apart
+-- ("<model id>@#rrggbb+#rrggbb", one colour per part, in pedidos_adesivos.itens).
+alter table public.modelos_adesivos add column if not exists camadas jsonb not null default '[]'::jsonb;
 
 insert into public.modelos_adesivos (id, nome, descricao, preco, crianca, ordem)
 values ('crianca', 'Você criança', 'O seu adesivo, com a sua foto de criança.', 5, true, 0)
@@ -54,7 +56,8 @@ on conflict (id) do nothing;
 create table if not exists public.pedidos_adesivos (
   formando text primary key references public.convidados_formando (formando) on update cascade on delete cascade,
   -- { "<model id>": <quantity> }, only models with a quantity above zero;
-  -- for a custom-colour model, one key per colour: "<model id>@#rrggbb".
+  -- for a custom-colour model, one key per combination of colours:
+  -- "<model id>@#rrggbb+#rrggbb" (one per part, in the model's order).
   itens jsonb not null default '{}'::jsonb check (jsonb_typeof(itens) = 'object'),
   observacao text check (char_length(observacao) <= 500),
   -- Set by the committee once the payment arrived; the formando can't

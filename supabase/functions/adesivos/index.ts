@@ -20,9 +20,9 @@
 //     (with `modelo`: id to change one, nome, descricao, preco, ativo,
 //     imagem) creates or changes it; `moverModelo` (`id`, `direcao` ±1)
 //     reorders; `apagarModelo` (`id`) deletes one no order has. A model
-//     with `personalizavel` lets the formando pick the colour of its
-//     coloured part: the order then has one key per colour,
-//     "<model id>@#rrggbb". Gets a link
+//     with `camadas` (parts of the picture, found by the site) lets the
+//     formando pick a colour for each: the order then has one key per
+//     combination, "<model id>@#rrggbb+#rrggbb". Gets a link
 //     to every formando's childhood photo (`fotos`), to download their
 //     stickers for printing.
 //
@@ -68,14 +68,37 @@ type LinhaModelo = {
   imagem: string | null;
   crianca: boolean;
   ativo: boolean;
-  personalizavel: boolean;
+  camadas: Camada[];
   ordem: number;
 };
 
-/** "abc" or "abc@#ff0000" → the model and the colour (lowercase), or null if malformed. */
-function lerChave(chave: string): { id: string; cor: string | null } | null {
-  const m = /^([A-Za-z0-9_-]{1,64})(?:@(#[0-9a-fA-F]{6}))?$/.exec(chave);
-  return m ? { id: m[1], cor: m[2]?.toLowerCase() ?? null } : null;
+type Camada = { tipo: 'matiz' | 'escuro' | 'claro'; nome: string; cor: string; h0?: number; h1?: number };
+
+/** The parts as sent by the committee, checked; or why they're refused. */
+function lerCamadas(valor: unknown): Camada[] | string {
+  if (valor === undefined || valor === null) return [];
+  if (!Array.isArray(valor) || valor.length > 4) return 'Partes de cor inválidas.';
+  const saida: Camada[] = [];
+  for (const c of valor as Record<string, unknown>[]) {
+    if (!c || !['matiz', 'escuro', 'claro'].includes(c.tipo as string)) return 'Partes de cor inválidas.';
+    const nome = typeof c.nome === 'string' ? c.nome.trim().slice(0, 30) : '';
+    if (!nome) return 'Dê um nome a cada parte que muda de cor.';
+    if (typeof c.cor !== 'string' || !/^#[0-9a-f]{6}$/i.test(c.cor)) return 'Partes de cor inválidas.';
+    const camada: Camada = { tipo: c.tipo as Camada['tipo'], nome, cor: c.cor.toLowerCase() };
+    if (c.tipo === 'matiz') {
+      if (typeof c.h0 !== 'number' || typeof c.h1 !== 'number' || c.h0 < 0 || c.h0 > 360 || c.h1 < 0 || c.h1 > 360) return 'Partes de cor inválidas.';
+      camada.h0 = c.h0;
+      camada.h1 = c.h1;
+    }
+    saida.push(camada);
+  }
+  return saida;
+}
+
+/** "abc" or "abc@#ff0000+#111111" → the model and its colours (lowercase), or null if malformed. */
+function lerChave(chave: string): { id: string; cores: string[] | null } | null {
+  const m = /^([A-Za-z0-9_-]{1,64})(?:@(#[0-9a-fA-F]{6}(?:\+#[0-9a-fA-F]{6}){0,3}))?$/.exec(chave);
+  return m ? { id: m[1], cores: m[2] ? m[2].toLowerCase().split('+') : null } : null;
 }
 type Linha = { formando: string; itens: Record<string, number>; observacao: string | null; pago: boolean; criado_em: string; atualizado_em: string };
 
@@ -132,7 +155,7 @@ Deno.serve(async (req) => {
     async function lerModelos(): Promise<LinhaModelo[]> {
       const { data, error } = await supabase
         .from('modelos_adesivos')
-        .select('id, nome, descricao, preco, imagem, crianca, ativo, personalizavel, ordem')
+        .select('id, nome, descricao, preco, imagem, crianca, ativo, camadas, ordem')
         .order('ordem')
         .order('criado_em');
       if (error) throw error;
@@ -158,15 +181,15 @@ Deno.serve(async (req) => {
         if (quantidade === 0) continue;
         const lida = lerChave(chaveBruta);
         if (!lida) return recusar('Pedido inválido.');
-        const chave = lida.cor ? `${lida.id}@${lida.cor}` : lida.id;
+        const chave = lida.cores ? `${lida.id}@${lida.cores.join('+')}` : lida.id;
         const m = modelos.find((x) => x.id === lida.id);
         // A hidden model stays in an order that already had it, at most as many.
         if (!m || (!m.ativo && !comissao && quantidade > (antes[chave] ?? 0))) {
           return recusar('Um dos adesivos do pedido não está mais à venda. Recarregue a página.');
         }
-        // A colour only on a custom-colour model (and it must have one).
-        if (!!lida.cor !== m.personalizavel && !(antes[chave] && quantidade <= antes[chave])) {
-          return recusar(m.personalizavel ? `Escolha a cor do adesivo "${m.nome}".` : `O adesivo "${m.nome}" não tem cor para escolher. Recarregue a página.`);
+        // One colour per part of a custom-colour model (none for the others).
+        if ((lida.cores?.length ?? 0) !== m.camadas.length && !(antes[chave] && quantidade <= antes[chave])) {
+          return recusar(m.camadas.length ? `Escolha as cores do adesivo "${m.nome}". Recarregue a página.` : `O adesivo "${m.nome}" não tem cor para escolher. Recarregue a página.`);
         }
         lidos[chave] = (lidos[chave] ?? 0) + quantidade;
         if (lidos[chave] > MAXIMO) return recusar(`A quantidade de cada adesivo vai de 0 a ${MAXIMO}.`);
@@ -211,12 +234,13 @@ Deno.serve(async (req) => {
       if (!Number.isFinite(preco) || preco < 0 || preco >= 10000) return recusar('O preço não parece certo.');
       const descricao = typeof m.descricao === 'string' && m.descricao.trim() ? m.descricao.trim().slice(0, 300) : null;
       const ativo = m.ativo !== false;
-      const personalizavel = m.personalizavel === true;
+      const camadas = lerCamadas(m.camadas);
+      if (typeof camadas === 'string') return recusar(camadas);
       const imagem = typeof m.imagem === 'string' && /^[0-9a-f-]{36}\.[a-z0-9]{1,5}$/.test(m.imagem) ? m.imagem : undefined;
       if (typeof m.id === 'string') {
         const existente = modelos.find((x) => x.id === m.id);
         if (!existente) return recusar('Esse adesivo não existe mais. Recarregue a página.');
-        const mudanca: Record<string, unknown> = { nome: nomeM, descricao, preco, ativo, personalizavel: existente.crianca ? false : personalizavel };
+        const mudanca: Record<string, unknown> = { nome: nomeM, descricao, preco, ativo, camadas: existente.crianca ? [] : camadas };
         if (imagem && !existente.crianca) mudanca.imagem = imagem;
         const { error } = await supabase.from('modelos_adesivos').update(mudanca).eq('id', m.id);
         if (error) throw error;
@@ -225,7 +249,7 @@ Deno.serve(async (req) => {
       } else {
         if (!imagem) return recusar('Escolha a imagem do adesivo.');
         const ordem = modelos.reduce((max, x) => Math.max(max, x.ordem), 0) + 1;
-        const { error } = await supabase.from('modelos_adesivos').insert({ nome: nomeM, descricao, preco, ativo, personalizavel, imagem, ordem });
+        const { error } = await supabase.from('modelos_adesivos').insert({ nome: nomeM, descricao, preco, ativo, camadas, imagem, ordem });
         if (error) throw error;
       }
     } else if (acao === 'moverModelo') {
@@ -260,7 +284,7 @@ Deno.serve(async (req) => {
     const urlImagem = (caminho: string | null) => (caminho ? supabase.storage.from(BUCKET).getPublicUrl(caminho).data.publicUrl : null);
     const modelosPagina = modelos
       .filter((m) => comissao || m.ativo)
-      .map((m) => ({ id: m.id, nome: m.nome, descricao: m.descricao, preco: Number(m.preco), imagem: urlImagem(m.imagem), crianca: m.crianca, ativo: m.ativo, personalizavel: m.personalizavel }));
+      .map((m) => ({ id: m.id, nome: m.nome, descricao: m.descricao, preco: Number(m.preco), imagem: urlImagem(m.imagem), crianca: m.crianca, ativo: m.ativo, camadas: m.camadas ?? [] }));
 
     if (!comissao && !voce) {
       // A number not on the list picks among the names that have none yet.
@@ -348,7 +372,7 @@ Deno.serve(async (req) => {
     const noPedido = new Set(Object.keys((meu?.itens ?? {}) as Record<string, number>).map((k) => lerChave(k)?.id));
     const modelosFormando = modelos
       .filter((m) => m.ativo || noPedido.has(m.id))
-      .map((m) => ({ id: m.id, nome: m.nome, descricao: m.descricao, preco: Number(m.preco), imagem: urlImagem(m.imagem), crianca: m.crianca, ativo: m.ativo, personalizavel: m.personalizavel }));
+      .map((m) => ({ id: m.id, nome: m.nome, descricao: m.descricao, preco: Number(m.preco), imagem: urlImagem(m.imagem), crianca: m.crianca, ativo: m.ativo, camadas: m.camadas ?? [] }));
 
     return json({
       comissao,

@@ -12,12 +12,10 @@ import { Popups, usePopup } from '../components/Popups';
 import {
   buscarAdesivos,
   chaveDe,
-  corDoAdesivo,
-  CORES,
+  descreverCores,
   descreverItem,
   enviarImagemAdesivo,
   lerChave,
-  nomeDaCor,
   MAXIMO_POR_MODELO,
   PIX,
   quantidadeDoPedido,
@@ -32,7 +30,9 @@ import {
   type Modelo,
   type Pedido,
 } from '../lib/adesivos';
+import { analisarCores, CORES, nomeDaCor, pintar, type Camada, type CamadaSugerida } from '../lib/cores';
 import { lerEleitor, salvarEleitor } from '../lib/eleitor';
+import { COLUNAS, DIAMETRO, FOLHA, folhasPara, itensDasFolhas, LINHAS, MARGEM, pdfDasFolhas, POR_FOLHA } from '../lib/folhas';
 import { useIsMobile } from '../lib/useViewport';
 
 const texto: CSSProperties = { fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)', margin: 0 };
@@ -46,7 +46,7 @@ const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um :
 const mensagemDe = (e: unknown, padrao: string) => (e instanceof Error ? e.message : padrao);
 
 /** The picture of a model: the formando's own sticker for the childhood one, the committee's picture for the rest. */
-function ArteDoModelo({ modelo, foto, nome, cor }: { modelo: Modelo; foto: string | null; nome: string; cor?: string | null }) {
+function ArteDoModelo({ modelo, foto, nome, cores }: { modelo: Modelo; foto: string | null; nome: string; cores?: string[] | null }) {
   if (modelo.crianca) {
     return (
       <div style={{ width: '100%', borderRadius: '50%', boxShadow: '0 18px 40px rgba(0,0,0,.55)' }}>
@@ -56,16 +56,20 @@ function ArteDoModelo({ modelo, foto, nome, cor }: { modelo: Modelo; foto: strin
   }
   if (!modelo.imagem) return null;
   const estilo: CSSProperties = { maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', filter: 'drop-shadow(0 14px 22px rgba(0,0,0,.5))' };
-  return cor ? <ImagemNaCor imagem={modelo.imagem} cor={cor} alt={`${modelo.nome} em ${nomeDaCor(cor)}`} style={estilo} /> : <img src={modelo.imagem} alt={modelo.nome} style={estilo} />;
+  return cores && modelo.camadas.length ? (
+    <ImagemNaCor imagem={modelo.imagem} camadas={modelo.camadas} cores={cores} alt={`${modelo.nome} (${descreverCores(modelo, cores)})`} style={estilo} />
+  ) : (
+    <img src={modelo.imagem} alt={modelo.nome} style={estilo} />
+  );
 }
 
-/** A custom-colour sticker's picture, painted in `cor` (the original shows meanwhile). */
-function ImagemNaCor({ imagem, cor, alt, style }: { imagem: string; cor: string; alt: string; style?: CSSProperties }) {
+/** A custom-colour sticker's picture, painted with `cores` (the original shows meanwhile). */
+function ImagemNaCor({ imagem, camadas, cores, alt, style }: { imagem: string; camadas: Camada[]; cores: string[]; alt: string; style?: CSSProperties }) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
     let ativo = true;
     let criado: string | null = null;
-    corDoAdesivo(imagem, cor).then(
+    pintar(imagem, camadas, cores).then(
       (blob) => {
         if (!ativo) return;
         criado = URL.createObjectURL(blob);
@@ -77,7 +81,7 @@ function ImagemNaCor({ imagem, cor, alt, style }: { imagem: string; cor: string;
       ativo = false;
       if (criado) URL.revokeObjectURL(criado);
     };
-  }, [imagem, cor]);
+  }, [imagem, JSON.stringify(camadas), cores.join()]);
   return <img src={url ?? imagem} alt={alt} style={{ ...style, transition: 'opacity 200ms', opacity: url ? 1 : 0.6 }} />;
 }
 
@@ -200,7 +204,7 @@ function Loja() {
         <h1 className="titulo-musica">Loja de adesivos.</h1>
         <p style={{ ...texto, maxWidth: '38rem', fontSize: 'var(--fs-lead, 19px)' }}>
           No baile, a turma distribui adesivos. Escolha quais modelos você quer e quantos de cada, inclusive o seu adesivo de criança, feito com a
-          sua foto.
+          sua foto. Todos os adesivos têm 6 cm.
         </p>
       </header>
 
@@ -271,7 +275,9 @@ function Loja() {
                   {ordenarItens(itens, modelos).map(([chave, q]) => (
                     <div key={chave} style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-4)', fontSize: 'var(--fs-body)' }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                        {lerChave(chave).cor ? <Bolinha cor={lerChave(chave).cor!} tamanho={14} /> : null}
+                        {(lerChave(chave).cores ?? []).map((c, i) => (
+                          <Bolinha key={i} cor={c} tamanho={14} />
+                        ))}
                         {descreverItem(chave, q, modelos)}
                       </span>
                       <span style={{ color: 'var(--text-muted)' }}>{reais(totalDoPedido({ [chave]: q }, modelos))}</span>
@@ -419,7 +425,48 @@ function Bolinha({ cor, tamanho = 28, marcada, rotulo, onClick }: { cor: string;
   return onClick ? <button type="button" aria-label={rotulo} aria-pressed={marcada} title={rotulo} style={estilo} onClick={onClick} /> : <span aria-hidden style={{ ...estilo, display: 'inline-block' }} />;
 }
 
-/** One model on sale: its art, what it is, the price and how many (of each colour, for a custom-colour one). */
+/** One row of colours to pick for a part of the sticker: its original colour first, the palette, and any other. */
+function Paleta({ camada, cor, onCor }: { camada: Camada; cor: string; onCor: (c: string) => void }) {
+  // The palette, minus a colour that's practically the original (the 32's black and "Preto").
+  const canais = (c: string) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+  const perto = (a: string, b: string) => canais(a).reduce((s, v, i) => s + Math.abs(v - canais(b)[i]), 0) < 40;
+  const opcoes = [{ nome: 'Original', cor: camada.cor.toLowerCase() }, ...CORES.filter((c) => !perto(c.cor, camada.cor))];
+  const outra = !opcoes.some((c) => c.cor === cor);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+      <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>
+        {camada.nome}: <strong style={{ color: 'var(--text-primary)' }}>{nomeDaCor(cor, camada)}</strong>
+      </span>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+        {opcoes.map((c) => (
+          <Bolinha key={c.cor} cor={c.cor} rotulo={`${camada.nome}: ${c.nome}`} marcada={cor === c.cor} onClick={() => onCor(c.cor)} />
+        ))}
+        <label
+          title="Outra cor"
+          style={{
+            position: 'relative',
+            width: 28,
+            height: 28,
+            borderRadius: '50%',
+            cursor: 'pointer',
+            background: 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)',
+            boxShadow: outra ? '0 0 0 2px var(--ink-850), 0 0 0 4px var(--chalk-050)' : 'inset 0 0 0 1px rgba(255,255,255,.18)',
+          }}
+        >
+          <input
+            type="color"
+            aria-label={`${camada.nome}: outra cor`}
+            value={cor}
+            onChange={(e) => onCor(e.target.value.toLowerCase())}
+            style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }}
+          />
+        </label>
+      </div>
+    </div>
+  );
+}
+
+/** One model on sale: its art, what it is, the price and how many (of each combination of colours, for a custom-colour one). */
 function CartaoModelo({
   modelo,
   voce,
@@ -437,14 +484,17 @@ function CartaoModelo({
 }) {
   const [baixando, setBaixando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
-  // The colours of this model already in the order.
-  const coresNoPedido = Object.entries(itens)
-    .filter(([k, q]) => q > 0 && lerChave(k).id === modelo.id && lerChave(k).cor)
-    .map(([k, q]) => ({ cor: lerChave(k).cor!, q }));
-  const [cor, setCor] = useState<string | null>(() => (modelo.personalizavel ? (coresNoPedido[0]?.cor ?? CORES[0].cor) : null));
-  const chave = chaveDe(modelo.id, cor);
+  const colorido = modelo.camadas.length > 0;
+  // The combinations of this model already in the order.
+  const combinacoes = Object.entries(itens)
+    .filter(([k, q]) => q > 0 && lerChave(k).id === modelo.id && lerChave(k).cores)
+    .map(([k, q]) => ({ chave: k, cores: lerChave(k).cores!, q }));
+  const [cores, setCores] = useState<string[] | null>(() =>
+    colorido ? (combinacoes[0]?.cores ?? modelo.camadas.map((c) => c.cor.toLowerCase())) : null,
+  );
+  const chave = chaveDe(modelo.id, cores);
   const quantidade = itens[chave] ?? 0;
-  const algum = modelo.personalizavel ? coresNoPedido.length > 0 : quantidade > 0;
+  const algum = colorido ? combinacoes.length > 0 : quantidade > 0;
 
   async function baixar() {
     if (!foto) return;
@@ -476,12 +526,12 @@ function CartaoModelo({
           <Badge tone="gild" style={{ position: 'absolute', top: 16, left: 16 }}>
             Só seu
           </Badge>
-        ) : modelo.personalizavel ? (
+        ) : colorido ? (
           <Badge tone="ice" style={{ position: 'absolute', top: 16, left: 16 }}>
-            Escolha a cor
+            Escolha {modelo.camadas.length > 1 ? 'as cores' : 'a cor'}
           </Badge>
         ) : null}
-        <ArteDoModelo modelo={modelo} foto={foto} nome={voce} cor={cor} />
+        <ArteDoModelo modelo={modelo} foto={foto} nome={voce} cores={cores} />
       </div>
 
       <div style={{ padding: 'var(--space-5) var(--space-6) var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', flex: 1 }}>
@@ -499,45 +549,18 @@ function CartaoModelo({
           ) : null}
         </div>
 
-        {modelo.personalizavel && cor ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-            <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>
-              Cor: <strong style={{ color: 'var(--text-primary)' }}>{nomeDaCor(cor)}</strong>
-            </span>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
-              {CORES.map((c) => (
-                <Bolinha key={c.cor} cor={c.cor} rotulo={c.nome} marcada={cor === c.cor} onClick={() => setCor(c.cor)} />
-              ))}
-              <label
-                title="Outra cor"
-                style={{
-                  position: 'relative',
-                  width: 28,
-                  height: 28,
-                  borderRadius: '50%',
-                  cursor: 'pointer',
-                  background: 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)',
-                  boxShadow: !CORES.some((c) => c.cor === cor) ? '0 0 0 2px var(--ink-850), 0 0 0 4px var(--chalk-050)' : 'inset 0 0 0 1px rgba(255,255,255,.18)',
-                }}
-              >
-                <input
-                  type="color"
-                  aria-label="Outra cor"
-                  value={cor}
-                  onChange={(e) => setCor(e.target.value.toLowerCase())}
-                  style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }}
-                />
-              </label>
-            </div>
-          </div>
-        ) : null}
+        {colorido && cores
+          ? modelo.camadas.map((camada, i) => (
+              <Paleta key={i} camada={camada} cor={cores[i]} onCor={(c) => setCores(cores.map((x, k) => (k === i ? c : x)))} />
+            ))
+          : null}
 
         <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
           <Quantidade
             valor={quantidade}
             travado={travado}
             maximo={modelo.ativo ? MAXIMO_POR_MODELO : quantidade}
-            rotulo={cor ? `${modelo.nome} em ${nomeDaCor(cor)}` : modelo.nome}
+            rotulo={cores ? `${modelo.nome} (${descreverCores(modelo, cores)})` : modelo.nome}
             onMudar={(q) => onMudar(chave, q)}
           />
           {modelo.crianca && foto ? (
@@ -547,31 +570,37 @@ function CartaoModelo({
           ) : null}
         </div>
 
-        {modelo.personalizavel && coresNoPedido.length > 0 ? (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-            {coresNoPedido.map((c) => (
-              <button
-                key={c.cor}
-                type="button"
-                onClick={() => setCor(c.cor)}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  height: 30,
-                  padding: '0 12px 0 6px',
-                  borderRadius: 'var(--radius-pill)',
-                  border: 'none',
-                  cursor: 'pointer',
-                  background: c.cor === cor ? 'rgba(245,245,247,.18)' : 'rgba(245,245,247,.08)',
-                  color: 'var(--chalk-050)',
-                  fontSize: 13,
-                }}
-              >
-                <Bolinha cor={c.cor} tamanho={18} />
-                {nomeDaCor(c.cor)} × {c.q}
-              </button>
-            ))}
+        {combinacoes.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+            <span style={pequeno}>No seu pedido (toque para mudar a quantidade):</span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+              {combinacoes.map((c) => (
+                <button
+                  key={c.chave}
+                  type="button"
+                  onClick={() => setCores(c.cores)}
+                  title={descreverCores(modelo, c.cores)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    height: 30,
+                    padding: '0 12px 0 6px',
+                    borderRadius: 'var(--radius-pill)',
+                    border: 'none',
+                    cursor: 'pointer',
+                    background: c.chave === chave ? 'rgba(245,245,247,.18)' : 'rgba(245,245,247,.08)',
+                    color: 'var(--chalk-050)',
+                    fontSize: 13,
+                  }}
+                >
+                  {c.cores.map((cor, i) => (
+                    <Bolinha key={i} cor={cor} tamanho={18} />
+                  ))}
+                  <span style={{ marginLeft: 2 }}>× {c.q}</span>
+                </button>
+              ))}
+            </div>
           </div>
         ) : null}
         {erro ? <span style={erroEstilo}>{erro}</span> : null}
@@ -694,9 +723,8 @@ export function AdesivosComissao({ codigo }: { codigo: string }) {
   // For the print shop: one line per model, and per colour for a custom-colour one.
   const somados: Itens = {};
   for (const p of pedidos) for (const [k, q] of Object.entries(p.itens)) somados[k] = (somados[k] ?? 0) + q;
-  for (const m of modelos) if (!m.personalizavel && !(m.id in somados)) somados[m.id] = 0;
   const linhasGrafica = ordenarItens(somados, modelos).concat(
-    modelos.filter((m) => !m.personalizavel && !somados[m.id]).map((m): [string, number] => [m.id, 0]),
+    modelos.filter((m) => m.camadas.length === 0 && !somados[m.id]).map((m): [string, number] => [m.id, 0]),
   );
   const totalAdesivos = Object.values(somados).reduce((s, q) => s + q, 0);
 
@@ -778,6 +806,8 @@ export function AdesivosComissao({ codigo }: { codigo: string }) {
         ))}
       </Card>
 
+      <FolhasDaGrafica pedidos={pedidos} modelos={modelos} fotos={dados.fotos ?? {}} />
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
         <span style={titulo}>Pedidos · {pedidos.length}</span>
         {pedidos.length === 0 ? <p style={texto}>Ninguém pediu ainda.</p> : null}
@@ -801,16 +831,70 @@ export function AdesivosComissao({ codigo }: { codigo: string }) {
   );
 }
 
+/** The print-shop PDF: every sticker ordered, 6 cm, on 33 × 46 cm sheets with a 3 cm margin. */
+function FolhasDaGrafica({ pedidos, modelos, fotos }: { pedidos: Pedido[]; modelos: Modelo[]; fotos: Record<string, string> }) {
+  const [linhaDeCorte, setLinhaDeCorte] = useState(false);
+  const [gerando, setGerando] = useState<string | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+  const { itens, semFoto } = itensDasFolhas(pedidos, modelos, fotos);
+  const adesivos = itens.reduce((s, i) => s + i.quantidade, 0);
+  const folhas = folhasPara(adesivos);
+
+  async function gerar() {
+    setErro(null);
+    setGerando('Começando…');
+    try {
+      salvarArquivo(await pdfDasFolhas(itens, { linhaDeCorte, aoAvancar: setGerando }), 'adesivos-turma-32-folhas.pdf');
+    } catch (e) {
+      setErro(mensagemDe(e, 'Não foi possível gerar as folhas agora.'));
+    } finally {
+      setGerando(null);
+    }
+  }
+
+  return (
+    <Card padding="var(--space-6) var(--space-7)">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+        <span style={rotuloSecao}>Arquivo para a gráfica</span>
+        <span style={{ fontSize: 'var(--fs-body)' }}>
+          {adesivos === 0
+            ? 'Nenhum adesivo pedido ainda.'
+            : `${plural(adesivos, 'adesivo', 'adesivos')} em ${plural(folhas, 'folha', 'folhas')} de ${FOLHA.largura / 10} × ${FOLHA.altura / 10} cm.`}
+        </span>
+        <span style={pequeno}>
+          Cada adesivo com {DIAMETRO / 10} cm, margem de {MARGEM / 10} cm em volta da folha, {COLUNAS} × {LINHAS} = {POR_FOLHA} adesivos por folha. Um PDF no
+          tamanho real, uma página por folha. Os adesivos de criança saem redondos; os outros, com o lado maior em {DIAMETRO / 10} cm.
+        </span>
+        {semFoto.length > 0 ? (
+          <span style={{ ...pequeno, color: 'var(--gild-300)' }}>
+            Fora do arquivo, porque ainda não têm foto de criança no site: {semFoto.join(', ')}.
+          </span>
+        ) : null}
+        <label style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', cursor: 'pointer', fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>
+          <input type="checkbox" checked={linhaDeCorte} onChange={(e) => setLinhaDeCorte(e.target.checked)} style={{ width: 18, height: 18, accentColor: 'var(--gild-400)' }} />
+          Desenhar a linha de corte (um círculo fino de {DIAMETRO / 10} cm em volta de cada adesivo)
+        </label>
+        {erro ? <span style={erroEstilo}>{erro}</span> : null}
+        <div>
+          <Button variant="gild" disabled={adesivos === 0} carregando={!!gerando} iconLeft={<Download size={16} />} onClick={gerar}>
+            {gerando ?? 'Baixar folhas (PDF)'}
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 /** One line of the print-shop list; a coloured one can be downloaded in its colour. */
 function LinhaGrafica({ chave, quantidade, modelos }: { chave: string; quantidade: number; modelos: Modelo[] }) {
-  const { id, cor } = lerChave(chave);
+  const { id, cores } = lerChave(chave);
   const modelo = modelos.find((m) => m.id === id);
   const [baixando, setBaixando] = useState(false);
   async function baixar() {
-    if (!modelo?.imagem || !cor) return;
+    if (!modelo?.imagem || !cores) return;
     setBaixando(true);
     try {
-      salvarArquivo(await corDoAdesivo(modelo.imagem, cor), `${slugDoNome(modelo.nome)}-${slugDoNome(nomeDaCor(cor))}.png`);
+      salvarArquivo(await pintar(modelo.imagem, modelo.camadas, cores), `${slugDoNome(modelo.nome)}-${slugDoNome(cores.map((c) => nomeDaCor(c)).join('-'))}.png`);
     } catch (e) {
       window.alert(mensagemDe(e, 'Não foi possível baixar agora.'));
     } finally {
@@ -830,9 +914,11 @@ function LinhaGrafica({ chave, quantidade, modelos }: { chave: string; quantidad
       }}
     >
       <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-        {cor ? <Bolinha cor={cor} tamanho={16} /> : null}
+        {(cores ?? []).map((c, i) => (
+          <Bolinha key={i} cor={c} tamanho={16} />
+        ))}
         {descreverItem(chave, 1, modelos).replace(/^1× /, '')}
-        {cor && modelo?.imagem ? (
+        {cores && modelo?.imagem ? (
           <Button variant="ghost" size="sm" style={{ height: 26 }} carregando={baixando} iconLeft={<Download size={14} />} onClick={baixar}>
             Arquivo nessa cor
           </Button>
@@ -928,7 +1014,7 @@ function ModelosDaComissao({
                   <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600 }}>{m.nome}</span>
                     {!m.ativo ? <Badge>Escondido</Badge> : null}
-                    {m.personalizavel ? <Badge tone="ice">Cor personalizada</Badge> : null}
+                    {m.camadas.length ? <Badge tone="ice">Cor personalizada</Badge> : null}
                   </div>
                   <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--gild-300)' }}>{reais(m.preco)}</span>
                   <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', marginTop: 4 }}>
@@ -942,7 +1028,7 @@ function ModelosDaComissao({
                       carregando={salvando === `ativo-${m.id}`}
                       onClick={() =>
                         agir(
-                          { acao: 'salvarModelo', modelo: { id: m.id, nome: m.nome, descricao: m.descricao ?? '', preco: m.preco, ativo: !m.ativo, personalizavel: m.personalizavel } },
+                          { acao: 'salvarModelo', modelo: { id: m.id, nome: m.nome, descricao: m.descricao ?? '', preco: m.preco, ativo: !m.ativo, camadas: m.camadas } },
                           `ativo-${m.id}`,
                         )
                       }
@@ -1011,7 +1097,31 @@ function BotaoSeta({ rotulo, desativado, onClick, children }: { rotulo: string; 
   );
 }
 
-/** Adds a sticker (picture, name, description, price) or changes one. */
+/** The same part in two lists (a saved one and one found again): same kind, and for a colour, overlapping hues. */
+function mesmaCamada(a: Camada, b: Camada): boolean {
+  if (a.tipo !== b.tipo) return false;
+  if (a.tipo !== 'matiz') return true;
+  const meio = (c: Camada) => (c.h0! <= c.h1! ? (c.h0! + c.h1!) / 2 : ((c.h0! + c.h1! + 360) / 2) % 360);
+  const d = Math.abs(meio(a) - meio(b));
+  return Math.min(d, 360 - d) < 30;
+}
+
+type CamadaNoForm = CamadaSugerida & { marcada: boolean };
+
+/** Sample colours to show what the chosen parts look like changed. */
+const AMOSTRAS = [
+  ['#e0262b', '#111111', '#ffffff'],
+  ['#22b05a', '#2f6fd6', '#ffffff'],
+  ['#ff5fa2', '#8a4fe0', '#ffffff'],
+  ['#ffd21f', '#e0262b', '#111111'],
+];
+
+/**
+ * Adds a sticker (picture, name, description, price) or changes one. As
+ * soon as the picture is in, the site looks at its colours and suggests
+ * which parts the class could pick the colour of — ticked when it looks
+ * good, with a preview; the committee decides.
+ */
 function FormModelo({
   codigo,
   modelo,
@@ -1023,16 +1133,20 @@ function FormModelo({
   modelo?: Modelo;
   salvando: boolean;
   onCancelar: () => void;
-  onSalvar: (m: { nome: string; descricao: string; preco: number; ativo: boolean; personalizavel: boolean; imagem?: string }) => Promise<void>;
+  onSalvar: (m: { nome: string; descricao: string; preco: number; ativo: boolean; camadas: Camada[]; imagem?: string }) => Promise<void>;
 }) {
   const mobile = useIsMobile();
   const entrada = useRef<HTMLInputElement>(null);
   const [nome, setNome] = useState(modelo?.nome ?? '');
   const [descricao, setDescricao] = useState(modelo?.descricao ?? '');
   const [preco, setPreco] = useState(modelo ? modelo.preco.toFixed(2).replace('.', ',') : '');
-  const [personalizavel, setPersonalizavel] = useState(modelo?.personalizavel ?? false);
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [previa, setPrevia] = useState<string | null>(modelo?.imagem ?? null);
+  const [analisando, setAnalisando] = useState(false);
+  const [resumo, setResumo] = useState<string | null>(null);
+  const [camadas, setCamadas] = useState<CamadaNoForm[]>(() =>
+    (modelo?.camadas ?? []).map((c) => ({ ...c, parte: 0, sugerida: true, motivo: '', marcada: true })),
+  );
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -1043,16 +1157,45 @@ function FormModelo({
     return () => URL.revokeObjectURL(url);
   }, [arquivo]);
 
+  // A new picture (or the saved one, when editing): look at its colours.
+  useEffect(() => {
+    if (!previa || modelo?.crianca) return;
+    let ativo = true;
+    setAnalisando(true);
+    analisarCores(previa)
+      .then((a) => {
+        if (!ativo) return;
+        setResumo(a.resumo);
+        // Editing with the same picture: what was saved stays ticked (and named); a new picture starts from the suggestion.
+        const salvas = !arquivo ? (modelo?.camadas ?? []) : [];
+        setCamadas(
+          a.camadas.map((c) => {
+            const salva = salvas.find((s) => mesmaCamada(s, c));
+            return salva ? { ...c, nome: salva.nome, marcada: true } : { ...c, marcada: !modelo || arquivo ? c.sugerida : false };
+          }),
+        );
+      })
+      .catch((e) => ativo && setResumo(mensagemDe(e, 'Não foi possível analisar as cores da imagem.')))
+      .finally(() => ativo && setAnalisando(false));
+    return () => {
+      ativo = false;
+    };
+  }, [previa]);
+
+  const escolhidas = camadas.filter((c) => c.marcada);
+  const paraSalvar: Camada[] = escolhidas.map(({ tipo, nome, cor, h0, h1 }) => (tipo === 'matiz' ? { tipo, nome: nome.trim(), cor, h0, h1 } : { tipo, nome: nome.trim(), cor }));
+
   async function salvar() {
     const valor = lerPreco(preco);
     if (!nome.trim()) return setErro('Dê um nome ao adesivo.');
     if (valor === null) return setErro('Digite o preço, por exemplo 5,00.');
     if (!modelo?.crianca && !arquivo && !modelo?.imagem) return setErro('Escolha a imagem do adesivo.');
+    if (paraSalvar.some((c) => !c.nome)) return setErro('Dê um nome a cada parte que muda de cor.');
     setErro(null);
     setEnviando(true);
     try {
       const imagem = arquivo ? await enviarImagemAdesivo(codigo, arquivo) : undefined;
-      await onSalvar({ nome: nome.trim(), descricao: descricao.trim(), preco: valor, ativo: modelo?.ativo ?? true, personalizavel: !modelo?.crianca && personalizavel, imagem });
+      await onSalvar({ nome: nome.trim(), descricao: descricao.trim(), preco: valor, ativo: modelo?.ativo ?? true, camadas: modelo?.crianca ? [] : paraSalvar, imagem });
     } catch (e) {
       setErro(mensagemDe(e, 'Não foi possível salvar agora.'));
     } finally {
@@ -1062,100 +1205,138 @@ function FormModelo({
 
   return (
     <Card accent padding="var(--space-6)">
-      <div style={{ display: 'flex', gap: 'var(--space-6)', flexDirection: mobile ? 'column' : 'row' }}>
-        {modelo?.crianca ? (
-          <div style={{ width: mobile ? '60%' : 200, flex: '0 0 auto', alignSelf: mobile ? 'center' : 'flex-start' }}>
-            <AdesivoCrianca foto={null} nome="" />
-            <p style={{ ...pequeno, marginTop: 'var(--space-3)', textAlign: 'center' }}>Cada formando vê o seu, com a foto de criança dele.</p>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => entrada.current?.click()}
-            style={{
-              width: mobile ? '100%' : 200,
-              aspectRatio: '1',
-              flex: '0 0 auto',
-              alignSelf: 'flex-start',
-              borderRadius: 'var(--radius-md)',
-              border: '1px dashed var(--stroke-muted)',
-              background: 'var(--ink-800)',
-              color: 'var(--text-muted)',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 'var(--space-3)',
-              cursor: 'pointer',
-              padding: 'var(--space-4)',
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+        <div style={{ display: 'flex', gap: 'var(--space-6)', flexDirection: mobile ? 'column' : 'row' }}>
+          {modelo?.crianca ? (
+            <div style={{ width: mobile ? '60%' : 200, flex: '0 0 auto', alignSelf: mobile ? 'center' : 'flex-start' }}>
+              <AdesivoCrianca foto={null} nome="" />
+              <p style={{ ...pequeno, marginTop: 'var(--space-3)', textAlign: 'center' }}>Cada formando vê o seu, com a foto de criança dele.</p>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => entrada.current?.click()}
+              style={{
+                width: mobile ? '100%' : 200,
+                aspectRatio: '1',
+                flex: '0 0 auto',
+                alignSelf: 'flex-start',
+                borderRadius: 'var(--radius-md)',
+                border: '1px dashed var(--stroke-muted)',
+                background: 'var(--ink-800)',
+                color: 'var(--text-muted)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 'var(--space-3)',
+                cursor: 'pointer',
+                padding: 'var(--space-4)',
+              }}
+            >
+              {previa ? (
+                <img src={previa} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+              ) : (
+                <>
+                  <ImagePlus size={32} />
+                  <span style={{ fontSize: 'var(--fs-body-sm)' }}>Escolher imagem</span>
+                </>
+              )}
+            </button>
+          )}
+          <input
+            ref={entrada}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) setArquivo(f);
+              e.target.value = '';
             }}
-          >
-            {previa ? (
-              <img src={previa} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
-            ) : (
-              <>
-                <ImagePlus size={32} />
-                <span style={{ fontSize: 'var(--fs-body-sm)' }}>Escolher imagem</span>
-              </>
-            )}
-          </button>
-        )}
-        <input
-          ref={entrada}
-          type="file"
-          accept="image/*"
-          hidden
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) setArquivo(f);
-            e.target.value = '';
-          }}
-        />
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', flex: 1 }}>
-          <Input label="Nome" placeholder="Ex.: Logo da Turma 32" value={nome} maxLength={80} onChange={(e) => setNome(e.target.value)} />
-          <Input label="Descrição (opcional)" placeholder="Ex.: 7 cm, recortado" value={descricao} maxLength={300} onChange={(e) => setDescricao(e.target.value)} />
-          <Input label="Preço por adesivo (R$)" placeholder="5,00" inputMode="decimal" value={preco} onChange={(e) => setPreco(e.target.value)} />
-          {!modelo?.crianca ? (
-            <label style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={personalizavel}
-                onChange={(e) => setPersonalizavel(e.target.checked)}
-                style={{ width: 20, height: 20, marginTop: 2, accentColor: 'var(--gild-400)', flex: '0 0 auto' }}
-              />
-              <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontSize: 'var(--fs-body)' }}>Cor personalizada</span>
-                <span style={pequeno}>
-                  O formando escolhe a cor da parte colorida da imagem (no 32, a sombra azul). Preto, branco e cinza continuam iguais.
-                </span>
-              </span>
-            </label>
-          ) : null}
-          {personalizavel && previa && !modelo?.crianca ? (
-            <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', flexWrap: 'wrap' }}>
-              {CORES.slice(1, 6).map((c) => (
-                <div key={c.cor} style={{ width: 56, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <ImagemNaCor imagem={previa} cor={c.cor} alt={c.nome} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
-                </div>
-              ))}
-            </div>
-          ) : null}
-          {!modelo?.crianca && previa ? (
-            <div>
-              <Button variant="ghost" size="sm" style={{ padding: 0 }} onClick={() => entrada.current?.click()}>
-                Trocar imagem
-              </Button>
-            </div>
-          ) : null}
-          {erro ? <span style={erroEstilo}>{erro}</span> : null}
-          <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-            <Button variant="gild" carregando={enviando || salvando} onClick={salvar}>
-              {modelo ? 'Salvar' : 'Adicionar à loja'}
-            </Button>
-            <Button variant="ghost" onClick={onCancelar}>
-              Cancelar
-            </Button>
+          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', flex: 1 }}>
+            <Input label="Nome" placeholder="Ex.: Logo da Turma 32" value={nome} maxLength={80} onChange={(e) => setNome(e.target.value)} />
+            <Input label="Descrição (opcional)" placeholder="Ex.: recortado no formato do 32" value={descricao} maxLength={300} onChange={(e) => setDescricao(e.target.value)} />
+            <Input label="Preço por adesivo (R$)" placeholder="5,00" inputMode="decimal" value={preco} onChange={(e) => setPreco(e.target.value)} />
+            {!modelo?.crianca && previa ? (
+              <div>
+                <Button variant="ghost" size="sm" style={{ padding: 0 }} onClick={() => entrada.current?.click()}>
+                  Trocar imagem
+                </Button>
+              </div>
+            ) : null}
           </div>
+        </div>
+
+        {!modelo?.crianca && previa ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', padding: 'var(--space-5)', borderRadius: 'var(--radius-md)', background: 'var(--ink-800)' }}>
+            <span style={{ ...titulo, fontSize: 'var(--fs-body)' }}>Cores que a turma pode escolher</span>
+            {analisando ? <span style={pequeno}>Analisando as cores da imagem…</span> : resumo ? <p style={{ ...texto, fontSize: 'var(--fs-body-sm)' }}>{resumo}</p> : null}
+            {camadas.map((c, i) => (
+              <div key={i} style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'flex-start' }}>
+                <input
+                  type="checkbox"
+                  aria-label={`Deixar escolher a cor: ${c.nome}`}
+                  checked={c.marcada}
+                  onChange={(e) => setCamadas(camadas.map((x, k) => (k === i ? { ...x, marcada: e.target.checked } : x)))}
+                  style={{ width: 20, height: 20, marginTop: 10, accentColor: 'var(--gild-400)', flex: '0 0 auto' }}
+                />
+                <Bolinha cor={c.cor} tamanho={24} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <input
+                      aria-label="Nome da parte"
+                      value={c.nome}
+                      maxLength={30}
+                      onChange={(e) => setCamadas(camadas.map((x, k) => (k === i ? { ...x, nome: e.target.value } : x)))}
+                      style={{
+                        height: 36,
+                        padding: '0 12px',
+                        fontSize: 'var(--fs-body)',
+                        color: 'var(--chalk-050)',
+                        background: 'var(--ink-850)',
+                        border: '1px solid var(--stroke-hair)',
+                        borderRadius: 'var(--radius-sm)',
+                        minWidth: 0,
+                        width: 220,
+                      }}
+                    />
+                    {c.sugerida && c.parte > 0 ? <Badge tone="gild">Sugerido</Badge> : null}
+                  </div>
+                  {c.motivo ? <span style={pequeno}>{c.motivo}</span> : null}
+                </div>
+              </div>
+            ))}
+            {escolhidas.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                <span style={pequeno}>Assim fica com algumas cores (o nome de cada parte é o que a turma vê na loja):</span>
+                <div style={{ display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
+                  {AMOSTRAS.map((amostra, k) => (
+                    <div key={k} style={{ width: 84, height: 84, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <ImagemNaCor
+                        imagem={previa}
+                        camadas={paraSalvar}
+                        cores={paraSalvar.map((c, n) => (c.tipo === 'claro' ? amostra[2] : amostra[n % 2]))}
+                        alt=""
+                        style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {erro ? <span style={erroEstilo}>{erro}</span> : null}
+        <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+          <Button variant="gild" carregando={enviando || salvando} onClick={salvar}>
+            {modelo ? 'Salvar' : 'Adicionar à loja'}
+          </Button>
+          <Button variant="ghost" onClick={onCancelar}>
+            Cancelar
+          </Button>
         </div>
       </div>
     </Card>
