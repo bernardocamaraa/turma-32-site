@@ -40,6 +40,13 @@ insert into public.modelos_adesivos (id, nome, descricao, crianca, ordem)
 values ('crianca', 'Você criança', 'O seu adesivo, com a sua foto de criança.', true, 0)
 on conflict (id) do nothing;
 
+-- "Crie seu adesivo": a sticker a formando designs in the site's editor is a
+-- model of their own — `dono` is them (only they and the committee see it),
+-- `design` is what the editor needs to open it again, `imagem` the finished
+-- picture. Public models have no `dono`.
+alter table public.modelos_adesivos add column if not exists dono text references public.convidados_formando (formando) on update cascade on delete cascade;
+alter table public.modelos_adesivos add column if not exists design jsonb;
+
 -- The class's 32, from the site's own logo, with the colour of its shadow and
 -- of its black fill for the formando to pick (as the site's colour analysis
 -- suggests for this picture — src/lib/cores.ts).

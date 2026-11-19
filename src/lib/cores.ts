@@ -48,8 +48,23 @@ export const CORES: { nome: string; cor: string }[] = [
   { nome: 'Branco', cor: '#ffffff' },
 ];
 
+/**
+ * The rainbow (LGBT pride flag): not a colour but the flag's six stripes,
+ * top to bottom across the part. It goes in an order's key as "arcoiris".
+ */
+export const ARCO_IRIS = 'arcoiris';
+export const FAIXAS_ARCO_IRIS = ['#e40303', '#ff8c00', '#ffed00', '#008026', '#004dff', '#750787'];
+
+/** What to paint a swatch of this colour with (the rainbow is its stripes). */
+export function fundoDaCor(cor: string): string {
+  if (cor !== ARCO_IRIS) return cor;
+  const n = FAIXAS_ARCO_IRIS.length;
+  return `linear-gradient(180deg, ${FAIXAS_ARCO_IRIS.map((c, i) => `${c} ${(i * 100) / n}% ${((i + 1) * 100) / n}%`).join(', ')})`;
+}
+
 export function nomeDaCor(cor: string, camada?: Camada): string {
   const c = cor.toLowerCase();
+  if (c === ARCO_IRIS) return 'Arco-íris (LGBT)';
   if (camada && c === camada.cor.toLowerCase()) return 'original';
   return CORES.find((x) => x.cor === c)?.nome ?? c.toUpperCase();
 }
@@ -293,7 +308,13 @@ export function pintar(src: string, camadas: Camada[], cores: string[]): Promise
     const feito = (async () => {
       const { canvas, ctx, dados } = await pixels(src);
       const px = dados.data;
-      const alvos = cores.map((c) => hsl(parseInt(c.slice(1, 3), 16) / 255, parseInt(c.slice(3, 5), 16) / 255, parseInt(c.slice(5, 7), 16) / 255));
+      const doHex = (c: string) => hsl(parseInt(c.slice(1, 3), 16) / 255, parseInt(c.slice(3, 5), 16) / 255, parseInt(c.slice(5, 7), 16) / 255);
+      const alvos = cores.map((c) => (c === ARCO_IRIS ? null : doHex(c)));
+      const faixas = FAIXAS_ARCO_IRIS.map(doHex);
+      const largura = canvas.width;
+      // Where each part starts and ends, top to bottom: the rainbow's stripes span it.
+      const topo = camadas.map(() => Infinity);
+      const base = camadas.map(() => -Infinity);
       // Which part each pixel is in (the first that takes it), and how much.
       const parte = new Int8Array(px.length / 4).fill(-1);
       const quanto = new Float32Array(px.length / 4);
@@ -310,6 +331,9 @@ export function pintar(src: string, camadas: Camada[], cores: string[]): Promise
             quanto[p] = w;
             if (w > 0.5) {
               tons[k][Math.round(l * 100)]++;
+              const y = Math.floor(p / largura);
+              if (y < topo[k]) topo[k] = y;
+              if (y > base[k]) base[k] = y;
             }
             break;
           }
@@ -329,7 +353,10 @@ export function pintar(src: string, camadas: Camada[], cores: string[]): Promise
         const k = parte[p];
         if (k < 0 || !cores[k] || cores[k].toLowerCase() === camadas[k].cor.toLowerCase()) continue;
         const [, , l] = hsl(px[i] / 255, px[i + 1] / 255, px[i + 2] / 255);
-        const [th, ts, tl] = alvos[k];
+        const alvo = alvos[k];
+        const [th, ts, tl] = alvo
+          ? alvo
+          : faixas[Math.min(faixas.length - 1, Math.max(0, Math.floor(((Math.floor(p / largura) - topo[k]) / Math.max(1, base[k] - topo[k] + 1)) * faixas.length)))];
         const [r, g, b] = rgb(th, ts, limitar(l - media[k] + tl));
         const w = quanto[p];
         px[i] = px[i] * (1 - w) + r * 255 * w;

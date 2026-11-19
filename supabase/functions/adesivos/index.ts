@@ -14,6 +14,11 @@
 //     — infancia.sql), for the childhood sticker; never anyone else's — and
 //     how it's framed (`enquadramento`), which they can change
 //     (`enquadrar`, with `enquadramento`: { x, y, zoom } or null for the default).
+//     Designs stickers of their own in the site's editor ("Crie seu
+//     adesivo"): `prepararCriacao` hands back a signed upload URL for the
+//     finished picture, `salvarCriacao` (`id` to change one, `nome`,
+//     `imagem`, `design`) keeps it as a model only they (and the committee)
+//     see, `apagarCriacao` (`id`) deletes it (and takes it out of their order).
 //   - `codigo`: COMMITTEE_CODE. Sees every order; marks one paid or not
 //     (`pago`, with `formando` and `sim`); changes or deletes one (`pedir`
 //     with `formando`, `apagar`); opens/closes the store (`aberta`, with
@@ -75,7 +80,13 @@ type LinhaModelo = {
   ativo: boolean;
   camadas: Camada[];
   ordem: number;
+  /** A formando's own design ("Crie seu adesivo"): only they and the committee see it. */
+  dono: string | null;
+  design: unknown;
 };
+
+/** Most stickers of their own a formando can keep. */
+const MAXIMO_CRIACOES = 10;
 
 type Camada = { tipo: 'matiz' | 'escuro' | 'claro'; nome: string; cor: string; h0?: number; h1?: number };
 
@@ -100,9 +111,13 @@ function lerCamadas(valor: unknown): Camada[] | string {
   return saida;
 }
 
-/** "abc" or "abc@#ff0000+#111111" → the model and its colours (lowercase), or null if malformed. */
+/**
+ * "abc" or "abc@#ff0000+#111111" → the model and its colours (lowercase), or
+ * null if malformed. A colour can also be "arcoiris": the LGBT pride flag's
+ * stripes across that part.
+ */
 function lerChave(chave: string): { id: string; cores: string[] | null } | null {
-  const m = /^([A-Za-z0-9_-]{1,64})(?:@(#[0-9a-fA-F]{6}(?:\+#[0-9a-fA-F]{6}){0,3}))?$/.exec(chave);
+  const m = /^([A-Za-z0-9_-]{1,64})(?:@((?:#[0-9a-fA-F]{6}|arcoiris)(?:\+(?:#[0-9a-fA-F]{6}|arcoiris)){0,3}))?$/i.exec(chave);
   return m ? { id: m[1], cores: m[2] ? m[2].toLowerCase().split('+') : null } : null;
 }
 type Enquadramento = { x: number; y: number; zoom: number };
@@ -133,7 +148,10 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { codigo, whatsapp, nome, acao, itens, observacao, formando, sim, modelo, id, direcao, extensao, valor, enquadramento } = await req.json();
+    const {
+      codigo, whatsapp, nome, acao, itens, observacao, formando, sim, modelo, id, direcao, extensao, valor, enquadramento, design,
+      nomeCriacao: nome_criacao, imagemCriacao: imagem_criacao,
+    } = await req.json();
 
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     const recusar = (mensagem: string) => json({ error: mensagem }, 400);
@@ -175,7 +193,7 @@ Deno.serve(async (req) => {
     async function lerModelos(): Promise<LinhaModelo[]> {
       const { data, error } = await supabase
         .from('modelos_adesivos')
-        .select('id, nome, descricao, imagem, crianca, ativo, camadas, ordem')
+        .select('id, nome, descricao, imagem, crianca, ativo, camadas, ordem, dono, design')
         .order('ordem')
         .order('criado_em');
       if (error) throw error;
@@ -202,7 +220,7 @@ Deno.serve(async (req) => {
         const lida = lerChave(chaveBruta);
         if (!lida) return recusar('Pedido inválido.');
         const chave = lida.cores ? `${lida.id}@${lida.cores.join('+')}` : lida.id;
-        const m = modelos.find((x) => x.id === lida.id);
+        const m = modelos.find((x) => x.id === lida.id && (comissao || !x.dono || x.dono === dono));
         // A hidden model stays in an order that already had it, at most as many.
         if (!m || (!m.ativo && !comissao && quantidade > (antes[chave] ?? 0))) {
           return recusar('Um dos adesivos do pedido não está mais à venda. Recarregue a página.');
@@ -233,6 +251,52 @@ Deno.serve(async (req) => {
         ? await supabase.from('enquadramentos_infancia').upsert({ formando: dono, ...e, atualizado_em: new Date().toISOString() }, { onConflict: 'formando' })
         : await supabase.from('enquadramentos_infancia').delete().eq('formando', dono);
       if (error) throw error;
+    } else if (acao === 'prepararCriacao' && voce) {
+      const caminho = `${crypto.randomUUID()}.png`;
+      const { data, error } = await supabase.storage.from(BUCKET).createSignedUploadUrl(caminho);
+      if (error) throw error;
+      return json({ caminho, token: data.token });
+    } else if (acao === 'salvarCriacao' && voce) {
+      const nomeC = typeof nome_criacao === 'string' ? nome_criacao.trim().slice(0, 40) : '';
+      if (!nomeC) return recusar('Dê um nome ao seu adesivo.');
+      if (!design || typeof design !== 'object' || JSON.stringify(design).length > 80000) return recusar('Esse adesivo não deu para salvar. Tente de novo.');
+      const imagem = typeof imagem_criacao === 'string' && /^[0-9a-f-]{36}\.png$/.test(imagem_criacao) ? imagem_criacao : undefined;
+      if (typeof id === 'string') {
+        const minha = modelos.find((x) => x.id === id && x.dono === voce);
+        if (!minha) return recusar('Esse adesivo não existe mais. Recarregue a página.');
+        const mudanca: Record<string, unknown> = { nome: nomeC, design };
+        if (imagem) mudanca.imagem = imagem;
+        const { error } = await supabase.from('modelos_adesivos').update(mudanca).eq('id', id);
+        if (error) throw error;
+        if (imagem && minha.imagem && !doSite(minha.imagem)) await supabase.storage.from(BUCKET).remove([minha.imagem]);
+      } else {
+        if (!imagem) return recusar('Esse adesivo não deu para salvar. Tente de novo.');
+        if (modelos.filter((x) => x.dono === voce).length >= MAXIMO_CRIACOES) {
+          return recusar(`Você já tem ${MAXIMO_CRIACOES} adesivos seus. Apague um para criar outro.`);
+        }
+        const { error } = await supabase.from('modelos_adesivos').insert({ nome: nomeC, imagem, design, dono: voce, camadas: [], ordem: 1000 });
+        if (error) throw error;
+      }
+      modelos = await lerModelos();
+    } else if (acao === 'apagarCriacao' && voce) {
+      const minha = modelos.find((x) => x.id === id && x.dono === voce);
+      if (!minha) return recusar('Esse adesivo não existe mais. Recarregue a página.');
+      const { data: pedido, error: erroPedido } = await supabase.from('pedidos_adesivos').select('itens, pago').eq('formando', voce).maybeSingle();
+      if (erroPedido) throw erroPedido;
+      const itensDele = (pedido?.itens ?? {}) as Record<string, number>;
+      const noPedido = Object.keys(itensDele).filter((k) => lerChave(k)?.id === minha.id);
+      if (noPedido.length) {
+        if (pedido?.pago) return recusar('Esse adesivo está num pedido já pago. Para mudar, fale com a comissão.');
+        const resto = Object.fromEntries(Object.entries(itensDele).filter(([k]) => !noPedido.includes(k)));
+        const { error } = Object.keys(resto).length
+          ? await supabase.from('pedidos_adesivos').update({ itens: resto, atualizado_em: new Date().toISOString() }).eq('formando', voce)
+          : await supabase.from('pedidos_adesivos').delete().eq('formando', voce);
+        if (error) throw error;
+      }
+      const { error } = await supabase.from('modelos_adesivos').delete().eq('id', minha.id);
+      if (error) throw error;
+      if (minha.imagem && !doSite(minha.imagem)) await supabase.storage.from(BUCKET).remove([minha.imagem]);
+      modelos = await lerModelos();
     } else if (acao && !comissao) {
       return recusar('Entre de novo com o seu WhatsApp.');
     } else if (acao === 'pago') {
@@ -286,10 +350,12 @@ Deno.serve(async (req) => {
         if (error) throw error;
       }
     } else if (acao === 'moverModelo') {
-      const i = modelos.findIndex((x) => x.id === id);
+      // Only the models on sale have an order in the store (a formando's own stickers don't).
+      const aVenda = modelos.filter((x) => !x.dono);
+      const i = aVenda.findIndex((x) => x.id === id);
       const j = i + (direcao === -1 ? -1 : 1);
-      if (i < 0 || j < 0 || j >= modelos.length) return recusar('Não dá para mover esse adesivo.');
-      const nova = [...modelos];
+      if (i < 0 || j < 0 || j >= aVenda.length) return recusar('Não dá para mover esse adesivo.');
+      const nova = [...aVenda];
       [nova[i], nova[j]] = [nova[j], nova[i]];
       for (const [k, x] of nova.entries()) {
         if (x.ordem === k) continue;
@@ -316,9 +382,20 @@ Deno.serve(async (req) => {
     // ---- What the page sees -----------------------------------------------
     const urlImagem = (caminho: string | null) =>
       !caminho ? null : doSite(caminho) ? caminho : supabase.storage.from(BUCKET).getPublicUrl(caminho).data.publicUrl;
-    const modelosPagina = modelos
-      .filter((m) => comissao || m.ativo)
-      .map((m) => ({ id: m.id, nome: m.nome, descricao: m.descricao, imagem: urlImagem(m.imagem), crianca: m.crianca, ativo: m.ativo, camadas: m.camadas ?? [] }));
+    const paraModelo = (m: LinhaModelo) => ({
+      id: m.id,
+      nome: m.nome,
+      descricao: m.descricao,
+      imagem: urlImagem(m.imagem),
+      crianca: m.crianca,
+      ativo: m.ativo,
+      camadas: m.camadas ?? [],
+      dono: m.dono,
+      // Only its owner opens it in the editor again.
+      design: m.dono && m.dono === voce ? m.design : null,
+    });
+    // The committee sees everything; anyone else only the public models.
+    const modelosPagina = modelos.filter((m) => comissao || (m.ativo && !m.dono)).map(paraModelo);
 
     if (!comissao && !voce) {
       // A number not on the list picks among the names that have none yet.
@@ -413,8 +490,8 @@ Deno.serve(async (req) => {
     // A hidden model still in their order still shows, so it can be taken out.
     const noPedido = new Set(Object.keys((meu?.itens ?? {}) as Record<string, number>).map((k) => lerChave(k)?.id));
     const modelosFormando = modelos
-      .filter((m) => m.ativo || noPedido.has(m.id))
-      .map((m) => ({ id: m.id, nome: m.nome, descricao: m.descricao, imagem: urlImagem(m.imagem), crianca: m.crianca, ativo: m.ativo, camadas: m.camadas ?? [] }));
+      .filter((m) => (!m.dono || m.dono === voce) && (m.ativo || noPedido.has(m.id)))
+      .map(paraModelo);
 
     return json({
       comissao,
