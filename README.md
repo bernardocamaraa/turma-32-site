@@ -521,7 +521,11 @@ escolhe quantos quer de cada modelo de adesivo para distribuir no baile.
   preenchimento), a assinatura dele, textos (9 fontes, contorno, texto curvo)
   e formas (estrela, coração, coroa, raio…), em qualquer cor (inclusive
   arco-íris), sobre um fundo de cor, degradê, arco-íris ou muro, com borda.
-  Arrasta para mover, puxa o canto dourado para aumentar e girar, desfaz.
+  Arrasta para mover, puxa o canto dourado para aumentar e girar, a bolinha
+  azul em cima de um texto para curvá-lo (ou os botões de curvatura), desfaz.
+  A assinatura entra em versão vetorial (`public/assets/assinaturas/*.svg`,
+  geradas dos PNG por `scripts/vetorizar-assinaturas.py`), nítida em qualquer
+  tamanho.
   Salvo, vira um adesivo só dele (`modelos_adesivos.dono`), com o projeto
   guardado (`design`) para editar depois; ele escolhe a quantidade como nos
   outros. A comissão vê todos em "Criações da turma", e eles entram nos

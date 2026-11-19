@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { ARCO_IRIS, CORES, fundoDaCor, nomeDaCor } from '../lib/cores';
 import {
+  alcaCurvaDe,
   alcaDe,
   carregarFontes,
   coresOriginaisDoLogo,
@@ -166,7 +167,17 @@ function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
 
 const NOME_DO_TIPO: Record<Elemento['tipo'], string> = { foto: 'Foto de criança', logo: 'Logo da 32', assinatura: 'Assinatura', texto: 'Texto', forma: 'Forma' };
 
-type Arrasto = { modo: 'mover'; id: string; dx: number; dy: number } | { modo: 'alca'; id: string; escala: number; giro: number; dist: number; ang: number };
+type Arrasto =
+  | { modo: 'mover'; id: string; dx: number; dy: number }
+  | { modo: 'alca'; id: string; escala: number; giro: number; dist: number; ang: number }
+  /** The text's top handle: up bends it like the top of a circle, down like the bottom. */
+  | { modo: 'curva'; id: string; curva: number; x: number; y: number };
+
+/** A text's curve from how far its top handle was dragged (up is positive), snapping to straight near 0. */
+function curvaArrastada(inicial: number, subida: number, escala: number): number {
+  const c = Math.round(Math.max(-180, Math.min(180, inicial + (subida / Math.max(0.2, escala)) * 0.6)));
+  return Math.abs(c) < 6 ? 0 : c;
+}
 
 /**
  * The sticker editor ("Crie seu adesivo"): the sticker on the left (drag an
@@ -285,6 +296,15 @@ export function EditorAdesivo({
   function apertar(ev: EventoPonteiro<HTMLCanvasElement>) {
     const p = ponto(ev);
     const ctx = canvas.current!.getContext('2d')!;
+    if (sel && sel.tipo === 'texto') {
+      const ac = alcaCurvaDe(sel, prontas, ctx);
+      if (Math.hypot(p.x - ac.x, p.y - ac.y) < 44) {
+        ev.currentTarget.setPointerCapture(ev.pointerId);
+        setHistorico((h) => [...h.slice(-49), design]);
+        arrasto.current = { modo: 'curva', id: sel.id, curva: sel.curva, x: p.x, y: p.y };
+        return;
+      }
+    }
     if (sel) {
       const a = alcaDe(sel, prontas, ctx);
       if (Math.hypot(p.x - a.x, p.y - a.y) < 48) {
@@ -308,6 +328,13 @@ export function EditorAdesivo({
     const p = ponto(ev);
     if (a.modo === 'mover') {
       mudarElemento(a.id, { x: Math.max(0, Math.min(LADO, p.x - a.dx)), y: Math.max(0, Math.min(LADO, p.y - a.dy)) }, false);
+    } else if (a.modo === 'curva') {
+      const e = design.elementos.find((x) => x.id === a.id);
+      if (!e || e.tipo !== 'texto') return;
+      // How far it moved along the text's own "up" (it may be turned).
+      const g = (e.giro * Math.PI) / 180;
+      const subida = -(-(p.x - a.x) * Math.sin(g) + (p.y - a.y) * Math.cos(g));
+      mudarElemento(a.id, { curva: curvaArrastada(a.curva, subida, e.escala) }, false);
     } else {
       const e = design.elementos.find((x) => x.id === a.id);
       if (!e) return;
@@ -412,15 +439,37 @@ export function EditorAdesivo({
               <Deslizante rotulo="Espessura do contorno" valor={sel.larguraContorno} min={1} max={24} passo={1} onValor={(v) => mudarElemento(sel.id, { larguraContorno: v }, false)} />
             ) : null}
           </div>
-          <Deslizante
-            rotulo="Curva"
-            valor={sel.curva}
-            min={-180}
-            max={180}
-            passo={5}
-            onValor={(v) => mudarElemento(sel.id, { curva: v }, false)}
-            formato={(v) => (v === 0 ? 'reto' : v > 0 ? 'para cima' : 'para baixo')}
-          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <span style={rotulo}>Curvatura</span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {(
+                [
+                  [0, 'Reto', 'M2 12 H22'],
+                  [100, 'Arco para cima', 'M2 16 Q12 4 22 16'],
+                  [-100, 'Arco para baixo', 'M2 8 Q12 20 22 8'],
+                  [180, 'Meio círculo para cima', 'M3 18 A9 9 0 0 1 21 18'],
+                  [-180, 'Meio círculo para baixo', 'M3 6 A9 9 0 0 0 21 6'],
+                ] as const
+              ).map(([valor, nomeCurva, desenho]) => (
+                <Botao key={valor} ativo={sel.curva === valor} titulo={nomeCurva} onClick={() => mudarElemento(sel.id, { curva: valor })}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden>
+                    <path d={desenho} />
+                  </svg>
+                  <span style={{ fontSize: 13 }}>{nomeCurva}</span>
+                </Botao>
+              ))}
+            </div>
+            <Deslizante
+              rotulo="Ajuste fino"
+              valor={sel.curva}
+              min={-180}
+              max={180}
+              passo={1}
+              onValor={(v) => mudarElemento(sel.id, { curva: Math.abs(v) < 4 ? 0 : v }, false)}
+              formato={(v) => (v === 0 ? 'reto' : `${Math.abs(v)}° ${v > 0 ? 'para cima' : 'para baixo'}`)}
+            />
+            <span style={pequeno}>Dá também para arrastar a bolinha azul em cima do texto: para cima ou para baixo.</span>
+          </div>
         </>
       ) : null}
 
@@ -600,7 +649,7 @@ export function EditorAdesivo({
             <canvas
               ref={canvas}
               tabIndex={0}
-              aria-label="O seu adesivo. Toque em algo para escolher; arraste para mover; o círculo dourado no canto aumenta e gira. Com o teclado: setas movem, Delete apaga."
+              aria-label="O seu adesivo. Toque em algo para escolher; arraste para mover; o círculo dourado no canto aumenta e gira; num texto, a bolinha azul em cima curva. Com o teclado: setas movem, Delete apaga."
               onPointerDown={apertar}
               onPointerMove={mover}
               onPointerUp={soltar}

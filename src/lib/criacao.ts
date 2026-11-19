@@ -408,7 +408,8 @@ export function desenhar(
     ctx.stroke();
   }
 
-  // The selection (editor only): a dashed box and the corner handle.
+  // The selection (editor only): a dashed box, the corner handle (size and
+  // turn) and, on a text, the top handle (how much it curves).
   const sel = d.elementos.find((e) => e.id === opcoes.selecionado);
   if (sel) {
     const { w, h } = caixa(sel, prontas.get(sel.id), ctx);
@@ -432,9 +433,33 @@ export function desenhar(
     ctx.lineWidth = 4 / k;
     ctx.strokeStyle = '#000000';
     ctx.stroke();
+    if (sel.tipo === 'texto') {
+      ctx.beginPath();
+      ctx.arc(0, -H, 22 / k, 0, Math.PI * 2);
+      ctx.fillStyle = '#a9d3e8';
+      ctx.fill();
+      ctx.lineWidth = 4 / k;
+      ctx.strokeStyle = '#000000';
+      ctx.stroke();
+      // A little arc inside it, bent like the text is.
+      ctx.beginPath();
+      const curva = Math.max(-1, Math.min(1, sel.curva / 120));
+      ctx.moveTo(-11 / k, -H + (curva * 5) / k);
+      ctx.quadraticCurveTo(0, -H - (curva * 9) / k, 11 / k, -H + (curva * 5) / k);
+      ctx.lineWidth = 3 / k;
+      ctx.stroke();
+    }
     ctx.restore();
   }
   ctx.restore();
+}
+
+/** Where a selected text's curve handle is (the middle of the box's top), in the sticker's pixels. */
+export function alcaCurvaDe(e: Elemento, prontas: Map<string, CanvasImageSource>, ctx: CanvasRenderingContext2D) {
+  const { h } = caixa(e, prontas.get(e.id), ctx);
+  const H = (h * e.escala) / 2 + 14;
+  const a = (e.giro * Math.PI) / 180;
+  return { x: e.x + H * Math.sin(a), y: e.y - H * Math.cos(a) };
 }
 
 /** Which element is under a point (the topmost), or null. */
