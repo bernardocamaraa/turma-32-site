@@ -501,7 +501,7 @@ Cada formando entra com o WhatsApp (o mesmo da votação e da música) e
 escolhe quantos quer de cada modelo de adesivo para distribuir no baile.
 
 - **Os modelos à venda** são cadastrados pela comissão, na aba Adesivos:
-  imagem, nome, descrição e preço. Dá para editar, mudar a ordem, esconder
+  imagem, nome e descrição. Dá para editar, mudar a ordem, esconder
   e apagar (só quem nenhum pedido tem; para os outros, esconder).
 - **"Você criança"** já vem cadastrado: é a foto de criança de cada formando
   (a que a comissão colocou na aba Fotos de criança) por baixo da moldura
@@ -522,6 +522,9 @@ escolhe quantos quer de cada modelo de adesivo para distribuir no baile.
   arte que não é (como o 32) vai encaixada inteira dentro do círculo, sobre
   branco, com folga para o corte (`src/lib/redondo.ts`) — e aparece assim
   também na loja.
-- A chave Pix fica em `PIX`, em `src/lib/adesivos.ts`.
+- **Preço**: um só para todos os adesivos, que a comissão define na aba
+  Adesivos. Enquanto estiver vazio, o site não mostra valor nenhum (os
+  pedidos funcionam normalmente). A chave Pix fica em `PIX`, em
+  `src/lib/adesivos.ts`, e só aparece quando há preço.
 - Para ligar: rode `supabase/adesivos.sql` no SQL Editor (depois de
   `infancia.sql`) e publique a função com `supabase functions deploy adesivos`.

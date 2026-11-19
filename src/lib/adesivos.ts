@@ -12,8 +12,6 @@ export type Modelo = {
   id: string;
   nome: string;
   descricao: string | null;
-  /** In reais, per sticker. */
-  preco: number;
   /** The picture's public URL; null for the childhood sticker. */
   imagem: string | null;
   crianca: boolean;
@@ -51,6 +49,8 @@ export type DadosAdesivos = {
   livres: string[] | null;
   /** Whether formandos can still order or change their order (the committee always can). */
   aberta: boolean;
+  /** The price of each sticker, the same for all; null while the committee hasn't set it (no price shows then). */
+  preco: number | null;
   /** The models, in the store's order. */
   modelos: Modelo[];
   /** The formando's own order. */
@@ -67,7 +67,7 @@ export type DadosAdesivos = {
 
 export type AcessoAdesivos = { whatsapp: string; nome?: string } | { codigo: string } | Record<string, never>;
 
-export type ModeloParaSalvar = { id?: string; nome: string; descricao: string; preco: number; ativo: boolean; camadas: Camada[]; imagem?: string };
+export type ModeloParaSalvar = { id?: string; nome: string; descricao: string; ativo: boolean; camadas: Camada[]; imagem?: string };
 
 export type AcaoAdesivos =
   /** Sends (or replaces) the order. All zero deletes it. Committee: whose, in `formando`. */
@@ -78,6 +78,8 @@ export type AcaoAdesivos =
   | { acao: 'apagar'; formando: string }
   /** Committee: opens or closes the store. */
   | { acao: 'aberta'; sim: boolean }
+  /** Committee: the price of every sticker (null: none yet). */
+  | { acao: 'preco'; valor: number | null }
   /** Committee: creates (no id) or changes a model. */
   | { acao: 'salvarModelo'; modelo: ModeloParaSalvar }
   | { acao: 'moverModelo'; id: string; direcao: -1 | 1 }
@@ -85,7 +87,7 @@ export type AcaoAdesivos =
 
 export async function buscarAdesivos(acesso: AcessoAdesivos, acao?: AcaoAdesivos): Promise<DadosAdesivos> {
   const dados = await chamarFuncao<DadosAdesivos>('adesivos', { ...acesso, ...acao });
-  return { ...dados, modelos: dados.modelos ?? [] };
+  return { ...dados, modelos: dados.modelos ?? [], preco: dados.preco ?? null };
 }
 
 const TIPOS: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml' };
@@ -124,8 +126,9 @@ export function descreverCores(modelo: Modelo | undefined, cores: string[]): str
   return cores.map((c, i) => (modelo?.camadas[i] ? `${modelo.camadas[i].nome}: ${nomeDaCor(c, modelo.camadas[i])}` : nomeDaCor(c))).join(' · ');
 }
 
-export function totalDoPedido(itens: Itens, modelos: Modelo[]): number {
-  return Object.entries(itens).reduce((s, [chave, q]) => s + (modelos.find((m) => m.id === lerChave(chave).id)?.preco ?? 0) * q, 0);
+/** Every sticker costs the same: the order's total is how many times the price. */
+export function totalDoPedido(itens: Itens, preco: number): number {
+  return quantidadeDoPedido(itens) * preco;
 }
 
 /** "2× Logo da Turma 32 (Vermelho)". */

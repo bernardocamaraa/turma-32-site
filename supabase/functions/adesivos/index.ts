@@ -15,9 +15,10 @@
 //   - `codigo`: COMMITTEE_CODE. Sees every order; marks one paid or not
 //     (`pago`, with `formando` and `sim`); changes or deletes one (`pedir`
 //     with `formando`, `apagar`); opens/closes the store (`aberta`, with
-//     `sim`). Runs the models on sale: `prepararImagem` (with `extensao`)
+//     `sim`); sets the price, the same for every sticker (`preco`, with
+//     `valor`: reais, or null for no price yet — then none shows). Runs the models on sale: `prepararImagem` (with `extensao`)
 //     hands back a signed upload URL for a picture, then `salvarModelo`
-//     (with `modelo`: id to change one, nome, descricao, preco, ativo,
+//     (with `modelo`: id to change one, nome, descricao, ativo,
 //     imagem) creates or changes it; `moverModelo` (`id`, `direcao` ±1)
 //     reorders; `apagarModelo` (`id`) deletes one no order has. A model
 //     with `camadas` (parts of the picture, found by the site) lets the
@@ -64,7 +65,6 @@ type LinhaModelo = {
   id: string;
   nome: string;
   descricao: string | null;
-  preco: number | string;
   imagem: string | null;
   crianca: boolean;
   ativo: boolean;
@@ -117,7 +117,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { codigo, whatsapp, nome, acao, itens, observacao, formando, sim, modelo, id, direcao, extensao } = await req.json();
+    const { codigo, whatsapp, nome, acao, itens, observacao, formando, sim, modelo, id, direcao, extensao, valor } = await req.json();
 
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     const recusar = (mensagem: string) => json({ error: mensagem }, 400);
@@ -152,10 +152,14 @@ Deno.serve(async (req) => {
     if (erroConfig) throw erroConfig;
     let aberta: boolean = config?.valor ?? true;
 
+    const { data: loja, error: erroLoja } = await supabase.from('loja_adesivos').select('preco').maybeSingle();
+    if (erroLoja) throw erroLoja;
+    let preco: number | null = loja?.preco == null ? null : Number(loja.preco);
+
     async function lerModelos(): Promise<LinhaModelo[]> {
       const { data, error } = await supabase
         .from('modelos_adesivos')
-        .select('id, nome, descricao, preco, imagem, crianca, ativo, camadas, ordem')
+        .select('id, nome, descricao, imagem, crianca, ativo, camadas, ordem')
         .order('ordem')
         .order('criado_em');
       if (error) throw error;
@@ -218,6 +222,12 @@ Deno.serve(async (req) => {
       aberta = sim === true;
       const { error } = await supabase.from('configuracoes').upsert({ chave: 'loja_aberta', valor: aberta }, { onConflict: 'chave' });
       if (error) throw error;
+    } else if (acao === 'preco') {
+      if (valor === null) preco = null;
+      else if (typeof valor === 'number' && Number.isFinite(valor) && valor >= 0 && valor < 10000) preco = Math.round(valor * 100) / 100;
+      else return recusar('O preço não parece certo.');
+      const { error } = await supabase.from('loja_adesivos').upsert({ id: true, preco }, { onConflict: 'id' });
+      if (error) throw error;
     } else if (acao === 'prepararImagem') {
       const ext = typeof extensao === 'string' && /^[a-z0-9]{1,5}$/.test(extensao) ? extensao : 'png';
       const caminho = `${crypto.randomUUID()}.${ext}`;
@@ -230,8 +240,6 @@ Deno.serve(async (req) => {
       const m = modelo as Record<string, unknown>;
       const nomeM = typeof m.nome === 'string' ? m.nome.trim() : '';
       if (!nomeM || nomeM.length > 80) return recusar('Dê um nome ao adesivo (até 80 letras).');
-      const preco = typeof m.preco === 'number' ? Math.round(m.preco * 100) / 100 : NaN;
-      if (!Number.isFinite(preco) || preco < 0 || preco >= 10000) return recusar('O preço não parece certo.');
       const descricao = typeof m.descricao === 'string' && m.descricao.trim() ? m.descricao.trim().slice(0, 300) : null;
       const ativo = m.ativo !== false;
       const camadas = lerCamadas(m.camadas);
@@ -240,7 +248,7 @@ Deno.serve(async (req) => {
       if (typeof m.id === 'string') {
         const existente = modelos.find((x) => x.id === m.id);
         if (!existente) return recusar('Esse adesivo não existe mais. Recarregue a página.');
-        const mudanca: Record<string, unknown> = { nome: nomeM, descricao, preco, ativo, camadas: existente.crianca ? [] : camadas };
+        const mudanca: Record<string, unknown> = { nome: nomeM, descricao, ativo, camadas: existente.crianca ? [] : camadas };
         if (imagem && !existente.crianca) mudanca.imagem = imagem;
         const { error } = await supabase.from('modelos_adesivos').update(mudanca).eq('id', m.id);
         if (error) throw error;
@@ -249,7 +257,7 @@ Deno.serve(async (req) => {
       } else {
         if (!imagem) return recusar('Escolha a imagem do adesivo.');
         const ordem = modelos.reduce((max, x) => Math.max(max, x.ordem), 0) + 1;
-        const { error } = await supabase.from('modelos_adesivos').insert({ nome: nomeM, descricao, preco, ativo, camadas, imagem, ordem });
+        const { error } = await supabase.from('modelos_adesivos').insert({ nome: nomeM, descricao, ativo, camadas, imagem, ordem });
         if (error) throw error;
       }
     } else if (acao === 'moverModelo') {
@@ -284,7 +292,7 @@ Deno.serve(async (req) => {
     const urlImagem = (caminho: string | null) => (caminho ? supabase.storage.from(BUCKET).getPublicUrl(caminho).data.publicUrl : null);
     const modelosPagina = modelos
       .filter((m) => comissao || m.ativo)
-      .map((m) => ({ id: m.id, nome: m.nome, descricao: m.descricao, preco: Number(m.preco), imagem: urlImagem(m.imagem), crianca: m.crianca, ativo: m.ativo, camadas: m.camadas ?? [] }));
+      .map((m) => ({ id: m.id, nome: m.nome, descricao: m.descricao, imagem: urlImagem(m.imagem), crianca: m.crianca, ativo: m.ativo, camadas: m.camadas ?? [] }));
 
     if (!comissao && !voce) {
       // A number not on the list picks among the names that have none yet.
@@ -294,7 +302,7 @@ Deno.serve(async (req) => {
         if (error) throw error;
         livres = data.map((f) => f.formando as string);
       }
-      return json({ comissao, voce, livres, aberta, modelos: modelosPagina, meu: null, fotoInfancia: null, pedidos: null, formandos: null, fotos: null });
+      return json({ comissao, voce, livres, aberta, preco, modelos: modelosPagina, meu: null, fotoInfancia: null, pedidos: null, formandos: null, fotos: null });
     }
 
     if (comissao) {
@@ -337,6 +345,7 @@ Deno.serve(async (req) => {
         voce: null,
         livres: null,
         aberta,
+        preco,
         modelos: modelosPagina,
         meu: null,
         fotoInfancia: null,
@@ -372,13 +381,14 @@ Deno.serve(async (req) => {
     const noPedido = new Set(Object.keys((meu?.itens ?? {}) as Record<string, number>).map((k) => lerChave(k)?.id));
     const modelosFormando = modelos
       .filter((m) => m.ativo || noPedido.has(m.id))
-      .map((m) => ({ id: m.id, nome: m.nome, descricao: m.descricao, preco: Number(m.preco), imagem: urlImagem(m.imagem), crianca: m.crianca, ativo: m.ativo, camadas: m.camadas ?? [] }));
+      .map((m) => ({ id: m.id, nome: m.nome, descricao: m.descricao, imagem: urlImagem(m.imagem), crianca: m.crianca, ativo: m.ativo, camadas: m.camadas ?? [] }));
 
     return json({
       comissao,
       voce,
       livres: null,
       aberta,
+      preco,
       modelos: modelosFormando,
       meu: meu ? paraPagina(meu as Linha) : null,
       fotoInfancia,

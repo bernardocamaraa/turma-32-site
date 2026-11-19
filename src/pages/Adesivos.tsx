@@ -191,7 +191,7 @@ function Loja() {
   const meu = dados?.meu ?? null;
   const travado = !!dados && (!dados.aberta || !!meu?.pago);
   const quantidade = quantidadeDoPedido(itens);
-  const total = totalDoPedido(itens, modelos);
+  const preco = dados?.preco ?? null;
   const mudou =
     JSON.stringify(Object.entries(itens).filter(([, q]) => q > 0).sort()) !== JSON.stringify(Object.entries(meu?.itens ?? {}).sort()) ||
     observacao.trim() !== (meu?.observacao ?? '');
@@ -270,7 +270,7 @@ function Loja() {
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : 'repeat(auto-fill, minmax(300px, 1fr))', gap: 'var(--space-5)' }}>
               {modelos.map((m) => (
-                <CartaoModelo key={m.id} modelo={m} voce={dados.voce!} foto={dados.fotoInfancia} itens={itens} travado={travado} onMudar={mudar} />
+                <CartaoModelo key={m.id} modelo={m} preco={preco} voce={dados.voce!} foto={dados.fotoInfancia} itens={itens} travado={travado} onMudar={mudar} />
               ))}
             </div>
           )}
@@ -280,7 +280,7 @@ function Loja() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
                 <ShoppingBag size={20} color="var(--gild-300)" />
                 <span style={titulo}>Seu pedido</span>
-                {meu ? <Badge tone={meu.pago ? 'ok' : 'gild'}>{meu.pago ? 'Pago' : 'Esperando pagamento'}</Badge> : null}
+                {meu ? <Badge tone={meu.pago ? 'ok' : 'gild'}>{meu.pago ? 'Pago' : preco === null ? 'Pedido feito' : 'Esperando pagamento'}</Badge> : null}
               </div>
 
               {quantidade > 0 ? (
@@ -293,7 +293,7 @@ function Loja() {
                         ))}
                         {descreverItem(chave, q, modelos)}
                       </span>
-                      <span style={{ color: 'var(--text-muted)' }}>{reais(totalDoPedido({ [chave]: q }, modelos))}</span>
+                      {preco !== null ? <span style={{ color: 'var(--text-muted)' }}>{reais(q * preco)}</span> : null}
                     </div>
                   ))}
                   <div
@@ -308,7 +308,7 @@ function Loja() {
                     }}
                   >
                     <span>{plural(quantidade, 'adesivo', 'adesivos')}</span>
-                    <span>{reais(total)}</span>
+                    {preco !== null ? <span>{reais(totalDoPedido(itens, preco))}</span> : null}
                   </div>
                 </div>
               ) : (
@@ -353,7 +353,7 @@ function Loja() {
             </div>
           </Card>
 
-          {meu && !meu.pago ? <Pagamento total={totalDoPedido(meu.itens, modelos)} /> : null}
+          {meu && !meu.pago && preco !== null ? <Pagamento total={totalDoPedido(meu.itens, preco)} /> : null}
         </>
       )}
     </main>
@@ -482,6 +482,7 @@ function Paleta({ camada, cor, onCor }: { camada: Camada; cor: string; onCor: (c
 /** One model on sale: its art, what it is, the price and how many (of each combination of colours, for a custom-colour one). */
 function CartaoModelo({
   modelo,
+  preco,
   voce,
   foto,
   itens,
@@ -489,6 +490,8 @@ function CartaoModelo({
   onMudar,
 }: {
   modelo: Modelo;
+  /** The same for every sticker; null: no price shows. */
+  preco: number | null;
   voce: string;
   foto: string | null;
   itens: Itens;
@@ -551,7 +554,7 @@ function CartaoModelo({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 'var(--space-4)' }}>
             <span style={titulo}>{modelo.nome}</span>
-            <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--gild-300)', whiteSpace: 'nowrap' }}>{reais(modelo.preco)}</span>
+            {preco !== null ? <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--gild-300)', whiteSpace: 'nowrap' }}>{reais(preco)}</span> : null}
           </div>
           {modelo.descricao ? <span style={pequeno}>{modelo.descricao}</span> : null}
           {!modelo.ativo ? <span style={{ ...pequeno, color: 'var(--gild-300)' }}>Esse adesivo saiu da loja. Dá para tirar do seu pedido, mas não para pedir mais.</span> : null}
@@ -731,8 +734,9 @@ export function AdesivosComissao({ codigo }: { codigo: string }) {
   const pedidos = dados.pedidos ?? [];
   const feitos = new Set(pedidos.map((p) => p.formando));
   const faltam = (dados.formandos ?? []).filter((f) => !feitos.has(f));
-  const total = pedidos.reduce((s, p) => s + totalDoPedido(p.itens, modelos), 0);
-  const recebido = pedidos.filter((p) => p.pago).reduce((s, p) => s + totalDoPedido(p.itens, modelos), 0);
+  const preco = dados.preco;
+  const total = preco === null ? null : pedidos.reduce((s, p) => s + totalDoPedido(p.itens, preco), 0);
+  const recebido = preco === null ? null : pedidos.filter((p) => p.pago).reduce((s, p) => s + totalDoPedido(p.itens, preco), 0);
   // For the print shop: one line per model, and per colour for a custom-colour one.
   const somados: Itens = {};
   for (const p of pedidos) for (const [k, q] of Object.entries(p.itens)) somados[k] = (somados[k] ?? 0) + q;
@@ -743,11 +747,12 @@ export function AdesivosComissao({ codigo }: { codigo: string }) {
 
   function baixarPlanilha() {
     const colunas = linhasGrafica.map(([k]) => k);
-    const cabecalho = ['Formando', ...colunas.map((k) => descreverItem(k, 1, modelos).replace(/^1× /, '')), 'Total (R$)', 'Pago', 'Observação'];
+    const cabecalho = ['Formando', ...colunas.map((k) => descreverItem(k, 1, modelos).replace(/^1× /, '')), 'Adesivos', ...(preco !== null ? ['Total (R$)'] : []), 'Pago', 'Observação'];
     const linhas = pedidos.map((p) => [
       p.formando,
       ...colunas.map((k) => String(p.itens[k] ?? 0)),
-      totalDoPedido(p.itens, modelos).toFixed(2).replace('.', ','),
+      String(quantidadeDoPedido(p.itens)),
+      ...(preco !== null ? [totalDoPedido(p.itens, preco).toFixed(2).replace('.', ',')] : []),
       p.pago ? 'Sim' : 'Não',
       p.observacao ?? '',
     ]);
@@ -778,6 +783,7 @@ export function AdesivosComissao({ codigo }: { codigo: string }) {
               {dados.aberta ? 'Fechar loja' : 'Abrir loja'}
             </Button>
           </div>
+          <PrecoUnico preco={dados.preco} salvando={salvando === 'preco'} onSalvar={(valor) => agir({ acao: 'preco', valor }, 'preco')} />
           <BotoesLink url={urlDaLoja()} mensagem="A loja de adesivos da formatura está aberta! Escolha os seus, inclusive o seu adesivo de criança:" />
         </div>
       </Card>
@@ -793,8 +799,8 @@ export function AdesivosComissao({ codigo }: { codigo: string }) {
       <div style={{ display: 'grid', gridTemplateColumns: mobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: 'var(--space-5)' }}>
         <Numero rotulo="Pedidos" valor={`${pedidos.length}/${dados.formandos?.length ?? 0}`} />
         <Numero rotulo="Adesivos" valor={String(totalAdesivos)} />
-        <Numero rotulo="Total" valor={reais(total)} />
-        <Numero rotulo="Já pago" valor={reais(recebido)} destaque />
+        <Numero rotulo="Total" valor={total === null ? 'Sem preço' : reais(total)} />
+        <Numero rotulo="Já pago" valor={recebido === null ? '—' : reais(recebido)} destaque={recebido !== null} />
       </div>
 
       <Card padding={0} style={{ overflow: 'hidden' }}>
@@ -829,6 +835,7 @@ export function AdesivosComissao({ codigo }: { codigo: string }) {
             key={p.formando}
             pedido={p}
             modelos={modelos}
+            preco={preco}
             salvando={salvando}
             onPago={(sim) => agir({ acao: 'pago', formando: p.formando, sim }, `pago-${p.formando}`)}
             onApagar={() => {
@@ -953,6 +960,47 @@ function Numero({ rotulo, valor, destaque }: { rotulo: string; valor: string; de
   );
 }
 
+/** The one price of every sticker: empty while it isn't decided (then no price shows anywhere on the site). */
+function PrecoUnico({ preco, salvando, onSalvar }: { preco: number | null; salvando: boolean; onSalvar: (valor: number | null) => Promise<boolean> }) {
+  const [texto, setTexto] = useState(preco === null ? '' : preco.toFixed(2).replace('.', ','));
+  const [erro, setErro] = useState<string | null>(null);
+  const lido = texto.trim() ? lerPreco(texto) : null;
+  const mudou = (texto.trim() ? lido : null) !== preco;
+
+  async function salvar() {
+    if (texto.trim() && lido === null) return setErro('Digite o preço, por exemplo 5,00 (ou deixe vazio para ficar sem preço).');
+    setErro(null);
+    await onSalvar(lido);
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', paddingTop: 'var(--space-4)', borderTop: '1px solid var(--stroke-hair)' }}>
+      <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <Input
+          label="Preço de cada adesivo (o mesmo para todos)"
+          placeholder="Sem preço por enquanto"
+          inputMode="decimal"
+          value={texto}
+          onChange={(e) => {
+            setTexto(e.target.value);
+            setErro(null);
+          }}
+          style={{ flex: '1 1 240px', maxWidth: 360 }}
+        />
+        <Button variant="secondary" disabled={!mudou} carregando={salvando} onClick={salvar}>
+          Salvar preço
+        </Button>
+      </div>
+      <span style={erro ? erroEstilo : pequeno}>
+        {erro ??
+          (preco === null
+            ? 'Sem preço: a loja não mostra valor nenhum, nem nos adesivos nem no pedido. Os pedidos continuam funcionando.'
+            : `Cada adesivo custa ${reais(preco)}. Para tirar o preço, apague o valor e salve.`)}
+      </span>
+    </div>
+  );
+}
+
 /** "5,50" / "5.5" / "R$ 5" → 5.5, or null. */
 function lerPreco(texto: string): number | null {
   const limpo = texto.replace(/[^\d,.]/g, '').replace(',', '.');
@@ -1029,7 +1077,6 @@ function ModelosDaComissao({
                     {!m.ativo ? <Badge>Escondido</Badge> : null}
                     {m.camadas.length ? <Badge tone="ice">Cor personalizada</Badge> : null}
                   </div>
-                  <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--gild-300)' }}>{reais(m.preco)}</span>
                   <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', marginTop: 4 }}>
                     <Button variant="ghost" size="sm" style={{ padding: 0, height: 26 }} onClick={() => setEditando(m.id)}>
                       Editar
@@ -1041,7 +1088,7 @@ function ModelosDaComissao({
                       carregando={salvando === `ativo-${m.id}`}
                       onClick={() =>
                         agir(
-                          { acao: 'salvarModelo', modelo: { id: m.id, nome: m.nome, descricao: m.descricao ?? '', preco: m.preco, ativo: !m.ativo, camadas: m.camadas } },
+                          { acao: 'salvarModelo', modelo: { id: m.id, nome: m.nome, descricao: m.descricao ?? '', ativo: !m.ativo, camadas: m.camadas } },
                           `ativo-${m.id}`,
                         )
                       }
@@ -1146,13 +1193,12 @@ function FormModelo({
   modelo?: Modelo;
   salvando: boolean;
   onCancelar: () => void;
-  onSalvar: (m: { nome: string; descricao: string; preco: number; ativo: boolean; camadas: Camada[]; imagem?: string }) => Promise<void>;
+  onSalvar: (m: { nome: string; descricao: string; ativo: boolean; camadas: Camada[]; imagem?: string }) => Promise<void>;
 }) {
   const mobile = useIsMobile();
   const entrada = useRef<HTMLInputElement>(null);
   const [nome, setNome] = useState(modelo?.nome ?? '');
   const [descricao, setDescricao] = useState(modelo?.descricao ?? '');
-  const [preco, setPreco] = useState(modelo ? modelo.preco.toFixed(2).replace('.', ',') : '');
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [previa, setPrevia] = useState<string | null>(modelo?.imagem ?? null);
   const [analisando, setAnalisando] = useState(false);
@@ -1199,16 +1245,14 @@ function FormModelo({
   const paraSalvar: Camada[] = escolhidas.map(({ tipo, nome, cor, h0, h1 }) => (tipo === 'matiz' ? { tipo, nome: nome.trim(), cor, h0, h1 } : { tipo, nome: nome.trim(), cor }));
 
   async function salvar() {
-    const valor = lerPreco(preco);
     if (!nome.trim()) return setErro('Dê um nome ao adesivo.');
-    if (valor === null) return setErro('Digite o preço, por exemplo 5,00.');
     if (!modelo?.crianca && !arquivo && !modelo?.imagem) return setErro('Escolha a imagem do adesivo.');
     if (paraSalvar.some((c) => !c.nome)) return setErro('Dê um nome a cada parte que muda de cor.');
     setErro(null);
     setEnviando(true);
     try {
       const imagem = arquivo ? await enviarImagemAdesivo(codigo, arquivo) : undefined;
-      await onSalvar({ nome: nome.trim(), descricao: descricao.trim(), preco: valor, ativo: modelo?.ativo ?? true, camadas: modelo?.crianca ? [] : paraSalvar, imagem });
+      await onSalvar({ nome: nome.trim(), descricao: descricao.trim(), ativo: modelo?.ativo ?? true, camadas: modelo?.crianca ? [] : paraSalvar, imagem });
     } catch (e) {
       setErro(mensagemDe(e, 'Não foi possível salvar agora.'));
     } finally {
@@ -1271,7 +1315,6 @@ function FormModelo({
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', flex: 1 }}>
             <Input label="Nome" placeholder="Ex.: Logo da Turma 32" value={nome} maxLength={80} onChange={(e) => setNome(e.target.value)} />
             <Input label="Descrição (opcional)" placeholder="Ex.: recortado no formato do 32" value={descricao} maxLength={300} onChange={(e) => setDescricao(e.target.value)} />
-            <Input label="Preço por adesivo (R$)" placeholder="5,00" inputMode="decimal" value={preco} onChange={(e) => setPreco(e.target.value)} />
             {!modelo?.crianca && previa ? (
               <div>
                 <Button variant="ghost" size="sm" style={{ padding: 0 }} onClick={() => entrada.current?.click()}>
@@ -1359,12 +1402,14 @@ function FormModelo({
 function PedidoDaComissao({
   pedido,
   modelos,
+  preco,
   salvando,
   onPago,
   onApagar,
 }: {
   pedido: Pedido;
   modelos: Modelo[];
+  preco: number | null;
   salvando: string | null;
   onPago: (sim: boolean) => void;
   onApagar: () => void;
@@ -1382,7 +1427,10 @@ function PedidoDaComissao({
             {ordenarItens(pedido.itens, modelos)
               .map(([chave, q]) => descreverItem(chave, q, modelos))
               .join(' · ')}{' '}
-            · <strong style={{ color: 'var(--text-primary)' }}>{reais(totalDoPedido(pedido.itens, modelos))}</strong>
+            ·{' '}
+            <strong style={{ color: 'var(--text-primary)' }}>
+              {preco !== null ? reais(totalDoPedido(pedido.itens, preco)) : plural(quantidadeDoPedido(pedido.itens), 'adesivo', 'adesivos')}
+            </strong>
           </span>
           {pedido.observacao ? <span style={pequeno}>“{pedido.observacao}”</span> : null}
         </div>
