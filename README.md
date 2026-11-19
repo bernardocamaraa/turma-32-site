@@ -503,14 +503,16 @@ escolhe quantos quer de cada modelo de adesivo para distribuir no baile.
 - **Os modelos à venda** são cadastrados pela comissão, na aba Adesivos:
   imagem, nome e descrição. Dá para editar, mudar a ordem, esconder
   e apagar (só quem nenhum pedido tem; para os outros, esconder).
-- **Modelos prontos**: 7 adesivos no estilo da turma (Terceirão, 32 no muro,
-  Sobrevivi ao Terceirão, Assinaturas, Selo dourado, 10.12 e Formados), em
+- **Modelos prontos**: 7 adesivos (Terceirão, 32, Sobrevivi ao Terceirão,
+  Assinaturas da turma, Formado, 10.12 e Formados), em
   `public/adesivos-prontos/`. Na aba Adesivos, um toque coloca um deles na
-  loja (com o nome e a descrição preenchidos, e as cores sugeridas). Eles são
-  desenhados por `scripts/gerar-adesivos.mjs`, com as peças da turma (o 32,
-  o Terceirão, as assinaturas, a textura de muro) e a fonte do adesivo de
-  criança (Roboto Slab, em `scripts/fontes/`): para mudar um desenho, edite
-  o script e rode `node scripts/gerar-adesivos.mjs`.
+  loja (com o nome e a descrição preenchidos, e as cores sugeridas). O visual
+  veio do design system da skill ui-ux-pro-max (brutalismo/neubrutalismo:
+  cores chapadas — rosa, âmbar, azul —, contorno preto grosso, sombra dura e
+  a fonte Anton), usando as peças da turma (o 32, o Terceirão, as
+  assinaturas). Eles são desenhados por `scripts/gerar-adesivos.mjs` (fontes
+  OFL em `scripts/fontes/`): para mudar um desenho, edite o script e rode
+  `node scripts/gerar-adesivos.mjs`.
 - **"Você criança"** já vem cadastrado: é a foto de criança de cada formando
   (a que a comissão colocou na aba Fotos de criança) por baixo da moldura
   `public/assets/adesivo-crianca-moldura.webp` — o modelo da comissão com o

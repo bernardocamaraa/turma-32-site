@@ -4,11 +4,11 @@
 export type AdesivoPronto = { id: string; nome: string; descricao: string; imagem: string };
 
 export const ADESIVOS_PRONTOS: AdesivoPronto[] = [
-  { id: 'terceirao', nome: 'Terceirão', descricao: 'O logo do Terceirão no azul do adesivo de criança, com a data do baile.', imagem: '/adesivos-prontos/terceirao.png' },
-  { id: 'muro', nome: '32 no muro', descricao: 'O 32 de grafite sobre o muro, com o brilho azul.', imagem: '/adesivos-prontos/muro.png' },
-  { id: 'sobrevivi', nome: 'Sobrevivi ao Terceirão', descricao: 'O clássico da formatura, com o 32 no meio.', imagem: '/adesivos-prontos/sobrevivi.png' },
-  { id: 'assinaturas', nome: 'Assinaturas da turma', descricao: 'A assinatura de todo mundo em volta do 32.', imagem: '/adesivos-prontos/assinaturas.png' },
-  { id: 'selo', nome: 'Selo dourado', descricao: 'Um selo de formando, no dourado do baile.', imagem: '/adesivos-prontos/selo.png' },
-  { id: 'data', nome: '10.12', descricao: 'A data do baile, grande, no azul do 32.', imagem: '/adesivos-prontos/data.png' },
-  { id: 'formados', nome: 'Formados', descricao: 'FORMADOS com a sombra azul do 32 e a coroa.', imagem: '/adesivos-prontos/formados.png' },
+  { id: 'terceirao', nome: 'Terceirão', descricao: 'O logo do Terceirão num bloco preto, com a data do baile.', imagem: '/adesivos-prontos/terceirao.png' },
+  { id: 'trinta-e-dois', nome: '32', descricao: 'O 32 grandão, com TURMA e 2026.', imagem: '/adesivos-prontos/trinta-e-dois.png' },
+  { id: 'sobrevivi', nome: 'Sobrevivi ao Terceirão', descricao: 'O clássico da formatura, em letras grandes.', imagem: '/adesivos-prontos/sobrevivi.png' },
+  { id: 'assinaturas', nome: 'Assinaturas da turma', descricao: 'As assinaturas de todo mundo, com o 32 no meio.', imagem: '/adesivos-prontos/assinaturas.png' },
+  { id: 'carimbo', nome: 'Formado', descricao: 'Um carimbo de FORMADO, com a fita da turma.', imagem: '/adesivos-prontos/carimbo.png' },
+  { id: 'data', nome: '10.12', descricao: 'A data do baile, gigante.', imagem: '/adesivos-prontos/data.png' },
+  { id: 'formados', nome: 'Formados', descricao: 'FORMADOS! com a coroa do 32.', imagem: '/adesivos-prontos/formados.png' },
 ];

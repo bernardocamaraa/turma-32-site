@@ -221,13 +221,19 @@ export async function analisarCores(src: string): Promise<Analise> {
       h0: g.h0,
       h1: g.h1,
       parte: g.parte,
-      sugerida: !foto,
-      motivo: foto ? 'A imagem parece uma foto: trocar uma cor dela não costuma ficar bom.' : `Uma cor só, ${pct(g.parte)} do adesivo: fica bom em qualquer cor.`,
+      sugerida: !foto && g.parte >= 0.05,
+      motivo: foto
+        ? 'A imagem parece uma foto: trocar uma cor dela não costuma ficar bom.'
+        : g.parte < 0.05
+          ? `Um detalhe pequeno (${pct(g.parte)} do adesivo): dá para trocar, mas quase não aparece.`
+          : `Uma cor só, ${pct(g.parte)} do adesivo: fica bom em qualquer cor.`,
     });
   }
+  // A big coloured part to change already (the sticker's background colour): then the black is the outlines and shadows.
+  const corDeFundo = coloridas.some((g) => g.parte >= 0.3);
   if (escuros / visiveis >= 0.03) {
     const n = escuros;
-    const grande = escuros / visiveis >= 0.08;
+    const grande = escuros / visiveis >= 0.08 && !corDeFundo;
     camadas.push({
       tipo: 'escuro',
       nome: 'Parte preta',
@@ -236,7 +242,9 @@ export async function analisarCores(src: string): Promise<Analise> {
       sugerida: grande && !foto,
       motivo: foto
         ? 'A imagem parece uma foto: trocar o preto dela não costuma ficar bom.'
-        : grande
+        : corDeFundo
+          ? `${pct(escuros / visiveis)} do adesivo, mas aqui o preto é contorno e sombra: trocar tira a força do desenho.`
+          : grande
           ? `Preenchimento preto, ${pct(escuros / visiveis)} do adesivo: em cor, ele muda a cara do adesivo.`
           : `Pouco preto (${pct(escuros / visiveis)}), quase só contornos: trocar faz pouca diferença.`,
     });

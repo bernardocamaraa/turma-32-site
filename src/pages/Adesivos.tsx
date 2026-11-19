@@ -1091,8 +1091,8 @@ function ModelosDaComissao({
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
             <span style={{ ...titulo, fontSize: 'var(--fs-body)' }}>Modelos prontos</span>
             <span style={pequeno}>
-              Adesivos feitos no estilo da turma, com o 32, o Terceirão, as assinaturas e as cores do site. Toque em um para colocar na loja: dá para
-              mudar o nome antes, e o site já sugere as cores que a turma pode escolher.
+              Adesivos feitos para a turma, com o 32, o Terceirão e as assinaturas. Toque em um para colocar na loja: dá para mudar o nome antes, e o
+              site já sugere as cores que a turma pode escolher.
             </span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: mobile ? 'repeat(3, 1fr)' : 'repeat(7, 1fr)', gap: 'var(--space-4)' }}>
