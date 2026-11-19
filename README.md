@@ -73,6 +73,7 @@ Cada parte é uma aba, com endereço próprio (dá para salvar ou mandar):
 | Mesas | `/comissao/mesas` | Quantas pessoas cada formando leva, os links pessoais e o mapa. |
 | Fotos de criança | `/comissao/fotos-de-crianca` | A foto de cada formando, para baixar todas juntas. |
 | Músicas | `/comissao/musicas` | A música de cada formando na descida da escada, quem falta e a lista para o DJ. |
+| Adesivos | `/comissao/adesivos` | Os pedidos da loja de adesivos, quem pagou, o total de cada modelo para a gráfica e o adesivo de criança de cada um para baixar. |
 | Álbum e mensagens | `/comissao/album` | Liberar o álbum da festa, moderar as fotos e ler as mensagens. |
 
 As abas ficam presas no topo ao rolar a página. Os endereços antigos
@@ -493,3 +494,18 @@ supabase/
 
 > A Edge Function é publicada à parte (`supabase functions deploy
 > committee-data`): um `git push` atualiza o site, mas não ela.
+
+## Loja de adesivos (`/adesivos`)
+
+Cada formando entra com o WhatsApp (o mesmo da votação e da música) e
+escolhe quantos quer de cada modelo de adesivo para distribuir no baile.
+O modelo "Você criança" é montado com a foto de criança daquele formando
+(a que a comissão colocou na aba Fotos de criança) e só ele vê o dele.
+
+- Modelos e preços: `MODELOS` em `src/lib/adesivos.ts` **e** a lista de ids
+  em `supabase/functions/adesivos/index.ts` (a função recusa ids que não
+  conhece). A chave Pix fica em `PIX`, no mesmo arquivo.
+- Desenho do adesivo de criança: `src/components/AdesivoCrianca.tsx` (SVG;
+  o botão "Baixar" gera um PNG de 1800×1800 para a gráfica).
+- Para ligar: rode `supabase/adesivos.sql` no SQL Editor e publique a
+  função com `supabase functions deploy adesivos`.
