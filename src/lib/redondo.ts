@@ -74,8 +74,8 @@ export function noCirculo(src: string, lado: number): Promise<Blob> {
       const ctx = canvas.getContext('2d')!;
       const raio = lado / 2;
 
-      // Art that already is the round sticker (a full circle, empty corners —
-      // the ready-made models): used whole, at the full size.
+      // Art that already is the round sticker (a full circle, empty corners):
+      // used whole, at the full size.
       const alfa = (x: number, y: number) => px[(Math.min(h - 1, Math.max(0, Math.round(y))) * w + Math.min(w - 1, Math.max(0, Math.round(x)))) * 4 + 3];
       const d = Math.round(w * 0.03);
       const jaRedondo =
