@@ -515,6 +515,17 @@ escolhe quantos quer de cada modelo de adesivo para distribuir no baile.
   ("Ajustar"). Fica salvo em `enquadramentos_infancia` e vale para a loja, os
   arquivos baixados e o PDF. Sem ajuste, uma foto em pé é cortada mais para
   cima, onde costuma estar o rosto.
+- **Crie seu adesivo**: um editor na própria loja (`src/components/EditorAdesivo.tsx`,
+  desenho em `src/lib/criacao.ts`). O formando monta um adesivo redondo com a
+  foto de criança dele, a logo da 32 (grafite ou lisa, com cor da sombra e do
+  preenchimento), a assinatura dele, textos (9 fontes, contorno, texto curvo)
+  e formas (estrela, coração, coroa, raio…), em qualquer cor (inclusive
+  arco-íris), sobre um fundo de cor, degradê, arco-íris ou muro, com borda.
+  Arrasta para mover, puxa o canto dourado para aumentar e girar, desfaz.
+  Salvo, vira um adesivo só dele (`modelos_adesivos.dono`), com o projeto
+  guardado (`design`) para editar depois; ele escolhe a quantidade como nos
+  outros. A comissão vê todos em "Criações da turma", e eles entram nos
+  pedidos e no PDF da gráfica. Até 10 por formando.
 - **"Logo da Turma 32"** também já vem cadastrado, com a logo do próprio site
   (`/assets/logo-32.png`) e a cor da sombra e do preenchimento para escolher.
 - **Cor personalizada**: quando a comissão sobe uma imagem, o site analisa as
