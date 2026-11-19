@@ -1,7 +1,8 @@
 import { pintar, type Camada } from './cores';
 
 /**
- * Every sticker is round (6 cm). A picture that isn't (the 32, cut to its
+ * Every sticker is round (6 cm). A picture that already is (a full circle
+ * with empty corners) is used whole. One that isn't (the 32, cut to its
  * shape) is fitted inside the circle, on white: centred on what's visible
  * of it, and shrunk until no visible pixel comes closer than FOLGA to the
  * edge — so nothing gets cut off.
@@ -72,6 +73,26 @@ export function noCirculo(src: string, lado: number): Promise<Blob> {
       canvas.height = lado;
       const ctx = canvas.getContext('2d')!;
       const raio = lado / 2;
+
+      // Art that already is the round sticker (a full circle, empty corners —
+      // the ready-made models): used whole, at the full size.
+      const alfa = (x: number, y: number) => px[(Math.min(h - 1, Math.max(0, Math.round(y))) * w + Math.min(w - 1, Math.max(0, Math.round(x)))) * 4 + 3];
+      const d = Math.round(w * 0.03);
+      const jaRedondo =
+        Math.abs(w - h) <= Math.max(2, w * 0.02) &&
+        [alfa(1, 1), alfa(w - 2, 1), alfa(1, h - 2), alfa(w - 2, h - 2)].every((a) => a < 10) &&
+        [alfa(w / 2, d), alfa(w / 2, h - 1 - d), alfa(d, h / 2), alfa(w - 1 - d, h / 2), alfa(w / 2, h / 2)].every((a) => a > 200);
+      if (jaRedondo) {
+        ctx.beginPath();
+        ctx.arc(raio, raio, raio, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, lado, lado);
+        return new Promise<Blob>((resolve, reject) =>
+          canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Não foi possível montar o adesivo.'))), 'image/png'),
+        );
+      }
+
       ctx.beginPath();
       ctx.arc(raio, raio, raio, 0, Math.PI * 2);
       ctx.fillStyle = '#ffffff';

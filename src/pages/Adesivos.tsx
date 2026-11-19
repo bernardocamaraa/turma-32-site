@@ -32,6 +32,7 @@ import {
 } from '../lib/adesivos';
 import { analisarCores, CORES, nomeDaCor, type Camada, type CamadaSugerida } from '../lib/cores';
 import { adesivoRedondo } from '../lib/redondo';
+import { ADESIVOS_PRONTOS, type AdesivoPronto } from '../lib/adesivosProntos';
 import { lerEleitor, salvarEleitor } from '../lib/eleitor';
 import { COLUNAS, DIAMETRO, FOLHA, folhasPara, itensDasFolhas, LINHAS, MARGEM, pdfDasFolhas, POR_FOLHA } from '../lib/folhas';
 import { useIsMobile } from '../lib/useViewport';
@@ -1024,13 +1025,42 @@ function ModelosDaComissao({
   const mobile = useIsMobile();
   // 'novo', a model's id, or null (form closed).
   const [editando, setEditando] = useState<string | null>(null);
+  // A ready-made model being added (the form opens filled in with it).
+  const [pronto, setPronto] = useState<{ arquivo: File; nome: string; descricao: string } | null>(null);
+  const [abrindo, setAbrindo] = useState<string | null>(null);
+  const [erroPronto, setErroPronto] = useState<string | null>(null);
+  const jaNaLoja = new Set(modelos.map((m) => m.nome.trim().toLowerCase()));
+
+  async function usarPronto(p: AdesivoPronto) {
+    setAbrindo(p.id);
+    setErroPronto(null);
+    try {
+      const resposta = await fetch(p.imagem);
+      if (!resposta.ok) throw new Error();
+      const arquivo = new File([await resposta.blob()], `${p.id}.png`, { type: 'image/png' });
+      setPronto({ arquivo, nome: p.nome, descricao: p.descricao });
+      setEditando('novo');
+    } catch {
+      setErroPronto('Não foi possível abrir esse modelo agora. Tente de novo.');
+    } finally {
+      setAbrindo(null);
+    }
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
         <span style={titulo}>Adesivos à venda · {modelos.filter((m) => m.ativo).length}</span>
         {editando !== 'novo' ? (
-          <Button variant="primary" size="sm" iconLeft={<Plus size={16} />} onClick={() => setEditando('novo')}>
+          <Button
+            variant="primary"
+            size="sm"
+            iconLeft={<Plus size={16} />}
+            onClick={() => {
+              setPronto(null);
+              setEditando('novo');
+            }}
+          >
             Adicionar adesivo
           </Button>
         ) : null}
@@ -1038,15 +1068,71 @@ function ModelosDaComissao({
 
       {editando === 'novo' ? (
         <FormModelo
+          key={pronto?.nome ?? 'novo'}
           codigo={codigo}
+          inicial={pronto ?? undefined}
           salvando={salvando === 'modelo-novo'}
-          onCancelar={() => setEditando(null)}
+          onCancelar={() => {
+            setEditando(null);
+            setPronto(null);
+          }}
           onSalvar={async (m) => {
-            if (await agir({ acao: 'salvarModelo', modelo: m }, 'modelo-novo')) setEditando(null);
+            if (await agir({ acao: 'salvarModelo', modelo: m }, 'modelo-novo')) {
+              setEditando(null);
+              setPronto(null);
+            }
           }}
         />
       ) : null}
 
+
+      <Card padding="var(--space-5) var(--space-6)">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+            <span style={{ ...titulo, fontSize: 'var(--fs-body)' }}>Modelos prontos</span>
+            <span style={pequeno}>
+              Adesivos feitos no estilo da turma, com o 32, o Terceirão, as assinaturas e as cores do site. Toque em um para colocar na loja: dá para
+              mudar o nome antes, e o site já sugere as cores que a turma pode escolher.
+            </span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: mobile ? 'repeat(3, 1fr)' : 'repeat(7, 1fr)', gap: 'var(--space-4)' }}>
+            {ADESIVOS_PRONTOS.map((p) => {
+              const na = jaNaLoja.has(p.nome.trim().toLowerCase());
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  disabled={na || !!abrindo}
+                  onClick={() => usarPronto(p)}
+                  title={na ? `${p.nome}: já está na loja` : `Colocar "${p.nome}" na loja`}
+                  aria-label={na ? `${p.nome}: já está na loja` : `Colocar "${p.nome}" na loja`}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 'var(--space-2)',
+                    padding: 'var(--space-3)',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--stroke-hair)',
+                    background: 'var(--ink-800)',
+                    color: 'var(--chalk-050)',
+                    cursor: na ? 'default' : 'pointer',
+                    opacity: na ? 0.45 : abrindo && abrindo !== p.id ? 0.6 : 1,
+                    minHeight: 44,
+                  }}
+                >
+                  <img src={p.imagem} alt="" loading="lazy" style={{ width: '100%', aspectRatio: '1', display: 'block' }} />
+                  <span style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.25, textAlign: 'center' }}>{p.nome}</span>
+                  <span style={{ fontSize: 11, color: na ? 'var(--text-faint)' : 'var(--accent)' }}>
+                    {na ? 'Na loja' : abrindo === p.id ? 'Abrindo…' : 'Adicionar'}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {erroPronto ? <span style={erroEstilo}>{erroPronto}</span> : null}
+        </div>
+      </Card>
       <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : 'repeat(2, 1fr)', gap: 'var(--space-4)' }}>
         {modelos.map((m, i) =>
           editando === m.id ? (
@@ -1185,21 +1271,24 @@ const AMOSTRAS = [
 function FormModelo({
   codigo,
   modelo,
+  inicial,
   salvando,
   onCancelar,
   onSalvar,
 }: {
   codigo: string;
   modelo?: Modelo;
+  /** A ready-made model: the form starts filled in with it. */
+  inicial?: { arquivo: File; nome: string; descricao: string };
   salvando: boolean;
   onCancelar: () => void;
   onSalvar: (m: { nome: string; descricao: string; ativo: boolean; camadas: Camada[]; imagem?: string }) => Promise<void>;
 }) {
   const mobile = useIsMobile();
   const entrada = useRef<HTMLInputElement>(null);
-  const [nome, setNome] = useState(modelo?.nome ?? '');
-  const [descricao, setDescricao] = useState(modelo?.descricao ?? '');
-  const [arquivo, setArquivo] = useState<File | null>(null);
+  const [nome, setNome] = useState(modelo?.nome ?? inicial?.nome ?? '');
+  const [descricao, setDescricao] = useState(modelo?.descricao ?? inicial?.descricao ?? '');
+  const [arquivo, setArquivo] = useState<File | null>(inicial?.arquivo ?? null);
   const [previa, setPrevia] = useState<string | null>(modelo?.imagem ?? null);
   const [analisando, setAnalisando] = useState(false);
   const [resumo, setResumo] = useState<string | null>(null);
