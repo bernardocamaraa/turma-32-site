@@ -297,7 +297,9 @@ export function pintar(src: string, camadas: Camada[], cores: string[]): Promise
       // Which part each pixel is in (the first that takes it), and how much.
       const parte = new Int8Array(px.length / 4).fill(-1);
       const quanto = new Float32Array(px.length / 4);
-      const soma = camadas.map(() => [0, 0]);
+      // Each part's lightness, in 100 steps, to find its median: the colour of the part's main area
+      // (an average would be pulled off by its edges and speckles).
+      const tons = camadas.map(() => new Uint32Array(101));
       for (let i = 0, p = 0; i < px.length; i += 4, p++) {
         if (px[i + 3] < 5) continue;
         const [h, s, l] = hsl(px[i] / 255, px[i + 1] / 255, px[i + 2] / 255);
@@ -307,14 +309,22 @@ export function pintar(src: string, camadas: Camada[], cores: string[]): Promise
             parte[p] = k;
             quanto[p] = w;
             if (w > 0.5) {
-              soma[k][0] += l;
-              soma[k][1]++;
+              tons[k][Math.round(l * 100)]++;
             }
             break;
           }
         }
       }
-      const media = soma.map(([s, n]) => (n ? s / n : 0.5));
+      const media = tons.map((h) => {
+        const total = h.reduce((a, b) => a + b, 0);
+        if (!total) return 0.5;
+        let acumulado = 0;
+        for (let i = 0; i <= 100; i++) {
+          acumulado += h[i];
+          if (acumulado >= total / 2) return i / 100;
+        }
+        return 0.5;
+      });
       for (let i = 0, p = 0; i < px.length; i += 4, p++) {
         const k = parte[p];
         if (k < 0 || !cores[k] || cores[k].toLowerCase() === camadas[k].cor.toLowerCase()) continue;

@@ -11,7 +11,9 @@
 //     optional `observacao`), while the store is open and the order isn't
 //     paid yet. Also gets a link to their own childhood photo
 //     (`fotoInfancia`, from the committee's private `fotos-infancia` bucket
-//     — infancia.sql), for the childhood sticker; never anyone else's.
+//     — infancia.sql), for the childhood sticker; never anyone else's — and
+//     how it's framed (`enquadramento`), which they can change
+//     (`enquadrar`, with `enquadramento`: { x, y, zoom } or null for the default).
 //   - `codigo`: COMMITTEE_CODE. Sees every order; marks one paid or not
 //     (`pago`, with `formando` and `sim`); changes or deletes one (`pedir`
 //     with `formando`, `apagar`); opens/closes the store (`aberta`, with
@@ -24,8 +26,9 @@
 //     with `camadas` (parts of the picture, found by the site) lets the
 //     formando pick a colour for each: the order then has one key per
 //     combination, "<model id>@#rrggbb+#rrggbb". Gets a link
-//     to every formando's childhood photo (`fotos`), to download their
-//     stickers for printing.
+//     to every formando's childhood photo (`fotos`) and how each is framed
+//     (`enquadramentos`), to download their stickers for printing; frames
+//     anyone's (`enquadrar` with `formando`).
 //
 // The anon key can't touch these tables (adesivos.sql): this is the only
 // way in.
@@ -48,6 +51,8 @@ function json(body: unknown, status = 200) {
 }
 
 const BUCKET = 'adesivos';
+/** A picture that ships with the site itself ("/assets/logo-32.png"), not one uploaded to the bucket. */
+const doSite = (caminho: string) => caminho.startsWith('/');
 /** Most of one model a formando can order. */
 const MAXIMO = 200;
 
@@ -55,7 +60,7 @@ const MAXIMO = 200;
 function slug(nome: string): string {
   return nome
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
@@ -100,6 +105,17 @@ function lerChave(chave: string): { id: string; cores: string[] | null } | null 
   const m = /^([A-Za-z0-9_-]{1,64})(?:@(#[0-9a-fA-F]{6}(?:\+#[0-9a-fA-F]{6}){0,3}))?$/.exec(chave);
   return m ? { id: m[1], cores: m[2] ? m[2].toLowerCase().split('+') : null } : null;
 }
+type Enquadramento = { x: number; y: number; zoom: number };
+
+/** A framing as sent: checked, or null for the default; undefined if invalid. */
+function lerEnquadramento(valor: unknown): Enquadramento | null | undefined {
+  if (valor === null) return null;
+  if (!valor || typeof valor !== 'object') return undefined;
+  const { x, y, zoom } = valor as Record<string, unknown>;
+  const num = (v: unknown, min: number, max: number) => typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max;
+  return num(x, 0, 1) && num(y, 0, 1) && num(zoom, 1, 4) ? { x: x as number, y: y as number, zoom: zoom as number } : undefined;
+}
+
 type Linha = { formando: string; itens: Record<string, number>; observacao: string | null; pago: boolean; criado_em: string; atualizado_em: string };
 
 const paraPagina = (l: Linha) => ({
@@ -117,7 +133,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { codigo, whatsapp, nome, acao, itens, observacao, formando, sim, modelo, id, direcao, extensao, valor } = await req.json();
+    const { codigo, whatsapp, nome, acao, itens, observacao, formando, sim, modelo, id, direcao, extensao, valor, enquadramento } = await req.json();
 
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     const recusar = (mensagem: string) => json({ error: mensagem }, 400);
@@ -208,6 +224,15 @@ Deno.serve(async (req) => {
           .upsert({ formando: dono, itens: lidos, observacao: nota, atualizado_em: new Date().toISOString() }, { onConflict: 'formando' });
         if (error) throw error;
       }
+    } else if (acao === 'enquadrar' && (voce || comissao)) {
+      const dono = comissao ? formando : voce;
+      if (typeof dono !== 'string') return recusar('De quem é a foto?');
+      const e = lerEnquadramento(enquadramento);
+      if (e === undefined) return recusar('Enquadramento inválido.');
+      const { error } = e
+        ? await supabase.from('enquadramentos_infancia').upsert({ formando: dono, ...e, atualizado_em: new Date().toISOString() }, { onConflict: 'formando' })
+        : await supabase.from('enquadramentos_infancia').delete().eq('formando', dono);
+      if (error) throw error;
     } else if (acao && !comissao) {
       return recusar('Entre de novo com o seu WhatsApp.');
     } else if (acao === 'pago') {
@@ -253,7 +278,7 @@ Deno.serve(async (req) => {
         const { error } = await supabase.from('modelos_adesivos').update(mudanca).eq('id', m.id);
         if (error) throw error;
         // The picture it had is no longer used.
-        if (mudanca.imagem && existente.imagem) await supabase.storage.from(BUCKET).remove([existente.imagem]);
+        if (mudanca.imagem && existente.imagem && !doSite(existente.imagem)) await supabase.storage.from(BUCKET).remove([existente.imagem]);
       } else {
         if (!imagem) return recusar('Escolha a imagem do adesivo.');
         const ordem = modelos.reduce((max, x) => Math.max(max, x.ordem), 0) + 1;
@@ -281,7 +306,7 @@ Deno.serve(async (req) => {
       if (comEle.length > 0) return recusar(`${comEle.length === 1 ? 'Um pedido tem' : `${comEle.length} pedidos têm`} esse adesivo. Para tirá-lo da loja, esconda em vez de apagar.`);
       const { error } = await supabase.from('modelos_adesivos').delete().eq('id', existente.id);
       if (error) throw error;
-      if (existente.imagem) await supabase.storage.from(BUCKET).remove([existente.imagem]);
+      if (existente.imagem && !doSite(existente.imagem)) await supabase.storage.from(BUCKET).remove([existente.imagem]);
     } else if (acao) {
       return recusar('Ação desconhecida.');
     }
@@ -289,7 +314,8 @@ Deno.serve(async (req) => {
     if (acao && comissao && acao.endsWith('Modelo')) modelos = await lerModelos();
 
     // ---- What the page sees -----------------------------------------------
-    const urlImagem = (caminho: string | null) => (caminho ? supabase.storage.from(BUCKET).getPublicUrl(caminho).data.publicUrl : null);
+    const urlImagem = (caminho: string | null) =>
+      !caminho ? null : doSite(caminho) ? caminho : supabase.storage.from(BUCKET).getPublicUrl(caminho).data.publicUrl;
     const modelosPagina = modelos
       .filter((m) => comissao || m.ativo)
       .map((m) => ({ id: m.id, nome: m.nome, descricao: m.descricao, imagem: urlImagem(m.imagem), crianca: m.crianca, ativo: m.ativo, camadas: m.camadas ?? [] }));
@@ -302,17 +328,20 @@ Deno.serve(async (req) => {
         if (error) throw error;
         livres = data.map((f) => f.formando as string);
       }
-      return json({ comissao, voce, livres, aberta, preco, modelos: modelosPagina, meu: null, fotoInfancia: null, pedidos: null, formandos: null, fotos: null });
+      return json({ comissao, voce, livres, aberta, preco, modelos: modelosPagina, meu: null, fotoInfancia: null, enquadramento: null, pedidos: null, formandos: null, fotos: null, enquadramentos: null });
     }
 
     if (comissao) {
-      const [pedidos, formandos, arquivos] = await Promise.all([
+      const [pedidos, formandos, arquivos, quadros] = await Promise.all([
         supabase.from('pedidos_adesivos').select('formando, itens, observacao, pago, criado_em, atualizado_em').order('formando'),
         supabase.from('convidados_formando').select('formando').order('formando'),
         supabase.rpc('fotos_infancia_arquivos'),
+        supabase.from('enquadramentos_infancia').select('formando, x, y, zoom'),
       ]);
       if (pedidos.error) throw pedidos.error;
       if (formandos.error) throw formandos.error;
+      if (quadros.error) throw quadros.error;
+      const enquadramentos = Object.fromEntries(quadros.data.map((q) => [q.formando, { x: q.x, y: q.y, zoom: q.zoom }]));
       const nomes = formandos.data.map((f) => f.formando as string);
 
       // Every formando's first childhood photo, for their sticker. Never breaks the page.
@@ -349,9 +378,11 @@ Deno.serve(async (req) => {
         modelos: modelosPagina,
         meu: null,
         fotoInfancia: null,
+        enquadramento: null,
         pedidos: (pedidos.data as Linha[]).map(paraPagina),
         formandos: nomes,
         fotos,
+        enquadramentos,
       });
     }
 
@@ -371,11 +402,13 @@ Deno.serve(async (req) => {
       }
     }
 
-    const [{ data: meu, error: erroMeu }, fotoInfancia] = await Promise.all([
+    const [{ data: meu, error: erroMeu }, fotoInfancia, { data: quadro, error: erroQuadro }] = await Promise.all([
       supabase.from('pedidos_adesivos').select('formando, itens, observacao, pago, criado_em, atualizado_em').eq('formando', voce!).maybeSingle(),
       minhaFoto(),
+      supabase.from('enquadramentos_infancia').select('x, y, zoom').eq('formando', voce!).maybeSingle(),
     ]);
     if (erroMeu) throw erroMeu;
+    if (erroQuadro) throw erroQuadro;
 
     // A hidden model still in their order still shows, so it can be taken out.
     const noPedido = new Set(Object.keys((meu?.itens ?? {}) as Record<string, number>).map((k) => lerChave(k)?.id));
@@ -392,9 +425,11 @@ Deno.serve(async (req) => {
       modelos: modelosFormando,
       meu: meu ? paraPagina(meu as Linha) : null,
       fotoInfancia,
+      enquadramento: quadro ? { x: quadro.x, y: quadro.y, zoom: quadro.zoom } : null,
       pedidos: null,
       formandos: null,
       fotos: null,
+      enquadramentos: null,
     });
   } catch (error) {
     console.error(error);

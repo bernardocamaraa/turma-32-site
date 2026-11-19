@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { ArrowDown, ArrowUp, Check, Download, ImagePlus, Minus, Plus, ShoppingBag, TriangleAlert } from 'lucide-react';
-import { AdesivoCrianca, pngDoAdesivo, salvarArquivo } from '../components/AdesivoCrianca';
+import { ArrowDown, ArrowUp, Check, Crop, Download, ImagePlus, Minus, Plus, ShoppingBag, TriangleAlert } from 'lucide-react';
+import { AdesivoCrianca, AjustarFoto, pngDoAdesivo, salvarArquivo, type Enquadramento } from '../components/AdesivoCrianca';
 import { Badge } from '../components/Badge';
 import { BotoesLink } from '../components/BotoesLink';
 import { Button } from '../components/Button';
@@ -47,11 +47,23 @@ const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um :
 const mensagemDe = (e: unknown, padrao: string) => (e instanceof Error ? e.message : padrao);
 
 /** The picture of a model: the formando's own sticker for the childhood one, the committee's picture for the rest. */
-function ArteDoModelo({ modelo, foto, nome, cores }: { modelo: Modelo; foto: string | null; nome: string; cores?: string[] | null }) {
+function ArteDoModelo({
+  modelo,
+  foto,
+  nome,
+  cores,
+  enquadramento,
+}: {
+  modelo: Modelo;
+  foto: string | null;
+  nome: string;
+  cores?: string[] | null;
+  enquadramento?: Enquadramento | null;
+}) {
   if (modelo.crianca) {
     return (
       <div style={{ width: '100%', borderRadius: '50%', boxShadow: '0 18px 40px rgba(0,0,0,.55)' }}>
-        <AdesivoCrianca foto={foto} nome={nome} />
+        <AdesivoCrianca foto={foto} nome={nome} enquadramento={enquadramento} />
       </div>
     );
   }
@@ -180,6 +192,19 @@ function Loja() {
     }
   }
 
+  /** Saves how the childhood photo is framed — without touching quantities not saved yet. Resolves to an error message, or null. */
+  async function enquadrar(enquadramento: Enquadramento | null): Promise<string | null> {
+    if (!eleitor) return 'Entre de novo com o seu WhatsApp.';
+    try {
+      const novo = await buscarAdesivos(eleitor, { acao: 'enquadrar', enquadramento });
+      setDados(novo);
+      popup({ tipo: 'ok', titulo: 'Foto enquadrada!' });
+      return null;
+    } catch (e) {
+      return mensagemDe(e, 'Não foi possível salvar agora.');
+    }
+  }
+
   function sair() {
     salvarEleitor(null);
     setEleitor(null);
@@ -270,7 +295,18 @@ function Loja() {
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : 'repeat(auto-fill, minmax(300px, 1fr))', gap: 'var(--space-5)' }}>
               {modelos.map((m) => (
-                <CartaoModelo key={m.id} modelo={m} preco={preco} voce={dados.voce!} foto={dados.fotoInfancia} itens={itens} travado={travado} onMudar={mudar} />
+                <CartaoModelo
+                  key={m.id}
+                  modelo={m}
+                  preco={preco}
+                  voce={dados.voce!}
+                  foto={dados.fotoInfancia}
+                  enquadramento={dados.enquadramento}
+                  onEnquadrar={enquadrar}
+                  itens={itens}
+                  travado={travado}
+                  onMudar={mudar}
+                />
               ))}
             </div>
           )}
@@ -485,6 +521,8 @@ function CartaoModelo({
   preco,
   voce,
   foto,
+  enquadramento,
+  onEnquadrar,
   itens,
   travado,
   onMudar,
@@ -494,12 +532,17 @@ function CartaoModelo({
   preco: number | null;
   voce: string;
   foto: string | null;
+  enquadramento: Enquadramento | null;
+  onEnquadrar: (e: Enquadramento | null) => Promise<string | null>;
   itens: Itens;
   travado: boolean;
   onMudar: (chave: string, q: number) => void;
 }) {
   const [baixando, setBaixando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [ajustando, setAjustando] = useState(false);
+  const [salvandoQuadro, setSalvandoQuadro] = useState(false);
+  const [erroQuadro, setErroQuadro] = useState<string | null>(null);
   const colorido = modelo.camadas.length > 0;
   // The combinations of this model already in the order.
   const combinacoes = Object.entries(itens)
@@ -517,7 +560,7 @@ function CartaoModelo({
     setBaixando(true);
     setErro(null);
     try {
-      salvarArquivo(await pngDoAdesivo(foto, voce), `adesivo-${slugDoNome(voce)}.png`);
+      salvarArquivo(await pngDoAdesivo(foto, voce, undefined, enquadramento), `adesivo-${slugDoNome(voce)}.png`);
     } catch (e) {
       setErro(mensagemDe(e, 'Não foi possível baixar agora.'));
     } finally {
@@ -547,7 +590,26 @@ function CartaoModelo({
             Escolha {modelo.camadas.length > 1 ? 'as cores' : 'a cor'}
           </Badge>
         ) : null}
-        <ArteDoModelo modelo={modelo} foto={foto} nome={voce} cores={cores} />
+        {ajustando && foto ? (
+          <AjustarFoto
+            foto={foto}
+            nome={voce}
+            inicial={enquadramento}
+            salvando={salvandoQuadro}
+            erro={erroQuadro}
+            onCancelar={() => setAjustando(false)}
+            onSalvar={async (e) => {
+              setSalvandoQuadro(true);
+              setErroQuadro(null);
+              const problema = await onEnquadrar(e);
+              setSalvandoQuadro(false);
+              if (problema) setErroQuadro(problema);
+              else setAjustando(false);
+            }}
+          />
+        ) : (
+          <ArteDoModelo modelo={modelo} foto={foto} nome={voce} cores={cores} enquadramento={enquadramento} />
+        )}
       </div>
 
       <div style={{ padding: 'var(--space-5) var(--space-6) var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', flex: 1 }}>
@@ -579,10 +641,15 @@ function CartaoModelo({
             rotulo={cores ? `${modelo.nome} (${descreverCores(modelo, cores)})` : modelo.nome}
             onMudar={(q) => onMudar(chave, q)}
           />
-          {modelo.crianca && foto ? (
-            <Button variant="ghost" size="sm" carregando={baixando} iconLeft={<Download size={16} />} onClick={baixar}>
-              Baixar
-            </Button>
+          {modelo.crianca && foto && !ajustando ? (
+            <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+              <Button variant="ghost" size="sm" iconLeft={<Crop size={16} />} onClick={() => setAjustando(true)}>
+                Ajustar foto
+              </Button>
+              <Button variant="ghost" size="sm" carregando={baixando} iconLeft={<Download size={16} />} onClick={baixar}>
+                Baixar
+              </Button>
+            </div>
           ) : null}
         </div>
 
@@ -825,7 +892,7 @@ export function AdesivosComissao({ codigo }: { codigo: string }) {
         ))}
       </Card>
 
-      <FolhasDaGrafica pedidos={pedidos} modelos={modelos} fotos={dados.fotos ?? {}} />
+      <FolhasDaGrafica pedidos={pedidos} modelos={modelos} fotos={dados.fotos ?? {}} enquadramentos={dados.enquadramentos ?? {}} />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
         <span style={titulo}>Pedidos · {pedidos.length}</span>
@@ -846,17 +913,34 @@ export function AdesivosComissao({ codigo }: { codigo: string }) {
         {faltam.length > 0 ? <p style={pequeno}>Ainda não pediram ({faltam.length}): {faltam.join(', ')}.</p> : null}
       </div>
 
-      <AdesivosDeCrianca formandos={dados.formandos ?? []} fotos={dados.fotos ?? {}} pedidos={pedidos} modelos={modelos} />
+      <AdesivosDeCrianca
+        formandos={dados.formandos ?? []}
+        fotos={dados.fotos ?? {}}
+        enquadramentos={dados.enquadramentos ?? {}}
+        pedidos={pedidos}
+        modelos={modelos}
+        onEnquadrar={(formando, enquadramento) => agir({ acao: 'enquadrar', formando, enquadramento }, `quadro-${formando}`)}
+      />
     </div>
   );
 }
 
 /** The print-shop PDF: every sticker ordered, 6 cm, on 33 × 46 cm sheets with a 3 cm margin. */
-function FolhasDaGrafica({ pedidos, modelos, fotos }: { pedidos: Pedido[]; modelos: Modelo[]; fotos: Record<string, string> }) {
+function FolhasDaGrafica({
+  pedidos,
+  modelos,
+  fotos,
+  enquadramentos,
+}: {
+  pedidos: Pedido[];
+  modelos: Modelo[];
+  fotos: Record<string, string>;
+  enquadramentos: Record<string, Enquadramento>;
+}) {
   const [linhaDeCorte, setLinhaDeCorte] = useState(false);
   const [gerando, setGerando] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const { itens, semFoto } = itensDasFolhas(pedidos, modelos, fotos);
+  const { itens, semFoto } = itensDasFolhas(pedidos, modelos, fotos, enquadramentos);
   const adesivos = itens.reduce((s, i) => s + i.quantidade, 0);
   const folhas = folhasPara(adesivos);
 
@@ -1457,8 +1541,24 @@ function PedidoDaComissao({
  * Every formando's childhood sticker, made from their photo in the frame:
  * to check them, and download one or all (a .zip) for the print shop.
  */
-function AdesivosDeCrianca({ formandos, fotos, pedidos, modelos }: { formandos: string[]; fotos: Record<string, string>; pedidos: Pedido[]; modelos: Modelo[] }) {
+function AdesivosDeCrianca({
+  formandos,
+  fotos,
+  enquadramentos,
+  pedidos,
+  modelos,
+  onEnquadrar,
+}: {
+  formandos: string[];
+  fotos: Record<string, string>;
+  enquadramentos: Record<string, Enquadramento>;
+  pedidos: Pedido[];
+  modelos: Modelo[];
+  onEnquadrar: (formando: string, e: Enquadramento | null) => Promise<boolean>;
+}) {
   const mobile = useIsMobile();
+  const [ajustando, setAjustando] = useState<string | null>(null);
+  const [salvandoQuadro, setSalvandoQuadro] = useState(false);
   const [baixando, setBaixando] = useState<string | null>(null);
   const [progresso, setProgresso] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -1471,7 +1571,7 @@ function AdesivosDeCrianca({ formandos, fotos, pedidos, modelos }: { formandos: 
     setBaixando(formando);
     setErro(null);
     try {
-      salvarArquivo(await pngDoAdesivo(fotos[formando], formando), `adesivo-${slugDoNome(formando)}.png`);
+      salvarArquivo(await pngDoAdesivo(fotos[formando], formando, undefined, enquadramentos[formando]), `adesivo-${slugDoNome(formando)}.png`);
     } catch (e) {
       setErro(mensagemDe(e, 'Não foi possível baixar agora.'));
     } finally {
@@ -1487,7 +1587,7 @@ function AdesivosDeCrianca({ formandos, fotos, pedidos, modelos }: { formandos: 
       const arquivos: Record<string, Uint8Array> = {};
       for (const [i, f] of quem.entries()) {
         setProgresso(`${i + 1} de ${quem.length}`);
-        const png = await pngDoAdesivo(fotos[f], f);
+        const png = await pngDoAdesivo(fotos[f], f, undefined, enquadramentos[f]);
         const qtd = pediram.get(f) ?? 0;
         arquivos[`${qtd > 0 ? `${qtd}x ` : ''}${f}.png`] = new Uint8Array(await png.arrayBuffer());
       }
@@ -1519,15 +1619,41 @@ function AdesivosDeCrianca({ formandos, fotos, pedidos, modelos }: { formandos: 
         O arquivo de cada um vem no tamanho do modelo (1181 × 1181), com o nome do formando e, para quem pediu, a quantidade na frente.
       </p>
       {erro ? <span style={erroEstilo}>{erro}</span> : null}
+      {ajustando && fotos[ajustando] ? (
+        <Card accent padding="var(--space-6)">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', alignItems: 'center' }}>
+            <span style={{ ...titulo, fontSize: 'var(--fs-body)' }}>Enquadrar a foto de {ajustando}</span>
+            <AjustarFoto
+              key={ajustando}
+              foto={fotos[ajustando]}
+              nome={ajustando}
+              inicial={enquadramentos[ajustando] ?? null}
+              salvando={salvandoQuadro}
+              onCancelar={() => setAjustando(null)}
+              onSalvar={async (e) => {
+                setSalvandoQuadro(true);
+                const ok = await onEnquadrar(ajustando, e);
+                setSalvandoQuadro(false);
+                if (ok) setAjustando(null);
+              }}
+            />
+          </div>
+        </Card>
+      ) : null}
       <div style={{ display: 'grid', gridTemplateColumns: mobile ? 'repeat(2, 1fr)' : 'repeat(5, 1fr)', gap: 'var(--space-5)' }}>
         {comFoto.map((f) => (
           <div key={f} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', alignItems: 'center', textAlign: 'center' }}>
-            <AdesivoCrianca foto={fotos[f]} nome={f} />
+            <AdesivoCrianca foto={fotos[f]} nome={f} enquadramento={enquadramentos[f]} />
             <span style={{ fontSize: 'var(--fs-body-sm)', fontWeight: 600 }}>{f}</span>
             {(pediram.get(f) ?? 0) > 0 ? <span style={{ ...pequeno, color: 'var(--gild-300)' }}>Pediu {pediram.get(f)}</span> : null}
-            <Button variant="ghost" size="sm" style={{ height: 28 }} disabled={!!baixando} carregando={baixando === f} iconLeft={<Download size={14} />} onClick={() => baixar(f)}>
-              Baixar
-            </Button>
+            <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+              <Button variant="ghost" size="sm" style={{ height: 28, padding: 0 }} iconLeft={<Crop size={14} />} onClick={() => setAjustando(f)}>
+                Ajustar
+              </Button>
+              <Button variant="ghost" size="sm" style={{ height: 28, padding: 0 }} disabled={!!baixando} carregando={baixando === f} iconLeft={<Download size={14} />} onClick={() => baixar(f)}>
+                Baixar
+              </Button>
+            </div>
           </div>
         ))}
       </div>
