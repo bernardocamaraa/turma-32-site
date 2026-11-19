@@ -1,3 +1,4 @@
+import type { Enquadramento } from '../components/AdesivoCrianca';
 import { nomeDaCor, type Camada } from './cores';
 import { chamarFuncao, supabase } from './supabase';
 
@@ -57,12 +58,16 @@ export type DadosAdesivos = {
   meu: Pedido | null;
   /** A link (valid a day) to the formando's own childhood photo, or null while the committee has none. */
   fotoInfancia: string | null;
+  /** How the formando framed their photo (null: the default crop). */
+  enquadramento: Enquadramento | null;
   /** Committee only: every order. */
   pedidos: Pedido[] | null;
   /** Committee only: every formando's name. */
   formandos: string[] | null;
   /** Committee only: each formando's childhood photo (those who have one). */
   fotos: Record<string, string> | null;
+  /** Committee only: how each photo is framed (missing: the default crop). */
+  enquadramentos: Record<string, Enquadramento> | null;
 };
 
 export type AcessoAdesivos = { whatsapp: string; nome?: string } | { codigo: string } | Record<string, never>;
@@ -78,6 +83,8 @@ export type AcaoAdesivos =
   | { acao: 'apagar'; formando: string }
   /** Committee: opens or closes the store. */
   | { acao: 'aberta'; sim: boolean }
+  /** Frames the childhood photo (null: back to the default). Committee: whose, in `formando`. */
+  | { acao: 'enquadrar'; enquadramento: Enquadramento | null; formando?: string }
   /** Committee: the price of every sticker (null: none yet). */
   | { acao: 'preco'; valor: number | null }
   /** Committee: creates (no id) or changes a model. */
@@ -87,7 +94,7 @@ export type AcaoAdesivos =
 
 export async function buscarAdesivos(acesso: AcessoAdesivos, acao?: AcaoAdesivos): Promise<DadosAdesivos> {
   const dados = await chamarFuncao<DadosAdesivos>('adesivos', { ...acesso, ...acao });
-  return { ...dados, modelos: dados.modelos ?? [], preco: dados.preco ?? null };
+  return { ...dados, modelos: dados.modelos ?? [], preco: dados.preco ?? null, enquadramento: dados.enquadramento ?? null, enquadramentos: dados.enquadramentos ?? null };
 }
 
 const TIPOS: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml' };

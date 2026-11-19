@@ -509,6 +509,14 @@ escolhe quantos quer de cada modelo de adesivo para distribuir no baile.
   círculo da foto recortado. Cada formando só vê o seu. Na aba Adesivos, a
   comissão vê o de todo mundo e baixa um por um ou todos num .zip, em PNG no
   tamanho do modelo (1181 × 1181).
+- **Enquadramento da foto**: a parte da foto que aparece no círculo pode ser
+  ajustada (arrastar e zoom) pelo próprio formando, no cartão do adesivo
+  ("Ajustar foto"), e pela comissão, na lista de adesivos de criança
+  ("Ajustar"). Fica salvo em `enquadramentos_infancia` e vale para a loja, os
+  arquivos baixados e o PDF. Sem ajuste, uma foto em pé é cortada mais para
+  cima, onde costuma estar o rosto.
+- **"Logo da Turma 32"** também já vem cadastrado, com a logo do próprio site
+  (`/assets/logo-32.png`) e a cor da sombra e do preenchimento para escolher.
 - **Cor personalizada**: quando a comissão sobe uma imagem, o site analisa as
   cores dela (`src/lib/cores.ts`) e sugere quais partes ficam legais em outra
   cor — no 32, a sombra azul e o preenchimento preto; o branco (a borda) e

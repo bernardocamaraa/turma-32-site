@@ -4,7 +4,7 @@
  * sheet, at the real size). Each different sticker goes into the PDF once
  * and is placed as many times as it was ordered, so the file stays small.
  */
-import { pngDoAdesivo } from '../components/AdesivoCrianca';
+import { pngDoAdesivo, type Enquadramento } from '../components/AdesivoCrianca';
 import { lerChave, type Modelo, type Pedido } from './adesivos';
 import { adesivoRedondo } from './redondo';
 
@@ -84,7 +84,12 @@ async function deBlob<T>(blob: Blob, usar: (url: string) => Promise<T>): Promise
  * model once per combination of colours. A childhood sticker with no photo
  * yet can't be printed: it's left out and named in `semFoto`.
  */
-export function itensDasFolhas(pedidos: Pedido[], modelos: Modelo[], fotos: Record<string, string>): { itens: ItemDaFolha[]; semFoto: string[] } {
+export function itensDasFolhas(
+  pedidos: Pedido[],
+  modelos: Modelo[],
+  fotos: Record<string, string>,
+  enquadramentos: Record<string, Enquadramento> = {},
+): { itens: ItemDaFolha[]; semFoto: string[] } {
   const itens: ItemDaFolha[] = [];
   const semFoto: string[] = [];
   for (const modelo of modelos) {
@@ -101,7 +106,7 @@ export function itensDasFolhas(pedidos: Pedido[], modelos: Modelo[], fotos: Reco
           rotulo: `${modelo.nome} · ${p.formando}`,
           quantidade: q,
           redondo: true,
-          gerar: async () => deBlob(await pngDoAdesivo(foto, p.formando, PIXELS), (url) => quadrado(url, true)),
+          gerar: async () => deBlob(await pngDoAdesivo(foto, p.formando, PIXELS, enquadramentos[p.formando]), (url) => quadrado(url, true)),
         });
       }
       continue;

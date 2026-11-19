@@ -18,7 +18,8 @@ create table if not exists public.modelos_adesivos (
   id text primary key default replace(gen_random_uuid()::text, '-', ''),
   nome text not null check (char_length(nome) between 1 and 80),
   descricao text check (char_length(descricao) <= 300),
-  -- Path of the picture in the `adesivos` bucket; null for the childhood one.
+  -- Path of the picture in the `adesivos` bucket, or a picture of the site
+  -- itself when it starts with "/" (the 32's logo); null for the childhood one.
   imagem text,
   -- The childhood sticker: made from each formando's own photo.
   crianca boolean not null default false,
@@ -37,6 +38,14 @@ alter table public.modelos_adesivos add column if not exists camadas jsonb not n
 
 insert into public.modelos_adesivos (id, nome, descricao, crianca, ordem)
 values ('crianca', 'Você criança', 'O seu adesivo, com a sua foto de criança.', true, 0)
+on conflict (id) do nothing;
+
+-- The class's 32, from the site's own logo, with the colour of its shadow and
+-- of its black fill for the formando to pick (as the site's colour analysis
+-- suggests for this picture — src/lib/cores.ts).
+insert into public.modelos_adesivos (id, nome, descricao, imagem, ordem, camadas)
+values ('logo-32', 'Logo da Turma 32', 'O 32 da turma. Escolha a cor da sombra e do preenchimento.', '/assets/logo-32.png', 1,
+  '[{"tipo":"matiz","nome":"Sombra","cor":"#559ecb","h0":180,"h1":230},{"tipo":"escuro","nome":"Preenchimento","cor":"#050607"}]'::jsonb)
 on conflict (id) do nothing;
 
 alter table public.modelos_adesivos enable row level security;
@@ -68,6 +77,19 @@ create table if not exists public.pedidos_adesivos (
 alter table public.pedidos_adesivos enable row level security;
 -- No policies: only the `adesivos` Edge Function reads or writes it, after
 -- checking the WhatsApp or the committee code.
+
+-- How each formando's childhood photo is framed in their sticker: the centre
+-- of the crop (0–1 across and down the photo) and the zoom. No row: the
+-- site's default crop. The formando sets theirs, the committee anyone's.
+create table if not exists public.enquadramentos_infancia (
+  formando text primary key references public.convidados_formando (formando) on update cascade on delete cascade,
+  x real not null check (x >= 0 and x <= 1),
+  y real not null check (y >= 0 and y <= 1),
+  zoom real not null check (zoom >= 1 and zoom <= 4),
+  atualizado_em timestamptz not null default now()
+);
+alter table public.enquadramentos_infancia enable row level security;
+-- No policies: read and written only by the `adesivos` Edge Function.
 
 -- The price: one for every sticker, set by the committee. Null while it
 -- isn't decided — the site then shows no price anywhere. (A project that
