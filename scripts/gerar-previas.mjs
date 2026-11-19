@@ -31,6 +31,8 @@ const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
 // Embedded as data URIs: a page built with setContent can't load file:// URLs.
 const asset = (nome) => `data:image/png;base64,${readFileSync(join(raiz, 'public', 'assets', nome)).toString('base64')}`;
 const LOGO = asset('logo-32.png');
+// The icons are small: the plain 32 (no spray) reads better there.
+const LOGO_ICONE = asset('logo-32-liso.png');
 const MURAL = asset('assinaturas-mural.png');
 
 // The names come straight from the site's own list, so the two never drift.
@@ -101,7 +103,7 @@ function icone(tamanho) {
   align-items: center; justify-content: center; overflow: hidden; }
   div { position: absolute; inset: 0; background: radial-gradient(circle, rgba(169,211,232,.3), rgba(169,211,232,0) 62%); }
   img { position: relative; height: ${Math.round(tamanho * 0.78)}px; }
-  </style></head><body><div></div><img src="${LOGO}"></body></html>`;
+  </style></head><body><div></div><img src="${LOGO_ICONE}"></body></html>`;
 }
 
 const navegador = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});

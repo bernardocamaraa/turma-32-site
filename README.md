@@ -73,6 +73,7 @@ Cada parte é uma aba, com endereço próprio (dá para salvar ou mandar):
 | Mesas | `/comissao/mesas` | Quantas pessoas cada formando leva, os links pessoais e o mapa. |
 | Fotos de criança | `/comissao/fotos-de-crianca` | A foto de cada formando, para baixar todas juntas. |
 | Músicas | `/comissao/musicas` | A música de cada formando na descida da escada, quem falta e a lista para o DJ. |
+| Adesivos | `/comissao/adesivos` | Os pedidos da loja de adesivos, quem pagou, o total de cada modelo para a gráfica e o adesivo de criança de cada um para baixar. |
 | Álbum e mensagens | `/comissao/album` | Liberar o álbum da festa, moderar as fotos e ler as mensagens. |
 
 As abas ficam presas no topo ao rolar a página. Os endereços antigos
@@ -493,3 +494,37 @@ supabase/
 
 > A Edge Function é publicada à parte (`supabase functions deploy
 > committee-data`): um `git push` atualiza o site, mas não ela.
+
+## Loja de adesivos (`/adesivos`)
+
+Cada formando entra com o WhatsApp (o mesmo da votação e da música) e
+escolhe quantos quer de cada modelo de adesivo para distribuir no baile.
+
+- **Os modelos à venda** são cadastrados pela comissão, na aba Adesivos:
+  imagem, nome e descrição. Dá para editar, mudar a ordem, esconder
+  e apagar (só quem nenhum pedido tem; para os outros, esconder).
+- **"Você criança"** já vem cadastrado: é a foto de criança de cada formando
+  (a que a comissão colocou na aba Fotos de criança) por baixo da moldura
+  `public/assets/adesivo-crianca-moldura.webp` — o modelo da comissão com o
+  círculo da foto recortado. Cada formando só vê o seu. Na aba Adesivos, a
+  comissão vê o de todo mundo e baixa um por um ou todos num .zip, em PNG no
+  tamanho do modelo (1181 × 1181).
+- **Cor personalizada**: quando a comissão sobe uma imagem, o site analisa as
+  cores dela (`src/lib/cores.ts`) e sugere quais partes ficam legais em outra
+  cor — no 32, a sombra azul e o preenchimento preto; o branco (a borda) e
+  fotos não são sugeridos. A comissão marca as partes, dá um nome a cada uma
+  (é o que a turma vê) e vê uma prévia. Na loja, o formando escolhe a cor de
+  cada parte e pode pedir várias combinações. A lista para a gráfica separa
+  por combinação, com o arquivo de cada uma.
+- **Arquivo para a gráfica**: um PDF no tamanho real, folhas de 33 × 46 cm
+  com margem de 3 cm, todos os adesivos com 6 cm (4 × 6 = 24 por folha), com
+  linha de corte opcional (`src/lib/folhas.ts`). Todos são redondos: uma
+  arte que não é (como o 32) vai encaixada inteira dentro do círculo, sobre
+  branco, com folga para o corte (`src/lib/redondo.ts`) — e aparece assim
+  também na loja.
+- **Preço**: um só para todos os adesivos, que a comissão define na aba
+  Adesivos. Enquanto estiver vazio, o site não mostra valor nenhum (os
+  pedidos funcionam normalmente). A chave Pix fica em `PIX`, em
+  `src/lib/adesivos.ts`, e só aparece quando há preço.
+- Para ligar: rode `supabase/adesivos.sql` no SQL Editor (depois de
+  `infancia.sql`) e publique a função com `supabase functions deploy adesivos`.
