@@ -11,7 +11,7 @@ const H = 336;
 // panel beside it (pages/Mesas.tsx).
 const R_MESA = 21;
 
-/** A rectangle's size: one of the venue's is 34×84; the long table (R) is two of them pushed together. */
+/** A rectangle's size: the venue's are 34×84, unless a table sets its own length. */
 function ret(p: PosicaoMesa): { w: number; h: number } {
   return { w: 34, h: p.altura ?? 84 };
 }
@@ -278,8 +278,8 @@ function RotuloProfessores({ desenhadas }: { desenhadas: MesaDesenhada[] }) {
  * one by one around it — gold for the viewer's, blue for classmates', silver
  * for the teachers, empty for free ones. Clicking the dimmed map closes it.
  *
- * On a phone the bottom sheet covers the lower half of the map, where the
- * long table (R) can't fit standing up — there it opens lying down.
+ * On a phone the bottom sheet covers the lower half of the map, where a
+ * rectangle can't fit standing up — there it opens lying down.
  */
 function MesaAberta({
   d,
@@ -298,7 +298,7 @@ function MesaAberta({
   const base = alcance(d.p);
   const r = deitada ? { x: base.y, y: base.x } : base;
   // Grows as much as its shape allows, but no taller than 70% of the map —
-  // the long table would otherwise take over the screen — nor, on a phone,
+  // a rectangle would otherwise take over the screen — nor, on a phone,
   // wider than the slice of the (wider than the screen) map in view.
   const larguraVisivel = painel === 'baixo' ? W * 0.45 : W - 8;
   const s = Math.min(ESCALA[d.p.formato], larguraVisivel / (2 * r.x), (H * 0.7) / (2 * r.y));
