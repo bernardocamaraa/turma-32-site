@@ -218,7 +218,8 @@ function Loja() {
   const publicos = modelos.filter((m) => !m.dono);
   const meus = modelos.filter((m) => m.dono && m.dono === dados?.voce);
   const recursos = useMemo<Recursos>(
-    () => ({ foto: dados?.fotoInfancia ?? null, assinatura: dados?.voce ? assinaturaDe(dados.voce) : null }),
+    // The signature in vector (scripts/vetorizar-assinaturas.py): sharp however big it's drawn.
+    () => ({ foto: dados?.fotoInfancia ?? null, assinatura: dados?.voce ? (assinaturaDe(dados.voce)?.replace(/\.png$/, '.svg') ?? null) : null }),
     [dados?.fotoInfancia, dados?.voce],
   );
   // The editor, when open: a new sticker, or one of theirs (`id`).
