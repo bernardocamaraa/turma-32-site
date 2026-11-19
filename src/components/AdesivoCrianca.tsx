@@ -1,170 +1,126 @@
-import { forwardRef, useId } from 'react';
-import { nomeNoAdesivo } from '../lib/adesivos';
+import { User } from 'lucide-react';
 
 /**
- * The childhood sticker: the formando's childhood photo in a round die-cut
- * sticker, the class name around the top and their name on a band across
- * the bottom. Drawn as SVG so the same drawing shows on the page and turns
- * into a print-size PNG (baixarAdesivoCrianca below).
+ * The childhood sticker: the committee's own model
+ * (public/assets/adesivo-crianca-moldura.webp — the date, "FORMATURA 32
+ * 2026", the stars, with the photo's circle cut out) laid over the
+ * formando's childhood photo. One per formando, made from their own photo.
  *
- * PROVISIONAL LAYOUT — to be replaced by the committee's own model.
+ * The sticker is cut round: `redondo` shows it that way on the page; the
+ * print file (pngDoAdesivo) keeps the square, like the model, for the print
+ * shop to cut.
  */
-export const AdesivoCrianca = forwardRef<SVGSVGElement, { foto: string | null; nome: string; tamanho?: number | string }>(
-  function AdesivoCrianca({ foto, nome, tamanho = '100%' }, ref) {
-    const id = useId().replace(/:/g, '');
-    const nomeCurto = nomeNoAdesivo(nome).toUpperCase();
-    // Long names shrink to fit the band.
-    const fonteNome = Math.min(54, Math.floor(520 / Math.max(6, nomeCurto.length) / 0.62));
 
-    return (
-      <svg
-        ref={ref}
-        xmlns="http://www.w3.org/2000/svg"
-        xmlnsXlink="http://www.w3.org/1999/xlink"
-        viewBox="0 0 600 600"
-        width={tamanho}
-        height={tamanho}
-        role="img"
-        aria-label={`Adesivo de criança de ${nome}`}
-        style={{ display: 'block', overflow: 'visible' }}
-      >
-        <defs>
-          <radialGradient id={`${id}-fundo`} cx="50%" cy="38%" r="70%">
-            <stop offset="0%" stopColor="#1d3a4c" />
-            <stop offset="70%" stopColor="#0a1620" />
-            <stop offset="100%" stopColor="#000000" />
-          </radialGradient>
-          <clipPath id={`${id}-foto`}>
-            <circle cx="300" cy="268" r="168" />
-          </clipPath>
-          <path id={`${id}-arco`} d="M 92 268 A 208 208 0 0 1 508 268" fill="none" />
-        </defs>
+export const MOLDURA = '/assets/adesivo-crianca-moldura.webp';
+/** The model's size, and where its photo circle is (measured on it). */
+const LADO = 1181;
+const FOTO = { cx: 581.5, cy: 594.5, r: 443 };
 
-        {/* The die-cut: a white margin all around, like a real sticker. */}
-        <circle cx="300" cy="300" r="296" fill="#ffffff" />
-        <circle cx="300" cy="300" r="276" fill={`url(#${id}-fundo)`} />
-        <circle cx="300" cy="300" r="262" fill="none" stroke="#a9d3e8" strokeWidth="3" strokeDasharray="2 10" strokeLinecap="round" />
-
-        {/* The class around the top. */}
-        <text
-          fontFamily="-apple-system, BlinkMacSystemFont, 'SF Pro Display', Inter, 'Helvetica Neue', Arial, sans-serif"
-          fontSize="30"
-          fontWeight="800"
-          letterSpacing="7"
-          fill="#a9d3e8"
+export function AdesivoCrianca({
+  foto,
+  nome,
+  redondo = true,
+  tamanho = '100%',
+}: {
+  foto: string | null;
+  nome: string;
+  redondo?: boolean;
+  tamanho?: number | string;
+}) {
+  // The photo fills the hole as a square, cut round by the frame's hole.
+  const lado = (FOTO.r * 2 * 100) / LADO;
+  return (
+    <div
+      role="img"
+      aria-label={`Adesivo de criança de ${nome}`}
+      style={{
+        position: 'relative',
+        width: tamanho,
+        aspectRatio: '1',
+        borderRadius: redondo ? '50%' : 0,
+        overflow: 'hidden',
+        background: '#2b5b91',
+      }}
+    >
+      {foto ? (
+        <img
+          src={foto}
+          alt=""
+          style={{
+            position: 'absolute',
+            left: `${((FOTO.cx - FOTO.r) * 100) / LADO}%`,
+            top: `${((FOTO.cy - FOTO.r) * 100) / LADO}%`,
+            width: `${lado}%`,
+            height: `${lado}%`,
+            objectFit: 'cover',
+            borderRadius: '50%',
+          }}
+        />
+      ) : (
+        <div
+          style={{
+            position: 'absolute',
+            left: `${((FOTO.cx - FOTO.r) * 100) / LADO}%`,
+            top: `${((FOTO.cy - FOTO.r) * 100) / LADO}%`,
+            width: `${lado}%`,
+            height: `${lado}%`,
+            borderRadius: '50%',
+            background: '#1f4370',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'rgba(255,255,255,.55)',
+          }}
         >
-          <textPath href={`#${id}-arco`} xlinkHref={`#${id}-arco`} startOffset="50%" textAnchor="middle">
-            TERCEIRÃO · TURMA 32
-          </textPath>
-        </text>
+          <User style={{ width: '45%', height: '45%' }} strokeWidth={1.5} aria-hidden />
+        </div>
+      )}
+      <img src={MOLDURA} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' }} />
+    </div>
+  );
+}
 
-        {/* The photo. */}
-        {foto ? (
-          <image
-            href={foto}
-            xlinkHref={foto}
-            x="132"
-            y="100"
-            width="336"
-            height="336"
-            preserveAspectRatio="xMidYMid slice"
-            clipPath={`url(#${id}-foto)`}
-            crossOrigin="anonymous"
-          />
-        ) : (
-          <g>
-            <circle cx="300" cy="268" r="168" fill="#2c2c2e" />
-            <circle cx="300" cy="228" r="58" fill="#48484a" />
-            <path d="M 196 372 Q 300 262 404 372 Z" fill="#48484a" />
-          </g>
-        )}
-        <circle cx="300" cy="268" r="168" fill="none" stroke="#ffffff" strokeWidth="10" />
-
-        {/* Their name, on a band across the bottom. */}
-        <g transform="rotate(-4 300 460)">
-          <rect x="70" y="416" width="460" height="84" rx="20" fill="#ffffff" />
-          <rect x="70" y="416" width="460" height="84" rx="20" fill="none" stroke="#000000" strokeWidth="4" />
-          <text
-            x="300"
-            y="458"
-            dominantBaseline="central"
-            textAnchor="middle"
-            fontFamily="-apple-system, BlinkMacSystemFont, 'SF Pro Display', Inter, 'Helvetica Neue', Arial, sans-serif"
-            fontSize={fonteNome}
-            fontWeight="900"
-            letterSpacing="1"
-            fill="#000000"
-          >
-            {nomeCurto}
-          </text>
-        </g>
-        <text
-          x="300"
-          y="536"
-          textAnchor="middle"
-          fontFamily="-apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, 'Helvetica Neue', Arial, sans-serif"
-          fontSize="20"
-          fontWeight="700"
-          letterSpacing="5"
-          fill="#dcc48c"
-        >
-          FORMATURA 2026
-        </text>
-      </svg>
-    );
-  },
-);
-
-/** A Blob read as a data: URL. */
-function comoDataUrl(blob: Blob): Promise<string> {
+function carregarImagem(src: string, erro: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
-    const leitor = new FileReader();
-    leitor.onload = () => resolve(leitor.result as string);
-    leitor.onerror = () => reject(leitor.error);
-    leitor.readAsDataURL(blob);
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error(erro));
+    img.src = src;
   });
 }
 
 /**
- * Saves the sticker drawn in `svg` as a PNG of `lado` pixels (1800 ≈ 15cm at
- * 300dpi), for the print shop. The photo is a link to Storage, which an SVG
- * turned into an image can't load: it's fetched and put inside first.
+ * One formando's sticker as a square PNG of `lado` pixels (the model's own
+ * size by default), for the print shop: the photo cropped to fill the
+ * circle, the frame over it.
  */
-export async function baixarAdesivoCrianca(svg: SVGSVGElement, nomeArquivo: string, lado = 1800): Promise<void> {
-  const copia = svg.cloneNode(true) as SVGSVGElement;
-  copia.setAttribute('width', String(lado));
-  copia.setAttribute('height', String(lado));
-  for (const imagem of Array.from(copia.querySelectorAll('image'))) {
-    const endereco = imagem.getAttribute('href') ?? imagem.getAttribute('xlink:href');
-    if (!endereco || endereco.startsWith('data:')) continue;
-    const resposta = await fetch(endereco);
-    if (!resposta.ok) throw new Error('Não foi possível baixar a foto. Recarregue a página e tente de novo.');
-    const dados = await comoDataUrl(await resposta.blob());
-    imagem.setAttribute('href', dados);
-    imagem.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', dados);
-  }
-  const texto = new XMLSerializer().serializeToString(copia);
-  const url = URL.createObjectURL(new Blob([texto], { type: 'image/svg+xml;charset=utf-8' }));
-  try {
-    const img = new Image();
-    await new Promise<void>((resolve, reject) => {
-      img.onload = () => resolve();
-      img.onerror = () => reject(new Error('Não foi possível montar o adesivo.'));
-      img.src = url;
-    });
-    const canvas = document.createElement('canvas');
-    canvas.width = lado;
-    canvas.height = lado;
-    canvas.getContext('2d')!.drawImage(img, 0, 0, lado, lado);
-    const png = await new Promise<Blob>((resolve, reject) =>
-      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Não foi possível montar o adesivo.'))), 'image/png'),
-    );
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(png);
-    link.download = nomeArquivo;
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(link.href), 10000);
-  } finally {
-    URL.revokeObjectURL(url);
-  }
+export async function pngDoAdesivo(foto: string, nome: string, lado = LADO): Promise<Blob> {
+  const [imagem, moldura] = await Promise.all([
+    carregarImagem(foto, `Não foi possível baixar a foto de ${nome}. Recarregue a página e tente de novo.`),
+    carregarImagem(MOLDURA, 'Não foi possível carregar o modelo do adesivo.'),
+  ]);
+  const canvas = document.createElement('canvas');
+  canvas.width = lado;
+  canvas.height = lado;
+  const ctx = canvas.getContext('2d')!;
+  const k = lado / LADO;
+  // The photo, cropped to a centred square ("cover").
+  const menor = Math.min(imagem.naturalWidth, imagem.naturalHeight);
+  const sx = (imagem.naturalWidth - menor) / 2;
+  const sy = (imagem.naturalHeight - menor) / 2;
+  ctx.drawImage(imagem, sx, sy, menor, menor, (FOTO.cx - FOTO.r) * k, (FOTO.cy - FOTO.r) * k, FOTO.r * 2 * k, FOTO.r * 2 * k);
+  ctx.drawImage(moldura, 0, 0, lado, lado);
+  return new Promise<Blob>((resolve, reject) =>
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Não foi possível montar o adesivo.'))), 'image/png'),
+  );
+}
+
+/** Saves a Blob as a file. */
+export function salvarArquivo(blob: Blob, nome: string) {
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = nome;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 10000);
 }

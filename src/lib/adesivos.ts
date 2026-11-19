@@ -1,40 +1,24 @@
-import { chamarFuncao } from './supabase';
+import { chamarFuncao, supabase } from './supabase';
 
 /**
  * The store of stickers handed out on the night (/adesivos). Each formando
  * enters with their WhatsApp (like the vote and /musica) and picks how many
- * of each model they want. The childhood one is personal: it's made from the
- * formando's own childhood photo, the one the committee collected.
- *
- * To add a model: add it here AND to MODELOS in
- * supabase/functions/adesivos/index.ts (the function refuses unknown ids).
+ * of each model they want. The models are put on sale by the committee
+ * (a picture, a name, a price — tab "Adesivos"). The childhood one is
+ * personal: each formando's own childhood photo in the committee's frame.
  */
 export type Modelo = {
   id: string;
   nome: string;
-  sobre: string;
+  descricao: string | null;
   /** In reais, per sticker. */
   preco: number;
-  /** The art (a file in /public). Absent for the childhood sticker, which is drawn from the photo. */
-  imagem?: string;
-  /** Art that's white on transparent: printed on a dark rounded plate so it shows. */
-  placa?: boolean;
-  /** Made from the formando's own childhood photo. */
-  crianca?: boolean;
+  /** The picture's public URL; null for the childhood sticker. */
+  imagem: string | null;
+  crianca: boolean;
+  /** Hidden ones only show to the committee (and in an order that already had them). */
+  ativo: boolean;
 };
-
-export const MODELOS: Modelo[] = [
-  {
-    id: 'crianca',
-    nome: 'Você criança',
-    sobre: 'O seu adesivo, com a sua foto de criança.',
-    preco: 5,
-    crianca: true,
-  },
-  { id: 'logo-32', nome: 'Logo da Turma 32', sobre: 'O 32 da turma, recortado.', preco: 5, imagem: '/assets/logo-32.png' },
-  { id: 'terceirao', nome: 'Terceirão', sobre: 'O nome do terceirão, recortado.', preco: 5, imagem: '/assets/logo-terceirao.png' },
-  { id: 'assinaturas', nome: 'Assinaturas da turma', sobre: 'A assinatura de todo mundo, num adesivo só.', preco: 5, imagem: '/assets/assinaturas-mural.png', placa: true },
-];
 
 /** Most of one model a formando can order — the same as MAXIMO in the function. */
 export const MAXIMO_POR_MODELO = 200;
@@ -64,6 +48,8 @@ export type DadosAdesivos = {
   livres: string[] | null;
   /** Whether formandos can still order or change their order (the committee always can). */
   aberta: boolean;
+  /** The models, in the store's order. */
+  modelos: Modelo[];
   /** The formando's own order. */
   meu: Pedido | null;
   /** A link (valid a day) to the formando's own childhood photo, or null while the committee has none. */
@@ -72,11 +58,13 @@ export type DadosAdesivos = {
   pedidos: Pedido[] | null;
   /** Committee only: every formando's name. */
   formandos: string[] | null;
-  /** Committee only: the childhood photo of each formando who ordered the childhood sticker. */
-  fotos: Record<string, string | null> | null;
+  /** Committee only: each formando's childhood photo (those who have one). */
+  fotos: Record<string, string> | null;
 };
 
 export type AcessoAdesivos = { whatsapp: string; nome?: string } | { codigo: string } | Record<string, never>;
+
+export type ModeloParaSalvar = { id?: string; nome: string; descricao: string; preco: number; ativo: boolean; imagem?: string };
 
 export type AcaoAdesivos =
   /** Sends (or replaces) the order. All zero deletes it. Committee: whose, in `formando`. */
@@ -86,20 +74,38 @@ export type AcaoAdesivos =
   /** Committee: deletes an order. */
   | { acao: 'apagar'; formando: string }
   /** Committee: opens or closes the store. */
-  | { acao: 'aberta'; sim: boolean };
+  | { acao: 'aberta'; sim: boolean }
+  /** Committee: creates (no id) or changes a model. */
+  | { acao: 'salvarModelo'; modelo: ModeloParaSalvar }
+  | { acao: 'moverModelo'; id: string; direcao: -1 | 1 }
+  | { acao: 'apagarModelo'; id: string };
 
-export function buscarAdesivos(acesso: AcessoAdesivos, acao?: AcaoAdesivos): Promise<DadosAdesivos> {
-  return chamarFuncao<DadosAdesivos>('adesivos', { ...acesso, ...acao });
+export async function buscarAdesivos(acesso: AcessoAdesivos, acao?: AcaoAdesivos): Promise<DadosAdesivos> {
+  const dados = await chamarFuncao<DadosAdesivos>('adesivos', { ...acesso, ...acao });
+  return { ...dados, modelos: dados.modelos ?? [] };
+}
+
+const TIPOS: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml' };
+
+/** Committee: sends a sticker's picture; the path to save the model with. */
+export async function enviarImagemAdesivo(codigo: string, arquivo: File): Promise<string> {
+  if (!arquivo.type.startsWith('image/')) throw new Error(`"${arquivo.name}" não é uma imagem.`);
+  if (arquivo.size > 10 * 1024 * 1024) throw new Error(`"${arquivo.name}" passa de 10MB.`);
+  const extensao =
+    Object.entries(TIPOS).find(([, t]) => t === arquivo.type)?.[0] ??
+    (arquivo.name.split('.').pop() ?? 'png').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5);
+  const { caminho, token } = await chamarFuncao<{ caminho: string; token: string }>('adesivos', { codigo, acao: 'prepararImagem', extensao });
+  const { error } = await supabase.storage.from('adesivos').uploadToSignedUrl(caminho, token, arquivo, { contentType: arquivo.type });
+  if (error) throw new Error(`Não foi possível enviar "${arquivo.name}" agora.`);
+  return caminho;
 }
 
 export function urlDaLoja(): string {
   return `${window.location.origin}/adesivos`;
 }
 
-export const modeloPorId = (id: string) => MODELOS.find((m) => m.id === id);
-
-export function totalDoPedido(itens: Itens): number {
-  return Object.entries(itens).reduce((s, [id, q]) => s + (modeloPorId(id)?.preco ?? 0) * q, 0);
+export function totalDoPedido(itens: Itens, modelos: Modelo[]): number {
+  return Object.entries(itens).reduce((s, [id, q]) => s + (modelos.find((m) => m.id === id)?.preco ?? 0) * q, 0);
 }
 
 export function quantidadeDoPedido(itens: Itens): number {
@@ -108,10 +114,11 @@ export function quantidadeDoPedido(itens: Itens): number {
 
 export const reais = (valor: number) => valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-/** The first name, then the last, for the sticker: "Maria Clara Bispo" → "Maria Clara", "Bernardo Câmara" → "Bernardo". */
-export function nomeNoAdesivo(nome: string): string {
-  const partes = nome.trim().split(/\s+/);
-  // Two-word first names the class goes by.
-  if (partes.length >= 3 && ['Maria', 'Anna', 'João'].includes(partes[0])) return `${partes[0]} ${partes[1]}`;
-  return partes[0] ?? nome;
-}
+/** "bernardo-camara", for file names. */
+export const slugDoNome = (nome: string) =>
+  nome
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');

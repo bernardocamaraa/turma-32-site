@@ -499,13 +499,16 @@ supabase/
 
 Cada formando entra com o WhatsApp (o mesmo da votação e da música) e
 escolhe quantos quer de cada modelo de adesivo para distribuir no baile.
-O modelo "Você criança" é montado com a foto de criança daquele formando
-(a que a comissão colocou na aba Fotos de criança) e só ele vê o dele.
 
-- Modelos e preços: `MODELOS` em `src/lib/adesivos.ts` **e** a lista de ids
-  em `supabase/functions/adesivos/index.ts` (a função recusa ids que não
-  conhece). A chave Pix fica em `PIX`, no mesmo arquivo.
-- Desenho do adesivo de criança: `src/components/AdesivoCrianca.tsx` (SVG;
-  o botão "Baixar" gera um PNG de 1800×1800 para a gráfica).
-- Para ligar: rode `supabase/adesivos.sql` no SQL Editor e publique a
-  função com `supabase functions deploy adesivos`.
+- **Os modelos à venda** são cadastrados pela comissão, na aba Adesivos:
+  imagem, nome, descrição e preço. Dá para editar, mudar a ordem, esconder
+  e apagar (só quem nenhum pedido tem; para os outros, esconder).
+- **"Você criança"** já vem cadastrado: é a foto de criança de cada formando
+  (a que a comissão colocou na aba Fotos de criança) por baixo da moldura
+  `public/assets/adesivo-crianca-moldura.webp` — o modelo da comissão com o
+  círculo da foto recortado. Cada formando só vê o seu. Na aba Adesivos, a
+  comissão vê o de todo mundo e baixa um por um ou todos num .zip, em PNG no
+  tamanho do modelo (1181 × 1181).
+- A chave Pix fica em `PIX`, em `src/lib/adesivos.ts`.
+- Para ligar: rode `supabase/adesivos.sql` no SQL Editor (depois de
+  `infancia.sql`) e publique a função com `supabase functions deploy adesivos`.

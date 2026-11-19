@@ -4,13 +4,48 @@
 -- WhatsApp (convidados_formando.whatsapp and identificar_eleitor, both from
 -- there). Running it again is safe.
 --
--- Each formando picks how many of each sticker model they want, to be handed
--- out on the night. One order per formando; sending again replaces it. The
--- models and their prices live in the site (src/lib/adesivos.ts) and in the
--- `adesivos` Edge Function — this table only keeps the quantities.
--- The committee sees every order in the "Adesivos" tab, marks who paid and
--- downloads each formando's childhood sticker to print.
+-- The committee puts the sticker models on sale (a picture, a name, a
+-- price) in the "Adesivos" tab; each formando picks how many of each they
+-- want, to be handed out on the night. One order per formando; sending
+-- again replaces it. The childhood sticker ("Você criança") is a model like
+-- the others, but has no picture of its own: each formando sees theirs,
+-- made from their childhood photo (infancia.sql) in the committee's frame.
 
+-- ---------------------------------------------------------------------------
+-- The models on sale.
+-- ---------------------------------------------------------------------------
+create table if not exists public.modelos_adesivos (
+  id text primary key default replace(gen_random_uuid()::text, '-', ''),
+  nome text not null check (char_length(nome) between 1 and 80),
+  descricao text check (char_length(descricao) <= 300),
+  -- In reais, per sticker.
+  preco numeric(8, 2) not null default 0 check (preco >= 0 and preco < 10000),
+  -- Path of the picture in the `adesivos` bucket; null for the childhood one.
+  imagem text,
+  -- The childhood sticker: made from each formando's own photo.
+  crianca boolean not null default false,
+  -- Hidden models stay in the orders that have them, but can't be ordered.
+  ativo boolean not null default true,
+  ordem int not null default 0,
+  criado_em timestamptz not null default now()
+);
+
+insert into public.modelos_adesivos (id, nome, descricao, preco, crianca, ordem)
+values ('crianca', 'Você criança', 'O seu adesivo, com a sua foto de criança.', 5, true, 0)
+on conflict (id) do nothing;
+
+alter table public.modelos_adesivos enable row level security;
+-- No policies: read and written only by the `adesivos` Edge Function.
+
+-- The pictures: public (they're on sale for the class to see), but only
+-- the function hands out upload URLs (no storage.objects policies).
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('adesivos', 'adesivos', true, 10485760, array['image/*'])
+on conflict (id) do nothing;
+
+-- ---------------------------------------------------------------------------
+-- The orders.
+-- ---------------------------------------------------------------------------
 create table if not exists public.pedidos_adesivos (
   formando text primary key references public.convidados_formando (formando) on update cascade on delete cascade,
   -- { "<model id>": <quantity> }, only models with a quantity above zero.
@@ -24,8 +59,8 @@ create table if not exists public.pedidos_adesivos (
 );
 
 alter table public.pedidos_adesivos enable row level security;
--- Deliberately no policies: only the `adesivos` Edge Function reads or
--- writes it, after checking the WhatsApp or the committee code.
+-- No policies: only the `adesivos` Edge Function reads or writes it, after
+-- checking the WhatsApp or the committee code.
 
 -- Lets the committee close the store (e.g. once the order goes to the print
 -- shop). Open from the start.

@@ -1225,26 +1225,3 @@ g[role="button"]:focus-visible .mesa-alvo {
   display: none;
 }
 
-/* Loja de adesivos (/adesivos): each model shown as a die-cut sticker — a
-   white margin traced around the art's own shape, and a soft shadow under
-   it, lifting a little when pointed at. */
-.adesivo-recorte {
-  filter: drop-shadow(4px 0 0 #fff) drop-shadow(-4px 0 0 #fff) drop-shadow(0 4px 0 #fff) drop-shadow(0 -4px 0 #fff)
-    drop-shadow(0 14px 18px rgba(0, 0, 0, .55));
-}
-.adesivo-peca {
-  transition: transform var(--dur-slow) var(--ease-out);
-}
-@media (hover: hover) {
-  .adesivo-vitrine:hover .adesivo-peca {
-    transform: rotate(0deg) scale(1.04) !important;
-  }
-}
-.adesivo-placa {
-  width: 112%;
-  padding: 9% 8%;
-  border-radius: 22px;
-  background: radial-gradient(circle at 50% 30%, #1d3a4c, #000 80%);
-  border: 6px solid #fff;
-  box-shadow: 0 14px 22px rgba(0, 0, 0, .55);
-}

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { Check, Download, Minus, Plus, ShoppingBag, TriangleAlert } from 'lucide-react';
-import { AdesivoCrianca, baixarAdesivoCrianca } from '../components/AdesivoCrianca';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { ArrowDown, ArrowUp, Check, Download, ImagePlus, Minus, Plus, ShoppingBag, TriangleAlert } from 'lucide-react';
+import { AdesivoCrianca, pngDoAdesivo, salvarArquivo } from '../components/AdesivoCrianca';
 import { Badge } from '../components/Badge';
 import { BotoesLink } from '../components/BotoesLink';
 import { Button } from '../components/Button';
@@ -11,12 +11,12 @@ import { Input } from '../components/Input';
 import { Popups, usePopup } from '../components/Popups';
 import {
   buscarAdesivos,
+  enviarImagemAdesivo,
   MAXIMO_POR_MODELO,
-  MODELOS,
-  modeloPorId,
   PIX,
   quantidadeDoPedido,
   reais,
+  slugDoNome,
   totalDoPedido,
   urlDaLoja,
   type AcaoAdesivos,
@@ -33,24 +33,31 @@ const texto: CSSProperties = { fontSize: 'var(--fs-body)', lineHeight: 'var(--lh
 const pequeno: CSSProperties = { fontSize: 'var(--fs-body-sm)', color: 'var(--text-faint)' };
 const titulo: CSSProperties = { fontFamily: 'var(--font-display)', fontSize: 'var(--fs-h4)', fontWeight: 600, letterSpacing: '-.015em' };
 const erroEstilo: CSSProperties = { fontSize: 'var(--fs-body-sm)', color: 'var(--state-error)' };
+const rotuloSecao: CSSProperties = { fontSize: 14, color: 'var(--text-faint)' };
 
 const primeiroNome = (nome: string) => nome.split(' ')[0];
 const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
+const mensagemDe = (e: unknown, padrao: string) => (e instanceof Error ? e.message : padrao);
 
-/** "bernardo-camara" for the file name of a sticker. */
-const slug = (nome: string) =>
-  nome
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
+/** The picture of a model: the formando's own sticker for the childhood one, the committee's picture for the rest. */
+function ArteDoModelo({ modelo, foto, nome }: { modelo: Modelo; foto: string | null; nome: string }) {
+  if (modelo.crianca) {
+    return (
+      <div style={{ width: '100%', borderRadius: '50%', boxShadow: '0 18px 40px rgba(0,0,0,.55)' }}>
+        <AdesivoCrianca foto={foto} nome={nome} />
+      </div>
+    );
+  }
+  return modelo.imagem ? (
+    <img src={modelo.imagem} alt={modelo.nome} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', filter: 'drop-shadow(0 14px 22px rgba(0,0,0,.5))' }} />
+  ) : null;
+}
 
 /**
  * /adesivos: the store of the stickers handed out on the night. One link
  * for the whole class, entered with the WhatsApp like the vote and /musica
  * (the same number, remembered on the phone, enters all three). The
- * committee sees every order in its "Adesivos" tab, below.
+ * committee runs it in its "Adesivos" tab, below.
  */
 export function Adesivos() {
   return (
@@ -86,7 +93,7 @@ function Loja() {
       comecarDe(novo);
       return novo;
     } catch (e) {
-      setErroAcesso(e instanceof Error ? e.message : 'Não foi possível entrar agora.');
+      setErroAcesso(mensagemDe(e, 'Não foi possível entrar agora.'));
       return null;
     } finally {
       setEntrando(false);
@@ -122,7 +129,7 @@ function Loja() {
       comecarDe(novo);
       popup({ tipo: 'ok', titulo: aviso });
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível salvar agora.');
+      setErro(mensagemDe(e, 'Não foi possível salvar agora.'));
     } finally {
       setSalvando(false);
     }
@@ -135,10 +142,11 @@ function Loja() {
     carregar({});
   }
 
+  const modelos = dados?.modelos ?? [];
   const meu = dados?.meu ?? null;
   const travado = !!dados && (!dados.aberta || !!meu?.pago);
   const quantidade = quantidadeDoPedido(itens);
-  const total = totalDoPedido(itens);
+  const total = totalDoPedido(itens, modelos);
   const mudou =
     JSON.stringify(Object.entries(itens).filter(([, q]) => q > 0).sort()) !== JSON.stringify(Object.entries(meu?.itens ?? {}).sort()) ||
     observacao.trim() !== (meu?.observacao ?? '');
@@ -163,8 +171,8 @@ function Loja() {
         <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--gild-300)' }}>Turma 32 · Baile de formatura</span>
         <h1 className="titulo-musica">Loja de adesivos.</h1>
         <p style={{ ...texto, maxWidth: '38rem', fontSize: 'var(--fs-lead, 19px)' }}>
-          No baile, a turma distribui adesivos. Escolha quais modelos você quer e quantos de cada, inclusive o seu adesivo de
-          criança, feito com a sua foto.
+          No baile, a turma distribui adesivos. Escolha quais modelos você quer e quantos de cada, inclusive o seu adesivo de criança, feito com a
+          sua foto.
         </p>
       </header>
 
@@ -212,30 +220,27 @@ function Loja() {
             <Aviso tom="gild">A loja já fechou. {meu ? 'Seu pedido está guardado abaixo.' : 'Para pedir agora, fale com a comissão.'}</Aviso>
           ) : null}
 
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: mobile ? '1fr' : 'repeat(auto-fill, minmax(300px, 1fr))',
-              gap: 'var(--space-5)',
-            }}
-          >
-            {MODELOS.map((m, i) => (
-              <CartaoModelo
-                key={m.id}
-                modelo={m}
-                indice={i}
-                voce={dados.voce!}
-                foto={dados.fotoInfancia}
-                quantidade={itens[m.id] ?? 0}
-                travado={travado}
-                onMudar={(q) => mudar(m.id, q)}
-              />
-            ))}
-          </div>
+          {modelos.length === 0 ? (
+            <p style={texto}>A comissão ainda está preparando os adesivos. Volte daqui a pouco!</p>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : 'repeat(auto-fill, minmax(300px, 1fr))', gap: 'var(--space-5)' }}>
+              {modelos.map((m) => (
+                <CartaoModelo
+                  key={m.id}
+                  modelo={m}
+                  voce={dados.voce!}
+                  foto={dados.fotoInfancia}
+                  quantidade={itens[m.id] ?? 0}
+                  travado={travado}
+                  onMudar={(q) => mudar(m.id, q)}
+                />
+              ))}
+            </div>
+          )}
 
           <Card padding="var(--space-6) var(--space-7)" accent={quantidade > 0 && mudou}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
                 <ShoppingBag size={20} color="var(--gild-300)" />
                 <span style={titulo}>Seu pedido</span>
                 {meu ? <Badge tone={meu.pago ? 'ok' : 'gild'}>{meu.pago ? 'Pago' : 'Esperando pagamento'}</Badge> : null}
@@ -243,14 +248,16 @@ function Loja() {
 
               {quantidade > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                  {MODELOS.filter((m) => (itens[m.id] ?? 0) > 0).map((m) => (
-                    <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-4)', fontSize: 'var(--fs-body)' }}>
-                      <span>
-                        {itens[m.id]}× {m.nome}
-                      </span>
-                      <span style={{ color: 'var(--text-muted)' }}>{reais(itens[m.id] * m.preco)}</span>
-                    </div>
-                  ))}
+                  {modelos
+                    .filter((m) => (itens[m.id] ?? 0) > 0)
+                    .map((m) => (
+                      <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-4)', fontSize: 'var(--fs-body)' }}>
+                        <span>
+                          {itens[m.id]}× {m.nome}
+                        </span>
+                        <span style={{ color: 'var(--text-muted)' }}>{reais(itens[m.id] * m.preco)}</span>
+                      </div>
+                    ))}
                   <div
                     style={{
                       display: 'flex',
@@ -293,10 +300,7 @@ function Loja() {
                     carregando={salvando}
                     iconLeft={<Check size={18} />}
                     onClick={() =>
-                      agir(
-                        { acao: 'pedir', itens, observacao },
-                        quantidade === 0 ? 'Pedido cancelado' : meu ? 'Pedido atualizado!' : 'Pedido feito!',
-                      )
+                      agir({ acao: 'pedir', itens, observacao }, quantidade === 0 ? 'Pedido cancelado' : meu ? 'Pedido atualizado!' : 'Pedido feito!')
                     }
                   >
                     {quantidade === 0 && meu ? 'Cancelar pedido' : meu ? 'Atualizar pedido' : 'Fazer pedido'}
@@ -311,7 +315,7 @@ function Loja() {
             </div>
           </Card>
 
-          {meu && !meu.pago ? <Pagamento total={totalDoPedido(meu.itens)} /> : null}
+          {meu && !meu.pago ? <Pagamento total={totalDoPedido(meu.itens, modelos)} /> : null}
         </>
       )}
     </main>
@@ -359,8 +363,8 @@ function Pagamento({ total }: { total: number }) {
           </>
         ) : (
           <p style={texto}>
-            O total do seu pedido é <strong style={{ color: 'var(--text-primary)' }}>{reais(total)}</strong>. A comissão vai avisar como pagar;
-            quando ela confirmar o pagamento, o pedido aparece aqui como pago.
+            O total do seu pedido é <strong style={{ color: 'var(--text-primary)' }}>{reais(total)}</strong>. A comissão vai avisar como pagar; quando ela
+            confirmar o pagamento, o pedido aparece aqui como pago.
           </p>
         )}
       </div>
@@ -371,7 +375,6 @@ function Pagamento({ total }: { total: number }) {
 /** One model on sale: its art, what it is, the price and how many. */
 function CartaoModelo({
   modelo,
-  indice,
   voce,
   foto,
   quantidade,
@@ -379,27 +382,23 @@ function CartaoModelo({
   onMudar,
 }: {
   modelo: Modelo;
-  indice: number;
   voce: string;
   foto: string | null;
   quantidade: number;
   travado: boolean;
   onMudar: (q: number) => void;
 }) {
-  const ref = useRef<SVGSVGElement>(null);
   const [baixando, setBaixando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
-  // Each sticker a little crooked, like stuck on by hand.
-  const giro = [-3, 2.5, -1.5, 3, -2.5][indice % 5];
 
   async function baixar() {
-    if (!ref.current) return;
+    if (!foto) return;
     setBaixando(true);
     setErro(null);
     try {
-      await baixarAdesivoCrianca(ref.current, `adesivo-${slug(voce)}.png`);
+      salvarArquivo(await pngDoAdesivo(foto, voce), `adesivo-${slugDoNome(voce)}.png`);
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível baixar agora.');
+      setErro(mensagemDe(e, 'Não foi possível baixar agora.'));
     } finally {
       setBaixando(false);
     }
@@ -408,35 +407,22 @@ function CartaoModelo({
   return (
     <Card accent={quantidade > 0} padding={0} style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       <div
-        className="adesivo-vitrine"
         style={{
           aspectRatio: '1',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: modelo.crianca ? '10%' : '16%',
-          background: modelo.crianca
-            ? 'radial-gradient(circle at 50% 40%, rgba(220,196,140,.18), transparent 65%), var(--ink-800)'
-            : 'radial-gradient(circle at 50% 40%, rgba(169,211,232,.14), transparent 65%), var(--ink-800)',
+          padding: '12%',
+          background: 'radial-gradient(circle at 50% 40%, rgba(169,211,232,.12), transparent 65%), var(--ink-800)',
           position: 'relative',
         }}
       >
-        {modelo.crianca ? <Badge tone="gild" style={{ position: 'absolute', top: 16, left: 16 }}>Só seu</Badge> : null}
-        <div className="adesivo-peca" style={{ transform: `rotate(${giro}deg)`, width: '100%', display: 'flex', justifyContent: 'center' }}>
-          {modelo.crianca ? (
-            <div style={{ width: '100%', filter: 'drop-shadow(0 14px 22px rgba(0,0,0,.55))' }}>
-              <AdesivoCrianca ref={ref} foto={foto} nome={voce} />
-            </div>
-          ) : (
-            modelo.placa ? (
-              <div className="adesivo-placa">
-                <img src={modelo.imagem} alt={modelo.nome} style={{ display: 'block', width: '100%' }} />
-              </div>
-            ) : (
-              <img src={modelo.imagem} alt={modelo.nome} className="adesivo-recorte" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
-            )
-          )}
-        </div>
+        {modelo.crianca ? (
+          <Badge tone="gild" style={{ position: 'absolute', top: 16, left: 16 }}>
+            Só seu
+          </Badge>
+        ) : null}
+        <ArteDoModelo modelo={modelo} foto={foto} nome={voce} />
       </div>
 
       <div style={{ padding: 'var(--space-5) var(--space-6) var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', flex: 1 }}>
@@ -445,7 +431,8 @@ function CartaoModelo({
             <span style={titulo}>{modelo.nome}</span>
             <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--gild-300)', whiteSpace: 'nowrap' }}>{reais(modelo.preco)}</span>
           </div>
-          <span style={pequeno}>{modelo.sobre}</span>
+          {modelo.descricao ? <span style={pequeno}>{modelo.descricao}</span> : null}
+          {!modelo.ativo ? <span style={{ ...pequeno, color: 'var(--gild-300)' }}>Esse adesivo saiu da loja. Dá para tirar do seu pedido, mas não para pedir mais.</span> : null}
           {modelo.crianca && !foto ? (
             <span style={{ ...pequeno, color: 'var(--gild-300)' }}>
               A comissão ainda não tem a sua foto de criança. Mande para ela no WhatsApp: assim que ela colocar no site, a foto aparece aqui.
@@ -454,7 +441,7 @@ function CartaoModelo({
         </div>
 
         <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
-          <Quantidade valor={quantidade} travado={travado} rotulo={modelo.nome} onMudar={onMudar} />
+          <Quantidade valor={quantidade} travado={travado} maximo={modelo.ativo ? MAXIMO_POR_MODELO : quantidade} rotulo={modelo.nome} onMudar={onMudar} />
           {modelo.crianca && foto ? (
             <Button variant="ghost" size="sm" carregando={baixando} iconLeft={<Download size={16} />} onClick={baixar}>
               Baixar
@@ -468,7 +455,19 @@ function CartaoModelo({
 }
 
 /** − 3 + */
-function Quantidade({ valor, travado, rotulo, onMudar }: { valor: number; travado: boolean; rotulo: string; onMudar: (q: number) => void }) {
+function Quantidade({
+  valor,
+  travado,
+  maximo,
+  rotulo,
+  onMudar,
+}: {
+  valor: number;
+  travado: boolean;
+  maximo: number;
+  rotulo: string;
+  onMudar: (q: number) => void;
+}) {
   const botao = (desativado: boolean): CSSProperties => ({
     width: 40,
     height: 40,
@@ -491,7 +490,7 @@ function Quantidade({ valor, travado, rotulo, onMudar }: { valor: number; travad
         inputMode="numeric"
         value={valor}
         disabled={travado}
-        onChange={(e) => onMudar(parseInt(e.target.value.replace(/\D/g, '') || '0', 10))}
+        onChange={(e) => onMudar(Math.min(maximo, parseInt(e.target.value.replace(/\D/g, '') || '0', 10)))}
         onFocus={(e) => e.target.select()}
         style={{
           width: 52,
@@ -506,13 +505,7 @@ function Quantidade({ valor, travado, rotulo, onMudar }: { valor: number; travad
           borderRadius: 'var(--radius-sm)',
         }}
       />
-      <button
-        type="button"
-        aria-label={`Mais ${rotulo}`}
-        disabled={travado || valor >= MAXIMO_POR_MODELO}
-        style={botao(travado || valor >= MAXIMO_POR_MODELO)}
-        onClick={() => onMudar(valor + 1)}
-      >
+      <button type="button" aria-label={`Mais ${rotulo}`} disabled={travado || valor >= maximo} style={botao(travado || valor >= maximo)} onClick={() => onMudar(valor + 1)}>
         <Plus size={18} />
       </button>
     </div>
@@ -524,9 +517,10 @@ function Quantidade({ valor, travado, rotulo, onMudar }: { valor: number; travad
 // ---------------------------------------------------------------------------
 
 /**
- * The committee's tab: open or close the store, every order (mark it paid,
- * delete it), the total of each model to send to the print shop, who hasn't
- * ordered, and each childhood sticker ready to download.
+ * The committee's tab: the stickers on sale (add, change, reorder, hide or
+ * delete), open or close the store, every order (mark it paid, delete it),
+ * the total of each model for the print shop, and every formando's
+ * childhood sticker ready to download.
  */
 export function AdesivosComissao({ codigo }: { codigo: string }) {
   const mobile = useIsMobile();
@@ -540,7 +534,7 @@ export function AdesivosComissao({ codigo }: { codigo: string }) {
     try {
       setDados(await buscarAdesivos({ codigo }));
     } catch (e) {
-      setErroCarregar(e instanceof Error ? e.message : 'Não foi possível abrir agora.');
+      setErroCarregar(mensagemDe(e, 'Não foi possível abrir agora.'));
     }
   }
 
@@ -548,46 +542,42 @@ export function AdesivosComissao({ codigo }: { codigo: string }) {
     carregar();
   }, []);
 
-  async function agir(acao: AcaoAdesivos, chave: string) {
+  /** Runs an action; whether it worked (the error shows at the top otherwise). */
+  async function agir(acao: AcaoAdesivos, chave: string): Promise<boolean> {
     setSalvando(chave);
     setErro(null);
     try {
       setDados(await buscarAdesivos({ codigo }, acao));
+      return true;
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível salvar agora.');
+      setErro(mensagemDe(e, 'Não foi possível salvar agora.'));
+      return false;
     } finally {
       setSalvando(null);
     }
   }
 
-  const pedidos = dados?.pedidos ?? [];
-  const porModelo = useMemo(
-    () => MODELOS.map((m) => ({ modelo: m, quantidade: pedidos.reduce((s, p) => s + (p.itens[m.id] ?? 0), 0) })),
-    [pedidos],
-  );
-
   if (!dados) return <CarregandoSecao erro={erroCarregar} onTentar={carregar} />;
 
+  const modelos = dados.modelos;
+  const pedidos = dados.pedidos ?? [];
   const feitos = new Set(pedidos.map((p) => p.formando));
   const faltam = (dados.formandos ?? []).filter((f) => !feitos.has(f));
-  const total = pedidos.reduce((s, p) => s + totalDoPedido(p.itens), 0);
-  const recebido = pedidos.filter((p) => p.pago).reduce((s, p) => s + totalDoPedido(p.itens), 0);
+  const total = pedidos.reduce((s, p) => s + totalDoPedido(p.itens, modelos), 0);
+  const recebido = pedidos.filter((p) => p.pago).reduce((s, p) => s + totalDoPedido(p.itens, modelos), 0);
+  const porModelo = modelos.map((m) => ({ modelo: m, quantidade: pedidos.reduce((s, p) => s + (p.itens[m.id] ?? 0), 0) }));
 
   function baixarPlanilha() {
-    const cabecalho = ['Formando', ...MODELOS.map((m) => m.nome), 'Total (R$)', 'Pago', 'Observação'];
+    const cabecalho = ['Formando', ...modelos.map((m) => m.nome), 'Total (R$)', 'Pago', 'Observação'];
     const linhas = pedidos.map((p) => [
       p.formando,
-      ...MODELOS.map((m) => String(p.itens[m.id] ?? 0)),
-      totalDoPedido(p.itens).toFixed(2).replace('.', ','),
+      ...modelos.map((m) => String(p.itens[m.id] ?? 0)),
+      totalDoPedido(p.itens, modelos).toFixed(2).replace('.', ','),
       p.pago ? 'Sim' : 'Não',
       p.observacao ?? '',
     ]);
     const csv = [cabecalho, ...linhas].map((l) => l.map((c) => `"${c.replace(/"/g, '""')}"`).join(';')).join('\r\n');
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
-    link.download = 'pedidos-adesivos.csv';
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+    salvarArquivo(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }), 'pedidos-adesivos.csv');
   }
 
   return (
@@ -604,24 +594,26 @@ export function AdesivosComissao({ codigo }: { codigo: string }) {
             }}
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-              <span style={{ fontSize: 14, color: 'var(--text-faint)' }}>Loja de adesivos</span>
+              <span style={rotuloSecao}>Loja de adesivos</span>
               <span style={{ fontSize: 'var(--fs-body)' }}>
                 {dados.aberta ? 'Aberta, a turma pode pedir e mudar o pedido.' : 'Fechada, ninguém consegue pedir ou mudar o pedido.'}
               </span>
             </div>
-            <Button
-              size="lg"
-              variant={dados.aberta ? 'secondary' : 'primary'}
-              carregando={salvando === 'aberta'}
-              onClick={() => agir({ acao: 'aberta', sim: !dados.aberta }, 'aberta')}
-            >
+            <Button size="lg" variant={dados.aberta ? 'secondary' : 'primary'} carregando={salvando === 'aberta'} onClick={() => agir({ acao: 'aberta', sim: !dados.aberta }, 'aberta')}>
               {dados.aberta ? 'Fechar loja' : 'Abrir loja'}
             </Button>
           </div>
           <BotoesLink url={urlDaLoja()} mensagem="A loja de adesivos da formatura está aberta! Escolha os seus, inclusive o seu adesivo de criança:" />
         </div>
-        {erro ? <span style={{ display: 'block', marginTop: 'var(--space-3)', ...erroEstilo }}>{erro}</span> : null}
       </Card>
+
+      {erro ? (
+        <Card padding="var(--space-5) var(--space-6)" style={{ borderColor: 'rgba(255,105,97,.45)' }}>
+          <span style={erroEstilo}>{erro}</span>
+        </Card>
+      ) : null}
+
+      <ModelosDaComissao codigo={codigo} modelos={modelos} salvando={salvando} agir={agir} />
 
       <div style={{ display: 'grid', gridTemplateColumns: mobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: 'var(--space-5)' }}>
         <Numero rotulo="Pedidos" valor={`${pedidos.length}/${dados.formandos?.length ?? 0}`} />
@@ -631,14 +623,27 @@ export function AdesivosComissao({ codigo }: { codigo: string }) {
       </div>
 
       <Card padding={0} style={{ overflow: 'hidden' }}>
-        <div style={{ padding: 'var(--space-6) var(--space-7)', borderBottom: '1px solid var(--stroke-hair)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 14, color: 'var(--text-faint)' }}>Para a gráfica: quantos de cada modelo</span>
+        <div
+          style={{
+            padding: 'var(--space-6) var(--space-7)',
+            borderBottom: '1px solid var(--stroke-hair)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: 'var(--space-4)',
+            flexWrap: 'wrap',
+          }}
+        >
+          <span style={rotuloSecao}>Para a gráfica: quantos de cada modelo</span>
           <Button variant="secondary" size="sm" disabled={pedidos.length === 0} onClick={baixarPlanilha}>
             Baixar planilha
           </Button>
         </div>
         {porModelo.map(({ modelo, quantidade }) => (
-          <div key={modelo.id} style={{ display: 'flex', justifyContent: 'space-between', padding: 'var(--space-4) var(--space-7)', borderBottom: '1px solid var(--stroke-hair)', fontSize: 'var(--fs-body)' }}>
+          <div
+            key={modelo.id}
+            style={{ display: 'flex', justifyContent: 'space-between', padding: 'var(--space-4) var(--space-7)', borderBottom: '1px solid var(--stroke-hair)', fontSize: 'var(--fs-body)' }}
+          >
             <span>{modelo.nome}</span>
             <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{quantidade}</span>
           </div>
@@ -652,7 +657,7 @@ export function AdesivosComissao({ codigo }: { codigo: string }) {
           <PedidoDaComissao
             key={p.formando}
             pedido={p}
-            foto={dados.fotos?.[p.formando] ?? null}
+            modelos={modelos}
             salvando={salvando}
             onPago={(sim) => agir({ acao: 'pago', formando: p.formando, sim }, `pago-${p.formando}`)}
             onApagar={() => {
@@ -660,16 +665,10 @@ export function AdesivosComissao({ codigo }: { codigo: string }) {
             }}
           />
         ))}
+        {faltam.length > 0 ? <p style={pequeno}>Ainda não pediram ({faltam.length}): {faltam.join(', ')}.</p> : null}
       </div>
 
-      {faltam.length > 0 ? (
-        <Card padding="var(--space-6) var(--space-7)">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-            <span style={{ fontSize: 14, color: 'var(--text-faint)' }}>Ainda não pediram · {faltam.length}</span>
-            <p style={texto}>{faltam.join(', ')}</p>
-          </div>
-        </Card>
-      ) : null}
+      <AdesivosDeCrianca formandos={dados.formandos ?? []} fotos={dados.fotos ?? {}} pedidos={pedidos} modelos={modelos} />
     </div>
   );
 }
@@ -678,8 +677,286 @@ function Numero({ rotulo, valor, destaque }: { rotulo: string; valor: string; de
   return (
     <Card padding="var(--space-5) var(--space-6)">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-        <span style={{ fontSize: 14, color: 'var(--text-faint)' }}>{rotulo}</span>
+        <span style={rotuloSecao}>{rotulo}</span>
         <span style={{ fontSize: 'clamp(22px, 3vw, 30px)', fontWeight: 700, lineHeight: 1.1, color: destaque ? 'var(--state-ok)' : undefined }}>{valor}</span>
+      </div>
+    </Card>
+  );
+}
+
+/** "5,50" / "5.5" / "R$ 5" → 5.5, or null. */
+function lerPreco(texto: string): number | null {
+  const limpo = texto.replace(/[^\d,.]/g, '').replace(',', '.');
+  if (!limpo) return null;
+  const n = Number(limpo);
+  return Number.isFinite(n) && n >= 0 && n < 10000 ? Math.round(n * 100) / 100 : null;
+}
+
+/** The stickers on sale: the list, and the form to add or change one. */
+function ModelosDaComissao({
+  codigo,
+  modelos,
+  salvando,
+  agir,
+}: {
+  codigo: string;
+  modelos: Modelo[];
+  salvando: string | null;
+  agir: (acao: AcaoAdesivos, chave: string) => Promise<boolean>;
+}) {
+  const mobile = useIsMobile();
+  // 'novo', a model's id, or null (form closed).
+  const [editando, setEditando] = useState<string | null>(null);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
+        <span style={titulo}>Adesivos à venda · {modelos.filter((m) => m.ativo).length}</span>
+        {editando !== 'novo' ? (
+          <Button variant="primary" size="sm" iconLeft={<Plus size={16} />} onClick={() => setEditando('novo')}>
+            Adicionar adesivo
+          </Button>
+        ) : null}
+      </div>
+
+      {editando === 'novo' ? (
+        <FormModelo
+          codigo={codigo}
+          salvando={salvando === 'modelo-novo'}
+          onCancelar={() => setEditando(null)}
+          onSalvar={async (m) => {
+            if (await agir({ acao: 'salvarModelo', modelo: m }, 'modelo-novo')) setEditando(null);
+          }}
+        />
+      ) : null}
+
+      <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : 'repeat(2, 1fr)', gap: 'var(--space-4)' }}>
+        {modelos.map((m, i) =>
+          editando === m.id ? (
+            <div key={m.id} style={{ gridColumn: '1 / -1' }}>
+              <FormModelo
+                codigo={codigo}
+                modelo={m}
+                salvando={salvando === `modelo-${m.id}`}
+                onCancelar={() => setEditando(null)}
+                onSalvar={async (novo) => {
+                  if (await agir({ acao: 'salvarModelo', modelo: { ...novo, id: m.id } }, `modelo-${m.id}`)) setEditando(null);
+                }}
+              />
+            </div>
+          ) : (
+            <Card key={m.id} padding="var(--space-4) var(--space-5)" style={{ opacity: m.ativo ? 1 : 0.6 }}>
+              <div style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'center' }}>
+                <div style={{ width: 72, height: 72, flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {m.crianca ? (
+                    <AdesivoCrianca foto={null} nome="" />
+                  ) : m.imagem ? (
+                    <img src={m.imagem} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                  ) : null}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600 }}>{m.nome}</span>
+                    {!m.ativo ? <Badge>Escondido</Badge> : null}
+                  </div>
+                  <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--gild-300)' }}>{reais(m.preco)}</span>
+                  <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', marginTop: 4 }}>
+                    <Button variant="ghost" size="sm" style={{ padding: 0, height: 26 }} onClick={() => setEditando(m.id)}>
+                      Editar
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      style={{ padding: 0, height: 26 }}
+                      carregando={salvando === `ativo-${m.id}`}
+                      onClick={() =>
+                        agir({ acao: 'salvarModelo', modelo: { id: m.id, nome: m.nome, descricao: m.descricao ?? '', preco: m.preco, ativo: !m.ativo } }, `ativo-${m.id}`)
+                      }
+                    >
+                      {m.ativo ? 'Esconder' : 'Mostrar'}
+                    </Button>
+                    {!m.crianca ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        style={{ padding: 0, height: 26, color: 'var(--state-error)' }}
+                        carregando={salvando === `apagar-modelo-${m.id}`}
+                        onClick={() => {
+                          if (window.confirm(`Apagar o adesivo "${m.nome}"?`)) agir({ acao: 'apagarModelo', id: m.id }, `apagar-modelo-${m.id}`);
+                        }}
+                      >
+                        Apagar
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <BotaoSeta rotulo={`Subir ${m.nome}`} desativado={i === 0 || !!salvando} onClick={() => agir({ acao: 'moverModelo', id: m.id, direcao: -1 }, `mover-${m.id}`)}>
+                    <ArrowUp size={16} />
+                  </BotaoSeta>
+                  <BotaoSeta
+                    rotulo={`Descer ${m.nome}`}
+                    desativado={i === modelos.length - 1 || !!salvando}
+                    onClick={() => agir({ acao: 'moverModelo', id: m.id, direcao: 1 }, `mover-${m.id}`)}
+                  >
+                    <ArrowDown size={16} />
+                  </BotaoSeta>
+                </div>
+              </div>
+            </Card>
+          ),
+        )}
+      </div>
+    </div>
+  );
+}
+
+function BotaoSeta({ rotulo, desativado, onClick, children }: { rotulo: string; desativado: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-label={rotulo}
+      disabled={desativado}
+      onClick={onClick}
+      style={{
+        width: 32,
+        height: 32,
+        borderRadius: '50%',
+        border: 'none',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'rgba(245,245,247,.1)',
+        color: desativado ? 'var(--text-faint)' : 'var(--chalk-050)',
+        cursor: desativado ? 'default' : 'pointer',
+        opacity: desativado ? 0.4 : 1,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Adds a sticker (picture, name, description, price) or changes one. */
+function FormModelo({
+  codigo,
+  modelo,
+  salvando,
+  onCancelar,
+  onSalvar,
+}: {
+  codigo: string;
+  modelo?: Modelo;
+  salvando: boolean;
+  onCancelar: () => void;
+  onSalvar: (m: { nome: string; descricao: string; preco: number; ativo: boolean; imagem?: string }) => Promise<void>;
+}) {
+  const mobile = useIsMobile();
+  const entrada = useRef<HTMLInputElement>(null);
+  const [nome, setNome] = useState(modelo?.nome ?? '');
+  const [descricao, setDescricao] = useState(modelo?.descricao ?? '');
+  const [preco, setPreco] = useState(modelo ? modelo.preco.toFixed(2).replace('.', ',') : '');
+  const [arquivo, setArquivo] = useState<File | null>(null);
+  const [previa, setPrevia] = useState<string | null>(modelo?.imagem ?? null);
+  const [enviando, setEnviando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!arquivo) return;
+    const url = URL.createObjectURL(arquivo);
+    setPrevia(url);
+    return () => URL.revokeObjectURL(url);
+  }, [arquivo]);
+
+  async function salvar() {
+    const valor = lerPreco(preco);
+    if (!nome.trim()) return setErro('Dê um nome ao adesivo.');
+    if (valor === null) return setErro('Digite o preço, por exemplo 5,00.');
+    if (!modelo?.crianca && !arquivo && !modelo?.imagem) return setErro('Escolha a imagem do adesivo.');
+    setErro(null);
+    setEnviando(true);
+    try {
+      const imagem = arquivo ? await enviarImagemAdesivo(codigo, arquivo) : undefined;
+      await onSalvar({ nome: nome.trim(), descricao: descricao.trim(), preco: valor, ativo: modelo?.ativo ?? true, imagem });
+    } catch (e) {
+      setErro(mensagemDe(e, 'Não foi possível salvar agora.'));
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <Card accent padding="var(--space-6)">
+      <div style={{ display: 'flex', gap: 'var(--space-6)', flexDirection: mobile ? 'column' : 'row' }}>
+        {modelo?.crianca ? (
+          <div style={{ width: mobile ? '60%' : 200, flex: '0 0 auto', alignSelf: mobile ? 'center' : 'flex-start' }}>
+            <AdesivoCrianca foto={null} nome="" />
+            <p style={{ ...pequeno, marginTop: 'var(--space-3)', textAlign: 'center' }}>Cada formando vê o seu, com a foto de criança dele.</p>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => entrada.current?.click()}
+            style={{
+              width: mobile ? '100%' : 200,
+              aspectRatio: '1',
+              flex: '0 0 auto',
+              alignSelf: 'flex-start',
+              borderRadius: 'var(--radius-md)',
+              border: '1px dashed var(--stroke-muted)',
+              background: 'var(--ink-800)',
+              color: 'var(--text-muted)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 'var(--space-3)',
+              cursor: 'pointer',
+              padding: 'var(--space-4)',
+            }}
+          >
+            {previa ? (
+              <img src={previa} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+            ) : (
+              <>
+                <ImagePlus size={32} />
+                <span style={{ fontSize: 'var(--fs-body-sm)' }}>Escolher imagem</span>
+              </>
+            )}
+          </button>
+        )}
+        <input
+          ref={entrada}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) setArquivo(f);
+            e.target.value = '';
+          }}
+        />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', flex: 1 }}>
+          <Input label="Nome" placeholder="Ex.: Logo da Turma 32" value={nome} maxLength={80} onChange={(e) => setNome(e.target.value)} />
+          <Input label="Descrição (opcional)" placeholder="Ex.: 7 cm, recortado" value={descricao} maxLength={300} onChange={(e) => setDescricao(e.target.value)} />
+          <Input label="Preço por adesivo (R$)" placeholder="5,00" inputMode="decimal" value={preco} onChange={(e) => setPreco(e.target.value)} />
+          {!modelo?.crianca && previa ? (
+            <div>
+              <Button variant="ghost" size="sm" style={{ padding: 0 }} onClick={() => entrada.current?.click()}>
+                Trocar imagem
+              </Button>
+            </div>
+          ) : null}
+          {erro ? <span style={erroEstilo}>{erro}</span> : null}
+          <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+            <Button variant="gild" carregando={enviando || salvando} onClick={salvar}>
+              {modelo ? 'Salvar' : 'Adicionar à loja'}
+            </Button>
+            <Button variant="ghost" onClick={onCancelar}>
+              Cancelar
+            </Button>
+          </div>
+        </div>
       </div>
     </Card>
   );
@@ -687,44 +964,21 @@ function Numero({ rotulo, valor, destaque }: { rotulo: string; valor: string; de
 
 function PedidoDaComissao({
   pedido,
-  foto,
+  modelos,
   salvando,
   onPago,
   onApagar,
 }: {
   pedido: Pedido;
-  foto: string | null;
+  modelos: Modelo[];
   salvando: string | null;
   onPago: (sim: boolean) => void;
   onApagar: () => void;
 }) {
   const mobile = useIsMobile();
-  const ref = useRef<SVGSVGElement>(null);
-  const [baixando, setBaixando] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
-  const criancas = pedido.itens.crianca ?? 0;
-
-  async function baixar() {
-    if (!ref.current) return;
-    setBaixando(true);
-    setErro(null);
-    try {
-      await baixarAdesivoCrianca(ref.current, `adesivo-${slug(pedido.formando)}.png`);
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível baixar agora.');
-    } finally {
-      setBaixando(false);
-    }
-  }
-
   return (
     <Card padding="var(--space-5) var(--space-6)">
       <div style={{ display: 'flex', gap: 'var(--space-5)', alignItems: mobile ? 'stretch' : 'center', flexDirection: mobile ? 'column' : 'row' }}>
-        {criancas > 0 ? (
-          <div style={{ width: 96, flex: '0 0 auto' }}>
-            <AdesivoCrianca ref={ref} foto={foto} nome={pedido.formando} />
-          </div>
-        ) : null}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
             <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600 }}>{pedido.formando}</span>
@@ -732,20 +986,13 @@ function PedidoDaComissao({
           </div>
           <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>
             {Object.entries(pedido.itens)
-              .map(([id, q]) => `${q}× ${modeloPorId(id)?.nome ?? id}`)
+              .map(([id, q]) => `${q}× ${modelos.find((m) => m.id === id)?.nome ?? 'adesivo apagado'}`)
               .join(' · ')}{' '}
-            · <strong style={{ color: 'var(--text-primary)' }}>{reais(totalDoPedido(pedido.itens))}</strong>
+            · <strong style={{ color: 'var(--text-primary)' }}>{reais(totalDoPedido(pedido.itens, modelos))}</strong>
           </span>
           {pedido.observacao ? <span style={pequeno}>“{pedido.observacao}”</span> : null}
-          {criancas > 0 && !foto ? <span style={{ ...pequeno, color: 'var(--gild-300)' }}>Pediu o adesivo de criança, mas ainda não tem foto no site.</span> : null}
-          {erro ? <span style={erroEstilo}>{erro}</span> : null}
         </div>
         <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', alignItems: 'center' }}>
-          {criancas > 0 && foto ? (
-            <Button variant="secondary" size="sm" carregando={baixando} iconLeft={<Download size={16} />} onClick={baixar}>
-              Adesivo
-            </Button>
-          ) : null}
           <Button variant={pedido.pago ? 'secondary' : 'primary'} size="sm" carregando={salvando === `pago-${pedido.formando}`} onClick={() => onPago(!pedido.pago)}>
             {pedido.pago ? 'Desmarcar pago' : 'Marcar pago'}
           </Button>
@@ -755,5 +1002,88 @@ function PedidoDaComissao({
         </div>
       </div>
     </Card>
+  );
+}
+
+/**
+ * Every formando's childhood sticker, made from their photo in the frame:
+ * to check them, and download one or all (a .zip) for the print shop.
+ */
+function AdesivosDeCrianca({ formandos, fotos, pedidos, modelos }: { formandos: string[]; fotos: Record<string, string>; pedidos: Pedido[]; modelos: Modelo[] }) {
+  const mobile = useIsMobile();
+  const [baixando, setBaixando] = useState<string | null>(null);
+  const [progresso, setProgresso] = useState<string | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+  const crianca = modelos.find((m) => m.crianca);
+  const pediram = new Map(pedidos.map((p) => [p.formando, crianca ? (p.itens[crianca.id] ?? 0) : 0]));
+  const comFoto = formandos.filter((f) => fotos[f]);
+  const semFoto = formandos.filter((f) => !fotos[f]);
+
+  async function baixar(formando: string) {
+    setBaixando(formando);
+    setErro(null);
+    try {
+      salvarArquivo(await pngDoAdesivo(fotos[formando], formando), `adesivo-${slugDoNome(formando)}.png`);
+    } catch (e) {
+      setErro(mensagemDe(e, 'Não foi possível baixar agora.'));
+    } finally {
+      setBaixando(null);
+    }
+  }
+
+  async function baixarTodos(quem: string[]) {
+    setBaixando('todos');
+    setErro(null);
+    try {
+      const { zipSync } = await import('fflate');
+      const arquivos: Record<string, Uint8Array> = {};
+      for (const [i, f] of quem.entries()) {
+        setProgresso(`${i + 1} de ${quem.length}`);
+        const png = await pngDoAdesivo(fotos[f], f);
+        const qtd = pediram.get(f) ?? 0;
+        arquivos[`${qtd > 0 ? `${qtd}x ` : ''}${f}.png`] = new Uint8Array(await png.arrayBuffer());
+      }
+      salvarArquivo(new Blob([zipSync(arquivos, { level: 0 }) as BlobPart], { type: 'application/zip' }), 'adesivos-de-crianca.zip');
+    } catch (e) {
+      setErro(mensagemDe(e, 'Não foi possível baixar agora.'));
+    } finally {
+      setBaixando(null);
+      setProgresso(null);
+    }
+  }
+
+  const quemPediu = comFoto.filter((f) => (pediram.get(f) ?? 0) > 0);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
+        <span style={titulo}>Adesivos de criança · {comFoto.length}</span>
+        <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+          <Button variant="secondary" size="sm" disabled={quemPediu.length === 0 || !!baixando} carregando={baixando === 'todos'} onClick={() => baixarTodos(quemPediu)}>
+            {baixando === 'todos' && progresso ? `Montando ${progresso}…` : `Baixar de quem pediu (${quemPediu.length})`}
+          </Button>
+          <Button variant="ghost" size="sm" disabled={comFoto.length === 0 || !!baixando} onClick={() => baixarTodos(comFoto)}>
+            Baixar todos
+          </Button>
+        </div>
+      </div>
+      <p style={pequeno}>
+        O arquivo de cada um vem no tamanho do modelo (1181 × 1181), com o nome do formando e, para quem pediu, a quantidade na frente.
+      </p>
+      {erro ? <span style={erroEstilo}>{erro}</span> : null}
+      <div style={{ display: 'grid', gridTemplateColumns: mobile ? 'repeat(2, 1fr)' : 'repeat(5, 1fr)', gap: 'var(--space-5)' }}>
+        {comFoto.map((f) => (
+          <div key={f} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', alignItems: 'center', textAlign: 'center' }}>
+            <AdesivoCrianca foto={fotos[f]} nome={f} />
+            <span style={{ fontSize: 'var(--fs-body-sm)', fontWeight: 600 }}>{f}</span>
+            {(pediram.get(f) ?? 0) > 0 ? <span style={{ ...pequeno, color: 'var(--gild-300)' }}>Pediu {pediram.get(f)}</span> : null}
+            <Button variant="ghost" size="sm" style={{ height: 28 }} disabled={!!baixando} carregando={baixando === f} iconLeft={<Download size={14} />} onClick={() => baixar(f)}>
+              Baixar
+            </Button>
+          </div>
+        ))}
+      </div>
+      {semFoto.length > 0 ? <p style={pequeno}>Sem foto de criança no site ainda ({semFoto.length}): {semFoto.join(', ')}.</p> : null}
+    </div>
   );
 }
