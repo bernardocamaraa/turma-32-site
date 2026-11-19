@@ -18,6 +18,8 @@ export type Modelo = {
   crianca: boolean;
   /** Hidden ones only show to the committee (and in an order that already had them). */
   ativo: boolean;
+  /** The formando picks the colour of the picture's coloured part (corDoAdesivo). */
+  personalizavel: boolean;
 };
 
 /** Most of one model a formando can order — the same as MAXIMO in the function. */
@@ -64,7 +66,7 @@ export type DadosAdesivos = {
 
 export type AcessoAdesivos = { whatsapp: string; nome?: string } | { codigo: string } | Record<string, never>;
 
-export type ModeloParaSalvar = { id?: string; nome: string; descricao: string; preco: number; ativo: boolean; imagem?: string };
+export type ModeloParaSalvar = { id?: string; nome: string; descricao: string; preco: number; ativo: boolean; personalizavel: boolean; imagem?: string };
 
 export type AcaoAdesivos =
   /** Sends (or replaces) the order. All zero deletes it. Committee: whose, in `formando`. */
@@ -104,8 +106,124 @@ export function urlDaLoja(): string {
   return `${window.location.origin}/adesivos`;
 }
 
+/**
+ * An order's key: the model's id, or "<id>@#rrggbb" for a custom-colour
+ * model — one key per colour, each with its own quantity.
+ */
+export function lerChave(chave: string): { id: string; cor: string | null } {
+  const [id, cor] = chave.split('@');
+  return { id, cor: cor ?? null };
+}
+
+export const chaveDe = (id: string, cor: string | null) => (cor ? `${id}@${cor.toLowerCase()}` : id);
+
 export function totalDoPedido(itens: Itens, modelos: Modelo[]): number {
-  return Object.entries(itens).reduce((s, [id, q]) => s + (modelos.find((m) => m.id === id)?.preco ?? 0) * q, 0);
+  return Object.entries(itens).reduce((s, [chave, q]) => s + (modelos.find((m) => m.id === lerChave(chave).id)?.preco ?? 0) * q, 0);
+}
+
+/** "2× Logo da Turma 32 (Vermelho)". */
+export function descreverItem(chave: string, q: number, modelos: Modelo[]): string {
+  const { id, cor } = lerChave(chave);
+  const nome = modelos.find((m) => m.id === id)?.nome ?? 'adesivo apagado';
+  return `${q}× ${nome}${cor ? ` (${nomeDaCor(cor)})` : ''}`;
+}
+
+/** The colours offered for a custom-colour sticker (any other can be picked too). */
+export const CORES: { nome: string; cor: string }[] = [
+  { nome: 'Azul-claro', cor: '#a9d3e8' },
+  { nome: 'Azul', cor: '#2f6fd6' },
+  { nome: 'Vermelho', cor: '#e0262b' },
+  { nome: 'Rosa', cor: '#ff5fa2' },
+  { nome: 'Roxo', cor: '#8a4fe0' },
+  { nome: 'Verde', cor: '#22b05a' },
+  { nome: 'Amarelo', cor: '#ffd21f' },
+  { nome: 'Laranja', cor: '#ff7a00' },
+  { nome: 'Dourado', cor: '#c9a33a' },
+  { nome: 'Cinza', cor: '#9a9a9a' },
+];
+
+export const nomeDaCor = (cor: string) => CORES.find((c) => c.cor === cor.toLowerCase())?.nome ?? cor.toUpperCase();
+
+function hsl(r: number, g: number, b: number): [number, number, number] {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  const h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h / 6, s, l];
+}
+
+function rgb(h: number, s: number, l: number): [number, number, number] {
+  if (s === 0) return [l, l, l];
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const canal = (t: number) => {
+    t = (t + 1) % 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  return [canal(h + 1 / 3), canal(h), canal(h - 1 / 3)];
+}
+
+const pintados = new Map<string, Promise<Blob>>();
+
+/**
+ * The picture with its coloured part (the pixels with colour: the 32's blue
+ * shadow) in `cor` — black, white and greys stay as they are. The shading
+ * is kept: each pixel's lightness moves by as much as the colour's differs
+ * from the coloured part's average. Full size, as a PNG (for the page and
+ * for the print shop).
+ */
+export function corDoAdesivo(imagem: string, cor: string): Promise<Blob> {
+  const chave = `${imagem}|${cor}`;
+  if (!pintados.has(chave)) {
+    const feito = (async () => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error('Não foi possível carregar a imagem do adesivo.'));
+        img.src = imagem;
+      });
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+      ctx.drawImage(img, 0, 0);
+      const dados = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const px = dados.data;
+      const [th, ts, tl] = hsl(parseInt(cor.slice(1, 3), 16) / 255, parseInt(cor.slice(3, 5), 16) / 255, parseInt(cor.slice(5, 7), 16) / 255);
+      const coloridos: number[] = [];
+      let soma = 0;
+      for (let i = 0; i < px.length; i += 4) {
+        if (px[i + 3] < 10) continue;
+        const [, s, l] = hsl(px[i] / 255, px[i + 1] / 255, px[i + 2] / 255);
+        if (s > 0.2 && l > 0.12 && l < 0.93) {
+          coloridos.push(i);
+          soma += l;
+        }
+      }
+      const media = coloridos.length ? soma / coloridos.length : 0;
+      for (const i of coloridos) {
+        const [, , l] = hsl(px[i] / 255, px[i + 1] / 255, px[i + 2] / 255);
+        const [r, g, b] = rgb(th, ts, Math.min(1, Math.max(0, l - media + tl)));
+        px[i] = Math.round(r * 255);
+        px[i + 1] = Math.round(g * 255);
+        px[i + 2] = Math.round(b * 255);
+      }
+      ctx.putImageData(dados, 0, 0);
+      return new Promise<Blob>((resolve, reject) =>
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Não foi possível pintar o adesivo.'))), 'image/png'),
+      );
+    })();
+    feito.catch(() => pintados.delete(chave));
+    pintados.set(chave, feito);
+  }
+  return pintados.get(chave)!;
 }
 
 export function quantidadeDoPedido(itens: Itens): number {

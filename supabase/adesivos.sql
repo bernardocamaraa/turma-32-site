@@ -30,6 +30,11 @@ create table if not exists public.modelos_adesivos (
   criado_em timestamptz not null default now()
 );
 
+-- Custom colour: the formando picks the colour of the picture's coloured
+-- part (the 32's blue shadow, say); the order keeps each colour apart
+-- ("<model id>@#rrggbb" in pedidos_adesivos.itens).
+alter table public.modelos_adesivos add column if not exists personalizavel boolean not null default false;
+
 insert into public.modelos_adesivos (id, nome, descricao, preco, crianca, ordem)
 values ('crianca', 'Você criança', 'O seu adesivo, com a sua foto de criança.', 5, true, 0)
 on conflict (id) do nothing;
@@ -48,7 +53,8 @@ on conflict (id) do nothing;
 -- ---------------------------------------------------------------------------
 create table if not exists public.pedidos_adesivos (
   formando text primary key references public.convidados_formando (formando) on update cascade on delete cascade,
-  -- { "<model id>": <quantity> }, only models with a quantity above zero.
+  -- { "<model id>": <quantity> }, only models with a quantity above zero;
+  -- for a custom-colour model, one key per colour: "<model id>@#rrggbb".
   itens jsonb not null default '{}'::jsonb check (jsonb_typeof(itens) = 'object'),
   observacao text check (char_length(observacao) <= 500),
   -- Set by the committee once the payment arrived; the formando can't

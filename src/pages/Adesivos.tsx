@@ -11,7 +11,13 @@ import { Input } from '../components/Input';
 import { Popups, usePopup } from '../components/Popups';
 import {
   buscarAdesivos,
+  chaveDe,
+  corDoAdesivo,
+  CORES,
+  descreverItem,
   enviarImagemAdesivo,
+  lerChave,
+  nomeDaCor,
   MAXIMO_POR_MODELO,
   PIX,
   quantidadeDoPedido,
@@ -40,7 +46,7 @@ const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um :
 const mensagemDe = (e: unknown, padrao: string) => (e instanceof Error ? e.message : padrao);
 
 /** The picture of a model: the formando's own sticker for the childhood one, the committee's picture for the rest. */
-function ArteDoModelo({ modelo, foto, nome }: { modelo: Modelo; foto: string | null; nome: string }) {
+function ArteDoModelo({ modelo, foto, nome, cor }: { modelo: Modelo; foto: string | null; nome: string; cor?: string | null }) {
   if (modelo.crianca) {
     return (
       <div style={{ width: '100%', borderRadius: '50%', boxShadow: '0 18px 40px rgba(0,0,0,.55)' }}>
@@ -48,9 +54,31 @@ function ArteDoModelo({ modelo, foto, nome }: { modelo: Modelo; foto: string | n
       </div>
     );
   }
-  return modelo.imagem ? (
-    <img src={modelo.imagem} alt={modelo.nome} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', filter: 'drop-shadow(0 14px 22px rgba(0,0,0,.5))' }} />
-  ) : null;
+  if (!modelo.imagem) return null;
+  const estilo: CSSProperties = { maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', filter: 'drop-shadow(0 14px 22px rgba(0,0,0,.5))' };
+  return cor ? <ImagemNaCor imagem={modelo.imagem} cor={cor} alt={`${modelo.nome} em ${nomeDaCor(cor)}`} style={estilo} /> : <img src={modelo.imagem} alt={modelo.nome} style={estilo} />;
+}
+
+/** A custom-colour sticker's picture, painted in `cor` (the original shows meanwhile). */
+function ImagemNaCor({ imagem, cor, alt, style }: { imagem: string; cor: string; alt: string; style?: CSSProperties }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let ativo = true;
+    let criado: string | null = null;
+    corDoAdesivo(imagem, cor).then(
+      (blob) => {
+        if (!ativo) return;
+        criado = URL.createObjectURL(blob);
+        setUrl(criado);
+      },
+      console.error,
+    );
+    return () => {
+      ativo = false;
+      if (criado) URL.revokeObjectURL(criado);
+    };
+  }, [imagem, cor]);
+  return <img src={url ?? imagem} alt={alt} style={{ ...style, transition: 'opacity 200ms', opacity: url ? 1 : 0.6 }} />;
 }
 
 /**
@@ -225,15 +253,7 @@ function Loja() {
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : 'repeat(auto-fill, minmax(300px, 1fr))', gap: 'var(--space-5)' }}>
               {modelos.map((m) => (
-                <CartaoModelo
-                  key={m.id}
-                  modelo={m}
-                  voce={dados.voce!}
-                  foto={dados.fotoInfancia}
-                  quantidade={itens[m.id] ?? 0}
-                  travado={travado}
-                  onMudar={(q) => mudar(m.id, q)}
-                />
+                <CartaoModelo key={m.id} modelo={m} voce={dados.voce!} foto={dados.fotoInfancia} itens={itens} travado={travado} onMudar={mudar} />
               ))}
             </div>
           )}
@@ -248,16 +268,15 @@ function Loja() {
 
               {quantidade > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                  {modelos
-                    .filter((m) => (itens[m.id] ?? 0) > 0)
-                    .map((m) => (
-                      <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-4)', fontSize: 'var(--fs-body)' }}>
-                        <span>
-                          {itens[m.id]}× {m.nome}
-                        </span>
-                        <span style={{ color: 'var(--text-muted)' }}>{reais(itens[m.id] * m.preco)}</span>
-                      </div>
-                    ))}
+                  {ordenarItens(itens, modelos).map(([chave, q]) => (
+                    <div key={chave} style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-4)', fontSize: 'var(--fs-body)' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                        {lerChave(chave).cor ? <Bolinha cor={lerChave(chave).cor!} tamanho={14} /> : null}
+                        {descreverItem(chave, q, modelos)}
+                      </span>
+                      <span style={{ color: 'var(--text-muted)' }}>{reais(totalDoPedido({ [chave]: q }, modelos))}</span>
+                    </div>
+                  ))}
                   <div
                     style={{
                       display: 'flex',
@@ -372,24 +391,60 @@ function Pagamento({ total }: { total: number }) {
   );
 }
 
-/** One model on sale: its art, what it is, the price and how many. */
+/** The order's lines in the store's order (by model, then colour), only those above zero. */
+function ordenarItens(itens: Itens, modelos: Modelo[]): [string, number][] {
+  const posicao = (chave: string) => {
+    const i = modelos.findIndex((m) => m.id === lerChave(chave).id);
+    return i < 0 ? modelos.length : i;
+  };
+  return Object.entries(itens)
+    .filter(([, q]) => q > 0)
+    .sort(([a], [b]) => posicao(a) - posicao(b) || a.localeCompare(b));
+}
+
+/** A round swatch of a colour. */
+function Bolinha({ cor, tamanho = 28, marcada, rotulo, onClick }: { cor: string; tamanho?: number; marcada?: boolean; rotulo?: string; onClick?: () => void }) {
+  const estilo: CSSProperties = {
+    width: tamanho,
+    height: tamanho,
+    flex: '0 0 auto',
+    borderRadius: '50%',
+    background: cor,
+    border: 'none',
+    padding: 0,
+    boxShadow: marcada ? '0 0 0 2px var(--ink-850), 0 0 0 4px var(--chalk-050)' : 'inset 0 0 0 1px rgba(255,255,255,.18)',
+    cursor: onClick ? 'pointer' : 'default',
+    transition: 'box-shadow var(--dur) var(--ease-out)',
+  };
+  return onClick ? <button type="button" aria-label={rotulo} aria-pressed={marcada} title={rotulo} style={estilo} onClick={onClick} /> : <span aria-hidden style={{ ...estilo, display: 'inline-block' }} />;
+}
+
+/** One model on sale: its art, what it is, the price and how many (of each colour, for a custom-colour one). */
 function CartaoModelo({
   modelo,
   voce,
   foto,
-  quantidade,
+  itens,
   travado,
   onMudar,
 }: {
   modelo: Modelo;
   voce: string;
   foto: string | null;
-  quantidade: number;
+  itens: Itens;
   travado: boolean;
-  onMudar: (q: number) => void;
+  onMudar: (chave: string, q: number) => void;
 }) {
   const [baixando, setBaixando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  // The colours of this model already in the order.
+  const coresNoPedido = Object.entries(itens)
+    .filter(([k, q]) => q > 0 && lerChave(k).id === modelo.id && lerChave(k).cor)
+    .map(([k, q]) => ({ cor: lerChave(k).cor!, q }));
+  const [cor, setCor] = useState<string | null>(() => (modelo.personalizavel ? (coresNoPedido[0]?.cor ?? CORES[0].cor) : null));
+  const chave = chaveDe(modelo.id, cor);
+  const quantidade = itens[chave] ?? 0;
+  const algum = modelo.personalizavel ? coresNoPedido.length > 0 : quantidade > 0;
 
   async function baixar() {
     if (!foto) return;
@@ -405,7 +460,7 @@ function CartaoModelo({
   }
 
   return (
-    <Card accent={quantidade > 0} padding={0} style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+    <Card accent={algum} padding={0} style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       <div
         style={{
           aspectRatio: '1',
@@ -421,8 +476,12 @@ function CartaoModelo({
           <Badge tone="gild" style={{ position: 'absolute', top: 16, left: 16 }}>
             Só seu
           </Badge>
+        ) : modelo.personalizavel ? (
+          <Badge tone="ice" style={{ position: 'absolute', top: 16, left: 16 }}>
+            Escolha a cor
+          </Badge>
         ) : null}
-        <ArteDoModelo modelo={modelo} foto={foto} nome={voce} />
+        <ArteDoModelo modelo={modelo} foto={foto} nome={voce} cor={cor} />
       </div>
 
       <div style={{ padding: 'var(--space-5) var(--space-6) var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', flex: 1 }}>
@@ -440,14 +499,81 @@ function CartaoModelo({
           ) : null}
         </div>
 
+        {modelo.personalizavel && cor ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+            <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>
+              Cor: <strong style={{ color: 'var(--text-primary)' }}>{nomeDaCor(cor)}</strong>
+            </span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+              {CORES.map((c) => (
+                <Bolinha key={c.cor} cor={c.cor} rotulo={c.nome} marcada={cor === c.cor} onClick={() => setCor(c.cor)} />
+              ))}
+              <label
+                title="Outra cor"
+                style={{
+                  position: 'relative',
+                  width: 28,
+                  height: 28,
+                  borderRadius: '50%',
+                  cursor: 'pointer',
+                  background: 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)',
+                  boxShadow: !CORES.some((c) => c.cor === cor) ? '0 0 0 2px var(--ink-850), 0 0 0 4px var(--chalk-050)' : 'inset 0 0 0 1px rgba(255,255,255,.18)',
+                }}
+              >
+                <input
+                  type="color"
+                  aria-label="Outra cor"
+                  value={cor}
+                  onChange={(e) => setCor(e.target.value.toLowerCase())}
+                  style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }}
+                />
+              </label>
+            </div>
+          </div>
+        ) : null}
+
         <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
-          <Quantidade valor={quantidade} travado={travado} maximo={modelo.ativo ? MAXIMO_POR_MODELO : quantidade} rotulo={modelo.nome} onMudar={onMudar} />
+          <Quantidade
+            valor={quantidade}
+            travado={travado}
+            maximo={modelo.ativo ? MAXIMO_POR_MODELO : quantidade}
+            rotulo={cor ? `${modelo.nome} em ${nomeDaCor(cor)}` : modelo.nome}
+            onMudar={(q) => onMudar(chave, q)}
+          />
           {modelo.crianca && foto ? (
             <Button variant="ghost" size="sm" carregando={baixando} iconLeft={<Download size={16} />} onClick={baixar}>
               Baixar
             </Button>
           ) : null}
         </div>
+
+        {modelo.personalizavel && coresNoPedido.length > 0 ? (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+            {coresNoPedido.map((c) => (
+              <button
+                key={c.cor}
+                type="button"
+                onClick={() => setCor(c.cor)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  height: 30,
+                  padding: '0 12px 0 6px',
+                  borderRadius: 'var(--radius-pill)',
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: c.cor === cor ? 'rgba(245,245,247,.18)' : 'rgba(245,245,247,.08)',
+                  color: 'var(--chalk-050)',
+                  fontSize: 13,
+                }}
+              >
+                <Bolinha cor={c.cor} tamanho={18} />
+                {nomeDaCor(c.cor)} × {c.q}
+              </button>
+            ))}
+          </div>
+        ) : null}
         {erro ? <span style={erroEstilo}>{erro}</span> : null}
       </div>
     </Card>
@@ -565,13 +691,21 @@ export function AdesivosComissao({ codigo }: { codigo: string }) {
   const faltam = (dados.formandos ?? []).filter((f) => !feitos.has(f));
   const total = pedidos.reduce((s, p) => s + totalDoPedido(p.itens, modelos), 0);
   const recebido = pedidos.filter((p) => p.pago).reduce((s, p) => s + totalDoPedido(p.itens, modelos), 0);
-  const porModelo = modelos.map((m) => ({ modelo: m, quantidade: pedidos.reduce((s, p) => s + (p.itens[m.id] ?? 0), 0) }));
+  // For the print shop: one line per model, and per colour for a custom-colour one.
+  const somados: Itens = {};
+  for (const p of pedidos) for (const [k, q] of Object.entries(p.itens)) somados[k] = (somados[k] ?? 0) + q;
+  for (const m of modelos) if (!m.personalizavel && !(m.id in somados)) somados[m.id] = 0;
+  const linhasGrafica = ordenarItens(somados, modelos).concat(
+    modelos.filter((m) => !m.personalizavel && !somados[m.id]).map((m): [string, number] => [m.id, 0]),
+  );
+  const totalAdesivos = Object.values(somados).reduce((s, q) => s + q, 0);
 
   function baixarPlanilha() {
-    const cabecalho = ['Formando', ...modelos.map((m) => m.nome), 'Total (R$)', 'Pago', 'Observação'];
+    const colunas = linhasGrafica.map(([k]) => k);
+    const cabecalho = ['Formando', ...colunas.map((k) => descreverItem(k, 1, modelos).replace(/^1× /, '')), 'Total (R$)', 'Pago', 'Observação'];
     const linhas = pedidos.map((p) => [
       p.formando,
-      ...modelos.map((m) => String(p.itens[m.id] ?? 0)),
+      ...colunas.map((k) => String(p.itens[k] ?? 0)),
       totalDoPedido(p.itens, modelos).toFixed(2).replace('.', ','),
       p.pago ? 'Sim' : 'Não',
       p.observacao ?? '',
@@ -617,7 +751,7 @@ export function AdesivosComissao({ codigo }: { codigo: string }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: mobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: 'var(--space-5)' }}>
         <Numero rotulo="Pedidos" valor={`${pedidos.length}/${dados.formandos?.length ?? 0}`} />
-        <Numero rotulo="Adesivos" valor={String(porModelo.reduce((s, m) => s + m.quantidade, 0))} />
+        <Numero rotulo="Adesivos" valor={String(totalAdesivos)} />
         <Numero rotulo="Total" valor={reais(total)} />
         <Numero rotulo="Já pago" valor={reais(recebido)} destaque />
       </div>
@@ -639,14 +773,8 @@ export function AdesivosComissao({ codigo }: { codigo: string }) {
             Baixar planilha
           </Button>
         </div>
-        {porModelo.map(({ modelo, quantidade }) => (
-          <div
-            key={modelo.id}
-            style={{ display: 'flex', justifyContent: 'space-between', padding: 'var(--space-4) var(--space-7)', borderBottom: '1px solid var(--stroke-hair)', fontSize: 'var(--fs-body)' }}
-          >
-            <span>{modelo.nome}</span>
-            <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{quantidade}</span>
-          </div>
+        {linhasGrafica.map(([chave, quantidade]) => (
+          <LinhaGrafica key={chave} chave={chave} quantidade={quantidade} modelos={modelos} />
         ))}
       </Card>
 
@@ -669,6 +797,48 @@ export function AdesivosComissao({ codigo }: { codigo: string }) {
       </div>
 
       <AdesivosDeCrianca formandos={dados.formandos ?? []} fotos={dados.fotos ?? {}} pedidos={pedidos} modelos={modelos} />
+    </div>
+  );
+}
+
+/** One line of the print-shop list; a coloured one can be downloaded in its colour. */
+function LinhaGrafica({ chave, quantidade, modelos }: { chave: string; quantidade: number; modelos: Modelo[] }) {
+  const { id, cor } = lerChave(chave);
+  const modelo = modelos.find((m) => m.id === id);
+  const [baixando, setBaixando] = useState(false);
+  async function baixar() {
+    if (!modelo?.imagem || !cor) return;
+    setBaixando(true);
+    try {
+      salvarArquivo(await corDoAdesivo(modelo.imagem, cor), `${slugDoNome(modelo.nome)}-${slugDoNome(nomeDaCor(cor))}.png`);
+    } catch (e) {
+      window.alert(mensagemDe(e, 'Não foi possível baixar agora.'));
+    } finally {
+      setBaixando(false);
+    }
+  }
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 'var(--space-4)',
+        padding: 'var(--space-4) var(--space-7)',
+        borderBottom: '1px solid var(--stroke-hair)',
+        fontSize: 'var(--fs-body)',
+      }}
+    >
+      <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+        {cor ? <Bolinha cor={cor} tamanho={16} /> : null}
+        {descreverItem(chave, 1, modelos).replace(/^1× /, '')}
+        {cor && modelo?.imagem ? (
+          <Button variant="ghost" size="sm" style={{ height: 26 }} carregando={baixando} iconLeft={<Download size={14} />} onClick={baixar}>
+            Arquivo nessa cor
+          </Button>
+        ) : null}
+      </span>
+      <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{quantidade}</span>
     </div>
   );
 }
@@ -758,6 +928,7 @@ function ModelosDaComissao({
                   <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600 }}>{m.nome}</span>
                     {!m.ativo ? <Badge>Escondido</Badge> : null}
+                    {m.personalizavel ? <Badge tone="ice">Cor personalizada</Badge> : null}
                   </div>
                   <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--gild-300)' }}>{reais(m.preco)}</span>
                   <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', marginTop: 4 }}>
@@ -770,7 +941,10 @@ function ModelosDaComissao({
                       style={{ padding: 0, height: 26 }}
                       carregando={salvando === `ativo-${m.id}`}
                       onClick={() =>
-                        agir({ acao: 'salvarModelo', modelo: { id: m.id, nome: m.nome, descricao: m.descricao ?? '', preco: m.preco, ativo: !m.ativo } }, `ativo-${m.id}`)
+                        agir(
+                          { acao: 'salvarModelo', modelo: { id: m.id, nome: m.nome, descricao: m.descricao ?? '', preco: m.preco, ativo: !m.ativo, personalizavel: m.personalizavel } },
+                          `ativo-${m.id}`,
+                        )
                       }
                     >
                       {m.ativo ? 'Esconder' : 'Mostrar'}
@@ -849,13 +1023,14 @@ function FormModelo({
   modelo?: Modelo;
   salvando: boolean;
   onCancelar: () => void;
-  onSalvar: (m: { nome: string; descricao: string; preco: number; ativo: boolean; imagem?: string }) => Promise<void>;
+  onSalvar: (m: { nome: string; descricao: string; preco: number; ativo: boolean; personalizavel: boolean; imagem?: string }) => Promise<void>;
 }) {
   const mobile = useIsMobile();
   const entrada = useRef<HTMLInputElement>(null);
   const [nome, setNome] = useState(modelo?.nome ?? '');
   const [descricao, setDescricao] = useState(modelo?.descricao ?? '');
   const [preco, setPreco] = useState(modelo ? modelo.preco.toFixed(2).replace('.', ',') : '');
+  const [personalizavel, setPersonalizavel] = useState(modelo?.personalizavel ?? false);
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [previa, setPrevia] = useState<string | null>(modelo?.imagem ?? null);
   const [enviando, setEnviando] = useState(false);
@@ -877,7 +1052,7 @@ function FormModelo({
     setEnviando(true);
     try {
       const imagem = arquivo ? await enviarImagemAdesivo(codigo, arquivo) : undefined;
-      await onSalvar({ nome: nome.trim(), descricao: descricao.trim(), preco: valor, ativo: modelo?.ativo ?? true, imagem });
+      await onSalvar({ nome: nome.trim(), descricao: descricao.trim(), preco: valor, ativo: modelo?.ativo ?? true, personalizavel: !modelo?.crianca && personalizavel, imagem });
     } catch (e) {
       setErro(mensagemDe(e, 'Não foi possível salvar agora.'));
     } finally {
@@ -940,6 +1115,31 @@ function FormModelo({
           <Input label="Nome" placeholder="Ex.: Logo da Turma 32" value={nome} maxLength={80} onChange={(e) => setNome(e.target.value)} />
           <Input label="Descrição (opcional)" placeholder="Ex.: 7 cm, recortado" value={descricao} maxLength={300} onChange={(e) => setDescricao(e.target.value)} />
           <Input label="Preço por adesivo (R$)" placeholder="5,00" inputMode="decimal" value={preco} onChange={(e) => setPreco(e.target.value)} />
+          {!modelo?.crianca ? (
+            <label style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={personalizavel}
+                onChange={(e) => setPersonalizavel(e.target.checked)}
+                style={{ width: 20, height: 20, marginTop: 2, accentColor: 'var(--gild-400)', flex: '0 0 auto' }}
+              />
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={{ fontSize: 'var(--fs-body)' }}>Cor personalizada</span>
+                <span style={pequeno}>
+                  O formando escolhe a cor da parte colorida da imagem (no 32, a sombra azul). Preto, branco e cinza continuam iguais.
+                </span>
+              </span>
+            </label>
+          ) : null}
+          {personalizavel && previa && !modelo?.crianca ? (
+            <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', flexWrap: 'wrap' }}>
+              {CORES.slice(1, 6).map((c) => (
+                <div key={c.cor} style={{ width: 56, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <ImagemNaCor imagem={previa} cor={c.cor} alt={c.nome} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                </div>
+              ))}
+            </div>
+          ) : null}
           {!modelo?.crianca && previa ? (
             <div>
               <Button variant="ghost" size="sm" style={{ padding: 0 }} onClick={() => entrada.current?.click()}>
@@ -985,8 +1185,8 @@ function PedidoDaComissao({
             <Badge tone={pedido.pago ? 'ok' : 'gild'}>{pedido.pago ? 'Pago' : 'Não pago'}</Badge>
           </div>
           <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>
-            {Object.entries(pedido.itens)
-              .map(([id, q]) => `${q}× ${modelos.find((m) => m.id === id)?.nome ?? 'adesivo apagado'}`)
+            {ordenarItens(pedido.itens, modelos)
+              .map(([chave, q]) => descreverItem(chave, q, modelos))
               .join(' · ')}{' '}
             · <strong style={{ color: 'var(--text-primary)' }}>{reais(totalDoPedido(pedido.itens, modelos))}</strong>
           </span>

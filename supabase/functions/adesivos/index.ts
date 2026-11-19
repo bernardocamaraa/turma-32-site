@@ -19,7 +19,10 @@
 //     hands back a signed upload URL for a picture, then `salvarModelo`
 //     (with `modelo`: id to change one, nome, descricao, preco, ativo,
 //     imagem) creates or changes it; `moverModelo` (`id`, `direcao` ±1)
-//     reorders; `apagarModelo` (`id`) deletes one no order has. Gets a link
+//     reorders; `apagarModelo` (`id`) deletes one no order has. A model
+//     with `personalizavel` lets the formando pick the colour of its
+//     coloured part: the order then has one key per colour,
+//     "<model id>@#rrggbb". Gets a link
 //     to every formando's childhood photo (`fotos`), to download their
 //     stickers for printing.
 //
@@ -65,8 +68,15 @@ type LinhaModelo = {
   imagem: string | null;
   crianca: boolean;
   ativo: boolean;
+  personalizavel: boolean;
   ordem: number;
 };
+
+/** "abc" or "abc@#ff0000" → the model and the colour (lowercase), or null if malformed. */
+function lerChave(chave: string): { id: string; cor: string | null } | null {
+  const m = /^([A-Za-z0-9_-]{1,64})(?:@(#[0-9a-fA-F]{6}))?$/.exec(chave);
+  return m ? { id: m[1], cor: m[2]?.toLowerCase() ?? null } : null;
+}
 type Linha = { formando: string; itens: Record<string, number>; observacao: string | null; pago: boolean; criado_em: string; atualizado_em: string };
 
 const paraPagina = (l: Linha) => ({
@@ -122,7 +132,7 @@ Deno.serve(async (req) => {
     async function lerModelos(): Promise<LinhaModelo[]> {
       const { data, error } = await supabase
         .from('modelos_adesivos')
-        .select('id, nome, descricao, preco, imagem, crianca, ativo, ordem')
+        .select('id, nome, descricao, preco, imagem, crianca, ativo, personalizavel, ordem')
         .order('ordem')
         .order('criado_em');
       if (error) throw error;
@@ -141,17 +151,25 @@ Deno.serve(async (req) => {
       if (!comissao && atual?.pago) return recusar('Esse pedido já foi pago. Para mudar, fale com a comissão.');
       const antes = (atual?.itens ?? {}) as Record<string, number>;
       const lidos: Record<string, number> = {};
-      for (const [modeloId, quantidade] of Object.entries(itens as Record<string, unknown>)) {
+      for (const [chaveBruta, quantidade] of Object.entries(itens as Record<string, unknown>)) {
         if (typeof quantidade !== 'number' || !Number.isInteger(quantidade) || quantidade < 0 || quantidade > MAXIMO) {
           return recusar(`A quantidade de cada adesivo vai de 0 a ${MAXIMO}.`);
         }
         if (quantidade === 0) continue;
-        const m = modelos.find((x) => x.id === modeloId);
+        const lida = lerChave(chaveBruta);
+        if (!lida) return recusar('Pedido inválido.');
+        const chave = lida.cor ? `${lida.id}@${lida.cor}` : lida.id;
+        const m = modelos.find((x) => x.id === lida.id);
         // A hidden model stays in an order that already had it, at most as many.
-        if (!m || (!m.ativo && !comissao && quantidade > (antes[modeloId] ?? 0))) {
+        if (!m || (!m.ativo && !comissao && quantidade > (antes[chave] ?? 0))) {
           return recusar('Um dos adesivos do pedido não está mais à venda. Recarregue a página.');
         }
-        lidos[modeloId] = quantidade;
+        // A colour only on a custom-colour model (and it must have one).
+        if (!!lida.cor !== m.personalizavel && !(antes[chave] && quantidade <= antes[chave])) {
+          return recusar(m.personalizavel ? `Escolha a cor do adesivo "${m.nome}".` : `O adesivo "${m.nome}" não tem cor para escolher. Recarregue a página.`);
+        }
+        lidos[chave] = (lidos[chave] ?? 0) + quantidade;
+        if (lidos[chave] > MAXIMO) return recusar(`A quantidade de cada adesivo vai de 0 a ${MAXIMO}.`);
       }
       const nota = typeof observacao === 'string' && observacao.trim() ? observacao.trim().slice(0, 500) : null;
       if (Object.keys(lidos).length === 0) {
@@ -193,11 +211,12 @@ Deno.serve(async (req) => {
       if (!Number.isFinite(preco) || preco < 0 || preco >= 10000) return recusar('O preço não parece certo.');
       const descricao = typeof m.descricao === 'string' && m.descricao.trim() ? m.descricao.trim().slice(0, 300) : null;
       const ativo = m.ativo !== false;
+      const personalizavel = m.personalizavel === true;
       const imagem = typeof m.imagem === 'string' && /^[0-9a-f-]{36}\.[a-z0-9]{1,5}$/.test(m.imagem) ? m.imagem : undefined;
       if (typeof m.id === 'string') {
         const existente = modelos.find((x) => x.id === m.id);
         if (!existente) return recusar('Esse adesivo não existe mais. Recarregue a página.');
-        const mudanca: Record<string, unknown> = { nome: nomeM, descricao, preco, ativo };
+        const mudanca: Record<string, unknown> = { nome: nomeM, descricao, preco, ativo, personalizavel: existente.crianca ? false : personalizavel };
         if (imagem && !existente.crianca) mudanca.imagem = imagem;
         const { error } = await supabase.from('modelos_adesivos').update(mudanca).eq('id', m.id);
         if (error) throw error;
@@ -206,7 +225,7 @@ Deno.serve(async (req) => {
       } else {
         if (!imagem) return recusar('Escolha a imagem do adesivo.');
         const ordem = modelos.reduce((max, x) => Math.max(max, x.ordem), 0) + 1;
-        const { error } = await supabase.from('modelos_adesivos').insert({ nome: nomeM, descricao, preco, ativo, imagem, ordem });
+        const { error } = await supabase.from('modelos_adesivos').insert({ nome: nomeM, descricao, preco, ativo, personalizavel, imagem, ordem });
         if (error) throw error;
       }
     } else if (acao === 'moverModelo') {
@@ -224,8 +243,9 @@ Deno.serve(async (req) => {
       const existente = modelos.find((x) => x.id === id);
       if (!existente) return recusar('Esse adesivo não existe mais.');
       if (existente.crianca) return recusar('O adesivo de criança não pode ser apagado. Para tirá-lo da loja, esconda.');
-      const { data: comEle, error: erroCom } = await supabase.from('pedidos_adesivos').select('formando').not(`itens->${existente.id}`, 'is', null);
+      const { data: todos, error: erroCom } = await supabase.from('pedidos_adesivos').select('formando, itens');
       if (erroCom) throw erroCom;
+      const comEle = (todos as { itens: Record<string, number> }[]).filter((p) => Object.keys(p.itens).some((k) => lerChave(k)?.id === existente.id));
       if (comEle.length > 0) return recusar(`${comEle.length === 1 ? 'Um pedido tem' : `${comEle.length} pedidos têm`} esse adesivo. Para tirá-lo da loja, esconda em vez de apagar.`);
       const { error } = await supabase.from('modelos_adesivos').delete().eq('id', existente.id);
       if (error) throw error;
@@ -240,7 +260,7 @@ Deno.serve(async (req) => {
     const urlImagem = (caminho: string | null) => (caminho ? supabase.storage.from(BUCKET).getPublicUrl(caminho).data.publicUrl : null);
     const modelosPagina = modelos
       .filter((m) => comissao || m.ativo)
-      .map((m) => ({ id: m.id, nome: m.nome, descricao: m.descricao, preco: Number(m.preco), imagem: urlImagem(m.imagem), crianca: m.crianca, ativo: m.ativo }));
+      .map((m) => ({ id: m.id, nome: m.nome, descricao: m.descricao, preco: Number(m.preco), imagem: urlImagem(m.imagem), crianca: m.crianca, ativo: m.ativo, personalizavel: m.personalizavel }));
 
     if (!comissao && !voce) {
       // A number not on the list picks among the names that have none yet.
@@ -325,10 +345,10 @@ Deno.serve(async (req) => {
     if (erroMeu) throw erroMeu;
 
     // A hidden model still in their order still shows, so it can be taken out.
-    const noPedido = new Set(Object.keys((meu?.itens ?? {}) as Record<string, number>));
+    const noPedido = new Set(Object.keys((meu?.itens ?? {}) as Record<string, number>).map((k) => lerChave(k)?.id));
     const modelosFormando = modelos
       .filter((m) => m.ativo || noPedido.has(m.id))
-      .map((m) => ({ id: m.id, nome: m.nome, descricao: m.descricao, preco: Number(m.preco), imagem: urlImagem(m.imagem), crianca: m.crianca, ativo: m.ativo }));
+      .map((m) => ({ id: m.id, nome: m.nome, descricao: m.descricao, preco: Number(m.preco), imagem: urlImagem(m.imagem), crianca: m.crianca, ativo: m.ativo, personalizavel: m.personalizavel }));
 
     return json({
       comissao,

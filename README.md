@@ -509,6 +509,11 @@ escolhe quantos quer de cada modelo de adesivo para distribuir no baile.
   círculo da foto recortado. Cada formando só vê o seu. Na aba Adesivos, a
   comissão vê o de todo mundo e baixa um por um ou todos num .zip, em PNG no
   tamanho do modelo (1181 × 1181).
+- **Cor personalizada**: marcando essa opção num adesivo, o formando escolhe
+  a cor da parte colorida da imagem (no 32, a sombra azul; preto, branco e
+  cinza ficam iguais), numa paleta ou em qualquer cor, e pode pedir várias
+  cores. A lista para a gráfica separa por cor, com o arquivo de cada cor
+  para baixar. A troca de cor é feita no navegador (`corDoAdesivo`).
 - A chave Pix fica em `PIX`, em `src/lib/adesivos.ts`.
 - Para ligar: rode `supabase/adesivos.sql` no SQL Editor (depois de
   `infancia.sql`) e publique a função com `supabase functions deploy adesivos`.
