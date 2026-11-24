@@ -100,6 +100,8 @@ export type DadosMesas = {
 export type AlteracaoMesas =
   | { formando: string; mesa: string; lugares: number }
   | { definirConvidados: { formando: string; total: number } }
+  /** Committee: how many chairs a table has (1 to 20, never fewer than the people seated there). */
+  | { definirCapacidade: { mesa: string; capacidade: number } }
   | { definirMesasAbertas: boolean }
   | { novoLink: string };
 

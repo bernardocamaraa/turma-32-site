@@ -43,11 +43,12 @@ insert into public.mesas (id, reservada_para) values
 on conflict (id) do nothing;
 
 -- The teachers' table: P, the round one in front of the dance floor, with
--- exactly one seat per teacher: it's full, no seats left for anyone.
+-- one seat per teacher. Running this again keeps the number of chairs the
+-- committee chose (definir_capacidade below), as long as every teacher fits.
 insert into public.mesas (id, capacidade, reservada_para, ocupantes_fixos) values
   ('P', 13, 'professores', array['Vitor', 'Gustavo', 'Flávia', 'Diniz', 'Cristiano', 'Ozael', 'Cleidson', 'Cláudio', 'Araújo', 'Lorena', 'Thereza', 'Jairo', 'Vânia'])
 on conflict (id) do update set
-  capacidade = excluded.capacidade,
+  capacidade = greatest(public.mesas.capacidade, cardinality(excluded.ocupantes_fixos)),
   reservada_para = excluded.reservada_para,
   ocupantes_fixos = excluded.ocupantes_fixos;
 
@@ -194,8 +195,40 @@ begin
 end;
 $$;
 
+-- How many chairs a table has, set by the committee on the map (1 to 20 —
+-- more don't fit around a table on the drawing). Never fewer than the people
+-- already seated there (formandos' seats plus the fixed ones, the teachers):
+-- someone has to leave the table first. The table's row is locked, like in
+-- definir_lugares, so a seat taken meanwhile is counted.
+create or replace function public.definir_capacidade(p_mesa text, p_capacidade int)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_fixos int;
+  v_ocupados int;
+begin
+  if p_capacidade is null or p_capacidade < 1 or p_capacidade > 20 then
+    raise exception 'Uma mesa pode ter de 1 a 20 cadeiras.';
+  end if;
+  select cardinality(ocupantes_fixos) into v_fixos from mesas where id = p_mesa for update;
+  if not found then
+    raise exception 'Essa mesa não existe.';
+  end if;
+  select coalesce(sum(lugares), 0) + v_fixos into v_ocupados from reservas_mesa where mesa = p_mesa;
+  if p_capacidade < v_ocupados then
+    raise exception 'Essa mesa já tem % lugar(es) ocupado(s). Tire alguém dela antes de diminuir.', v_ocupados;
+  end if;
+  update mesas set capacidade = p_capacidade where id = p_mesa;
+end;
+$$;
+
 -- Only the Edge Function (service role) may call these.
 revoke all on function public.definir_lugares(text, text, int, boolean) from public, anon, authenticated;
 revoke all on function public.definir_convidados(text, int) from public, anon, authenticated;
+revoke all on function public.definir_capacidade(text, int) from public, anon, authenticated;
 grant execute on function public.definir_lugares(text, text, int, boolean) to service_role;
 grant execute on function public.definir_convidados(text, int) to service_role;
+grant execute on function public.definir_capacidade(text, int) to service_role;

@@ -9,8 +9,9 @@
 //     the link preview.
 //   - `codigo`: COMMITTEE_CODE (the same secret committee-data uses). Moves
 //     anyone's seats on any table, even with the map closed, sets how many
-//     people each formando brings, opens/closes the map, and sees (and can
-//     replace) every formando's personal link.
+//     people each formando brings, how many chairs each table has
+//     (`definirCapacidade`: { mesa, capacidade }), opens/closes the map, and
+//     sees (and can replace) every formando's personal link.
 //
 // The anon key can't touch the mesas tables at all (mesas.sql), so this is
 // the only way in. Capacity and per-formando limits are enforced inside
@@ -40,7 +41,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { codigo, link, formando, mesa, lugares, definirConvidados, definirMesasAbertas, novoLink, soNome } = await req.json();
+    const { codigo, link, formando, mesa, lugares, definirConvidados, definirCapacidade, definirMesasAbertas, novoLink, soNome } = await req.json();
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -97,6 +98,14 @@ Deno.serve(async (req) => {
       const falha = await rpc('definir_convidados', {
         p_formando: definirConvidados.formando,
         p_total: definirConvidados.total,
+      });
+      if (falha) return falha;
+    }
+
+    if (comissao && definirCapacidade && typeof definirCapacidade.mesa === 'string' && Number.isInteger(definirCapacidade.capacidade)) {
+      const falha = await rpc('definir_capacidade', {
+        p_mesa: definirCapacidade.mesa,
+        p_capacidade: definirCapacidade.capacidade,
       });
       if (falha) return falha;
     }

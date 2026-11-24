@@ -97,7 +97,7 @@ O álbum liga em três peças do Supabase, todas em `schema.sql`:
 ## Mapa das mesas (`/mesas/<link>` e `/comissao/mesas`)
 
 Cada formando recebe da comissão um **link pessoal** (`/mesas/<link>`) e,
-por ele, marca em qual mesa a família dele vai sentar. Cada mesa tem 10 lugares, desenhados como
+por ele, marca em qual mesa a família dele vai sentar. Cada mesa começa com 10 lugares, desenhados como
 bolinhas em volta dela, e vai enchendo conforme a turma marca: dourado para
 os lugares de quem está vendo e azul para os dos outros. Uma mesa pode ser
 dividida entre vários formandos (ex.: 3 + 3 + 4). Um formando também pode
@@ -116,6 +116,11 @@ espalhar os lugares dele por mais de uma mesa, se não couber tudo numa só.
   lugares, um para cada professor (`mesas.ocupantes_fixos`), e já fica
   completa. As duas retangulares ao lado da pista, `R1` e `R2`, são mesas
   comuns de 10 lugares.
+- **Cadeiras de cada mesa**: a comissão escolhe, no mapa da aba Mesas, quantas
+  cadeiras cada mesa tem: toca na mesa e usa "Cadeiras nesta mesa" (de 1 a
+  20, e nunca menos que as pessoas já sentadas nela). O mapa desenha as
+  cadeiras novas na hora. Fica em `mesas.capacidade`, gravado por
+  `definir_capacidade` (`mesas.sql`).
 - **Fechar o mapa**: o botão "Fechar mapa" congela as mudanças da turma
   (por exemplo, quando o mapa for mandado para a casa de festas). A comissão
   continua podendo mexer.
