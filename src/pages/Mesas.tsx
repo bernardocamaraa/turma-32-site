@@ -173,6 +173,16 @@ export function Mesas({ codigoComissao }: { codigoComissao?: string }) {
         </span>
       </div>
 
+      {dados?.comissao ? (
+        <CadeirasDaMesa
+          key={`${mesa.id}-${mesa.capacidade}`}
+          capacidade={mesa.capacidade}
+          ocupados={ocupados}
+          salvando={salvando}
+          onSalvar={(capacidade) => alterar({ definirCapacidade: { mesa: mesa.id, capacidade } })}
+        />
+      ) : null}
+
       {naMesa.length > 0 ? (
         <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column' }}>
           {naMesa
@@ -454,6 +464,89 @@ function Legenda({ cor, texto, tracejada }: { cor?: string; texto: string; trace
       />
       {texto}
     </span>
+  );
+}
+
+/** Most chairs a table can have: more don't fit around it on the map (and definir_capacidade refuses them). */
+const MAXIMO_CADEIRAS = 20;
+
+/**
+ * Committee only: how many chairs the open table has — never fewer than the
+ * people already seated there (someone has to leave first).
+ */
+function CadeirasDaMesa({
+  capacidade,
+  ocupados,
+  salvando,
+  onSalvar,
+}: {
+  capacidade: number;
+  ocupados: number;
+  salvando: boolean;
+  onSalvar: (capacidade: number) => Promise<string | null>;
+}) {
+  const [valor, setValor] = useState(capacidade);
+  const [erro, setErro] = useState<string | null>(null);
+  const minimo = Math.max(1, ocupados);
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 'var(--space-3)',
+        padding: 'var(--space-4) var(--space-5)',
+        borderRadius: 'var(--radius-md)',
+        background: 'rgba(245,245,247,.05)',
+        border: '1px solid var(--stroke-hair)',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-4)' }}>
+        <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>Cadeiras nesta mesa</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: 4, borderRadius: 'var(--radius-pill)', background: 'rgba(245,245,247,.08)' }}>
+          <BotaoPasso
+            rotulo="Menos uma cadeira"
+            disabled={valor <= minimo || salvando}
+            onClick={() => {
+              setErro(null);
+              setValor((v) => v - 1);
+            }}
+          >
+            <Minus size={16} strokeWidth={2} />
+          </BotaoPasso>
+          <span aria-live="polite" style={{ minWidth: 36, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 21, fontWeight: 600 }}>
+            {valor}
+          </span>
+          <BotaoPasso
+            rotulo="Mais uma cadeira"
+            disabled={valor >= MAXIMO_CADEIRAS || salvando}
+            onClick={() => {
+              setErro(null);
+              setValor((v) => v + 1);
+            }}
+          >
+            <Plus size={16} strokeWidth={2} />
+          </BotaoPasso>
+        </div>
+      </div>
+      {valor !== capacidade ? (
+        <Button
+          variant="secondary"
+          carregando={salvando}
+          onClick={async () => {
+            const falha = await onSalvar(valor);
+            setErro(falha);
+          }}
+        >
+          {salvando ? 'Salvando…' : `Salvar ${valor} cadeiras`}
+        </Button>
+      ) : null}
+      <span style={{ fontSize: 'var(--fs-body-sm)', color: erro ? 'var(--state-error)' : 'var(--text-faint)' }}>
+        {erro ??
+          (ocupados > 0
+            ? `De ${minimo} a ${MAXIMO_CADEIRAS}: ${ocupados === 1 ? 'já tem 1 pessoa' : `já tem ${ocupados} pessoas`} sentada${ocupados === 1 ? '' : 's'} aqui.`
+            : `De 1 a ${MAXIMO_CADEIRAS}. Só a comissão vê isso.`)}
+      </span>
+    </div>
   );
 }
 
