@@ -25,9 +25,12 @@ function carregar(src: string): Promise<HTMLImageElement> {
   });
 }
 
-/** The round sticker, `lado` pixels across, as a PNG (transparent outside the circle), on `fundo` when it isn't round art. */
-export function noCirculo(src: string, lado: number, fundo = '#ffffff'): Promise<Blob> {
-  const chave = `${src}|${lado}|${fundo}`;
+/**
+ * The round sticker, `lado` pixels across, as a PNG (transparent outside the circle), on `fundo` when it isn't round art.
+ * `quadrado`: the same art at the same size, but the background fills the whole square (the file downloaded on its own).
+ */
+export function noCirculo(src: string, lado: number, fundo = '#ffffff', quadrado = false): Promise<Blob> {
+  const chave = `${src}|${lado}|${fundo}|${quadrado}`;
   if (!prontos.has(chave)) {
     const feito = (async () => {
       const [img, imagemDoFundo] = await Promise.all([carregar(src), ehEstampa(fundo) ? prepararEstampa(fundo) : null]);
@@ -95,10 +98,12 @@ export function noCirculo(src: string, lado: number, fundo = '#ffffff'): Promise
         );
       }
 
-      ctx.beginPath();
-      ctx.arc(raio, raio, raio, 0, Math.PI * 2);
       ctx.save();
-      ctx.clip();
+      if (!quadrado) {
+        ctx.beginPath();
+        ctx.arc(raio, raio, raio, 0, Math.PI * 2);
+        ctx.clip();
+      }
       if (ehEstampa(fundo)) {
         desenharEstampa(ctx, fundo, lado, imagemDoFundo);
       } else if (fundo === ARCO_IRIS) {
@@ -130,20 +135,23 @@ export function noCirculo(src: string, lado: number, fundo = '#ffffff'): Promise
 
 const pintadosRedondos = new Map<string, Promise<Blob>>();
 
-/** The round sticker of a picture, painted with `cores` (one per part) first when given; a 'fundo' part's colour goes behind it. */
-export function adesivoRedondo(src: string, lado: number, camadas: Camada[] = [], cores: string[] | null = null): Promise<Blob> {
+/**
+ * The round sticker of a picture, painted with `cores` (one per part) first when given; a 'fundo' part's colour goes behind it.
+ * `quadrado`: square instead, the background filling it all (noCirculo).
+ */
+export function adesivoRedondo(src: string, lado: number, camadas: Camada[] = [], cores: string[] | null = null, quadrado = false): Promise<Blob> {
   const iFundo = camadas.findIndex((c) => c.tipo === 'fundo');
   const fundo = iFundo >= 0 ? (cores?.[iFundo] ?? camadas[iFundo].cor) : '#ffffff';
   const repinta = !!cores && camadas.some((c, i) => c.tipo !== 'fundo' && cores[i] && cores[i].toLowerCase() !== c.cor.toLowerCase());
-  if (!repinta) return noCirculo(src, lado, fundo);
-  const chave = `${src}|${lado}|${JSON.stringify(camadas)}|${cores!.join()}`;
+  if (!repinta) return noCirculo(src, lado, fundo, quadrado);
+  const chave = `${src}|${lado}|${JSON.stringify(camadas)}|${cores!.join()}|${quadrado}`;
   if (!pintadosRedondos.has(chave)) {
     const feito = (async () => {
       const url = URL.createObjectURL(await pintar(src, camadas, cores!));
       try {
-        return await noCirculo(url, lado, fundo);
+        return await noCirculo(url, lado, fundo, quadrado);
       } finally {
-        prontos.delete(`${url}|${lado}|${fundo}`);
+        prontos.delete(`${url}|${lado}|${fundo}|${quadrado}`);
         URL.revokeObjectURL(url);
       }
     })();

@@ -1190,7 +1190,8 @@ function LinhaGrafica({ chave, quantidade, modelos }: { chave: string; quantidad
     if (!modelo?.imagem || !cores) return;
     setBaixando(true);
     try {
-      salvarArquivo(await adesivoRedondo(modelo.imagem, 709, modelo.camadas, cores), `${slugDoNome(modelo.nome)}-${slugDoNome(cores.map((c) => nomeDaCor(c)).join('-'))}.png`);
+      // Square, the background filling it all: the file on its own (the sheets cut it round).
+      salvarArquivo(await adesivoRedondo(modelo.imagem, 709, modelo.camadas, cores, true), `${slugDoNome(modelo.nome)}-${slugDoNome(cores.map((c) => nomeDaCor(c)).join('-'))}.png`);
     } catch (e) {
       window.alert(mensagemDe(e, 'Não foi possível baixar agora.'));
     } finally {
