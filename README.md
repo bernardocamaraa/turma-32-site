@@ -132,6 +132,10 @@ espalhar os lugares dele por mais de uma mesa, se não couber tudo numa só.
   de festas. Os grupos ("sentar juntos" e "ficar longe") ficam no banco
   (`afinidades_mesas`) e a comissão edita na mesma tela; só a comissão
   recebe, nunca ficam no código do site.
+- **PDF para a casa de festas**: o botão "Baixar PDF das mesas", no painel
+  da comissão, gera na hora o mapa do salão e a lista de quem senta em cada
+  mesa (formando e quantas pessoas do grupo dele), com um aviso se ainda
+  tiver gente sem mesa (`src/lib/pdfMesas.ts`).
 - **Fechar o mapa**: o botão "Fechar mapa" congela as mudanças da turma
   (por exemplo, quando o mapa for mandado para a casa de festas). A comissão
   continua podendo mexer.

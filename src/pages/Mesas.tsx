@@ -716,6 +716,25 @@ function PainelComissao({
     setErro(await alterar({ definirMesasAbertas: !dados.abertas }));
   }
 
+  const [gerandoPdf, setGerandoPdf] = useState(false);
+  async function baixarPdf() {
+    setGerandoPdf(true);
+    setErro(null);
+    try {
+      // Loaded on demand: jsPDF is big and only the committee needs it.
+      const { pdfDasMesas } = await import('../lib/pdfMesas');
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(await pdfDasMesas(dados));
+      link.download = 'Mapa de mesas - Turma 32.pdf';
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+    } catch {
+      setErro('Não foi possível gerar o PDF. Tente de novo.');
+    } finally {
+      setGerandoPdf(false);
+    }
+  }
+
   return (
     <Card padding={0} style={{ overflow: 'hidden' }}>
       <div
@@ -740,9 +759,14 @@ function PainelComissao({
           </span>
           {erro ? <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--state-error)' }}>{erro}</span> : null}
         </div>
-        <Button variant={dados.abertas ? 'secondary' : 'primary'} disabled={salvando} onClick={alternarMapa}>
-          {dados.abertas ? 'Fechar mapa' : 'Abrir mapa'}
-        </Button>
+        <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+          <Button variant="secondary" disabled={gerandoPdf} onClick={baixarPdf}>
+            {gerandoPdf ? 'Gerando PDF…' : 'Baixar PDF das mesas'}
+          </Button>
+          <Button variant={dados.abertas ? 'secondary' : 'primary'} disabled={salvando} onClick={alternarMapa}>
+            {dados.abertas ? 'Fechar mapa' : 'Abrir mapa'}
+          </Button>
+        </div>
       </div>
       {dados.convidados.map((c) => {
         const marcados = marcadosPor.get(c.formando) ?? 0;
