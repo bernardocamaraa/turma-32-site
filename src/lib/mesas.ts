@@ -6,7 +6,7 @@ import { chamarFuncao } from './supabase';
  * drawing, so the map scales to any width. Ids follow the layout: E = the
  * grid on the left, R1/R2 = the two rectangles beside the dance floor, D =
  * the column on the far right, P = the round one in front of the dance floor
- * (the teachers' table).
+ * (the teachers' table), C1 = the class table beside it.
  *
  * Which tables are reserved (professores/comissão) lives in the database
  * (`mesas.reservada_para`) — that's what's enforced — this file only says
@@ -48,6 +48,9 @@ export const POSICOES_MESAS: PosicaoMesa[] = [
   redonda('D3', 505, 188),
   redonda('D4', 505, 253),
   redonda('P', 321, 259),
+  // Not on the venue's plan: an extra class table on P's left, the only side
+  // with room (R2 is too close on the right).
+  redonda('C1', 263, 259),
 ];
 
 /** The dance floor, as a box in % (left, top, width, height). */
