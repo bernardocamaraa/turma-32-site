@@ -114,8 +114,8 @@ espalhar os lugares dele por mais de uma mesa, se não couber tudo numa só.
   hora, caso algum vaze, e o antigo para de funcionar.
 - **Mesa dos professores**: `P`, a redonda em frente à pista. Tem 13
   lugares, um para cada professor (`mesas.ocupantes_fixos`), e já fica
-  completa. As duas retangulares ao lado da pista, `R1` e `R2`, são mesas
-  comuns de 10 lugares.
+  completa. As duas retangulares ao lado da pista, `R1` e `R2`, e a redonda
+  `C1`, à esquerda da P, são mesas comuns da turma.
 - **Cadeiras de cada mesa**: a comissão escolhe, no mapa da aba Mesas, quantas
   cadeiras cada mesa tem: toca na mesa e usa "Cadeiras nesta mesa" (de 1 a
   20, e nunca menos que as pessoas já sentadas nela). O mapa desenha as

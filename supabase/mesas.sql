@@ -39,7 +39,8 @@ insert into public.mesas (id, reservada_para) values
   ('E9', null), ('E10', null), ('E11', null), ('E12', null),
   ('E13', null), ('E14', null),
   ('R1', null), ('R2', null),
-  ('D1', null), ('D2', null), ('D3', null), ('D4', null)
+  ('D1', null), ('D2', null), ('D3', null), ('D4', null),
+  ('C1', null)
 on conflict (id) do nothing;
 
 -- The teachers' table: P, the round one in front of the dance floor, with
