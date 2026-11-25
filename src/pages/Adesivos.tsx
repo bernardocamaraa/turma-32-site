@@ -1085,15 +1085,14 @@ function FolhasDaGrafica({
   const [linhaDeCorte, setLinhaDeCorte] = useState(false);
   const [gerando, setGerando] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const { itens, semFoto } = itensDasFolhas(pedidos, modelos, fotos, enquadramentos);
-  const adesivos = itens.reduce((s, i) => s + i.quantidade, 0);
-  const folhas = folhasPara(adesivos);
+  const { itens, colunas, semFoto, adesivos } = itensDasFolhas(pedidos, modelos, fotos, enquadramentos);
+  const folhas = folhasPara(colunas.length);
 
   async function gerar() {
     setErro(null);
     setGerando('Começando…');
     try {
-      salvarArquivo(await pdfDasFolhas(itens, { linhaDeCorte, aoAvancar: setGerando }), 'adesivos-turma-32-folhas.pdf');
+      salvarArquivo(await pdfDasFolhas(itens, colunas, { linhaDeCorte, aoAvancar: setGerando }), 'adesivos-turma-32-folhas.pdf');
     } catch (e) {
       setErro(mensagemDe(e, 'Não foi possível gerar as folhas agora.'));
     } finally {
@@ -1111,7 +1110,9 @@ function FolhasDaGrafica({
             : `${plural(adesivos, 'adesivo', 'adesivos')} em ${plural(folhas, 'folha', 'folhas')} de ${FOLHA.largura / 10} × ${FOLHA.altura / 10} cm.`}
         </span>
         <span style={pequeno}>
-          Cada adesivo com {DIAMETRO / 10} cm, margem de {MARGEM / 10} cm em volta da folha, {COLUNAS} × {LINHAS} = {POR_FOLHA} adesivos por folha. Um PDF no
+          Cada adesivo com {DIAMETRO / 10} cm, margem de {MARGEM / 10} cm em volta da folha, {COLUNAS} × {LINHAS} = {POR_FOLHA} lugares por folha. Uma coluna
+          por formando, com o nome em cima, para cortar o pacote de cada um de uma vez: quem pediu mais de {LINHAS} ocupa a coluna seguinte também, e uma coluna
+          nunca mistura duas pessoas (por isso pode ter mais folhas). Um PDF no
           tamanho real, uma página por folha. Todos redondos: uma arte que não é redonda (como o 32) vai encaixada inteira dentro do círculo, sobre branco, com uma folga para o corte.
         </span>
         {semFoto.length > 0 ? (
