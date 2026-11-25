@@ -37,6 +37,7 @@ import {
   type Recursos,
 } from '../lib/criacao';
 import { useIsMobile } from '../lib/useViewport';
+import { DIAMETRO } from '../lib/folhas';
 
 const C = LADO / 2;
 const rotulo: CSSProperties = { fontSize: 13, fontWeight: 600, color: 'var(--text-muted)' };
@@ -675,7 +676,7 @@ export function EditorAdesivo({
                 style={{ height: 44, padding: '0 12px', fontSize: 16, color: 'var(--chalk-050)', background: 'var(--ink-800)', border: '1px solid var(--stroke-hair)', borderRadius: 'var(--radius-sm)' }}
               />
             </label>
-            <span style={{ ...pequeno, textAlign: 'center' }}>O adesivo sai redondo, com 6 cm. O que está fora do círculo não aparece.</span>
+            <span style={{ ...pequeno, textAlign: 'center' }}>O adesivo sai redondo, com {DIAMETRO / 10} cm. O que está fora do círculo não aparece.</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             {adicionarPainel}

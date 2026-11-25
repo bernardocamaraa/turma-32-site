@@ -1,5 +1,5 @@
 /**
- * The print-shop file: every sticker ordered, 6 cm each, laid out on
+ * The print-shop file: every sticker ordered, 5 cm each (5 × 7 = 35 a sheet), laid out on
  * 33 × 46 cm sheets with a 3 cm margin all around, as one PDF (one page per
  * sheet, at the real size). Each different sticker goes into the PDF once
  * and is placed as many times as it was ordered, so the file stays small.
@@ -11,10 +11,10 @@ import { adesivoRedondo } from './redondo';
 // Everything in millimetres.
 export const FOLHA = { largura: 330, altura: 460 };
 export const MARGEM = 30;
-export const DIAMETRO = 60;
+export const DIAMETRO = 50;
 /** The least space between two stickers, for the cut. */
 const FOLGA_MINIMA = 4;
-/** Pixels across a sticker: 6 cm at 300 dpi. */
+/** Pixels across a sticker: 5 cm at 300 dpi. */
 const PIXELS = Math.round((DIAMETRO / 25.4) * 300);
 
 const util = { largura: FOLHA.largura - 2 * MARGEM, altura: FOLHA.altura - 2 * MARGEM };
@@ -182,10 +182,10 @@ export async function pdfDasFolhas(itens: ItemDaFolha[], opcoes: { linhaDeCorte:
 
 /**
  * The class sheet: every formando's childhood face once, and a few twice,
- * so one sheet has exactly TURMA.porFolha stickers. 5 cm each, 5 × 7 on the
- * same 33 × 46 cm sheet with the 3 cm margin.
+ * so one sheet has exactly TURMA.porFolha stickers, in the same layout as
+ * the print-shop file.
  */
-export const TURMA = { diametro: 50, colunas: 5, linhas: 7, porFolha: 35 };
+export const TURMA = { diametro: DIAMETRO, colunas: COLUNAS, linhas: LINHAS, porFolha: POR_FOLHA };
 /** Who comes twice on every class sheet. */
 export const DUAS_VEZES = ['Caio Bezerra', 'Bernardo Câmara', 'Maria Clara Bispo', 'Lívia Whitaker'];
 

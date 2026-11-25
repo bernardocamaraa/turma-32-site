@@ -1,7 +1,7 @@
 import { pintar, type Camada } from './cores';
 
 /**
- * Every sticker is round (6 cm). A picture that already is (a full circle
+ * Every sticker is round (5 cm, folhas.ts). A picture that already is (a full circle
  * with empty corners) is used whole. One that isn't (the 32, cut to its
  * shape) is fitted inside the circle, on white: centred on what's visible
  * of it, and shrunk until no visible pixel comes closer than FOLGA to the

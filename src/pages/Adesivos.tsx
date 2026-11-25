@@ -283,7 +283,7 @@ function Loja() {
         <h1 className="titulo-musica">Loja de adesivos.</h1>
         <p style={{ ...texto, maxWidth: '38rem', fontSize: 'var(--fs-lead, 19px)' }}>
           No baile, a turma distribui adesivos. Escolha quais modelos você quer e quantos de cada, inclusive o seu adesivo de criança, feito com a
-          sua foto. Todos os adesivos têm 6 cm.
+          sua foto. Todos os adesivos têm {DIAMETRO / 10} cm.
         </p>
       </header>
 
@@ -1070,7 +1070,7 @@ export function AdesivosComissao({ codigo }: { codigo: string }) {
   );
 }
 
-/** The print-shop PDF: every sticker ordered, 6 cm, on 33 × 46 cm sheets with a 3 cm margin. */
+/** The print-shop PDF: every sticker ordered, 5 cm (35 a sheet), on 33 × 46 cm sheets with a 3 cm margin. */
 function FolhasDaGrafica({
   pedidos,
   modelos,
