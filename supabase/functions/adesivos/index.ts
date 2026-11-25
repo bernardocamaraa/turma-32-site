@@ -60,6 +60,8 @@ const BUCKET = 'adesivos';
 const doSite = (caminho: string) => caminho.startsWith('/');
 /** Most of one model a formando can order. */
 const MAXIMO = 200;
+/** How many stickers a formando takes in all (the committee can set any number). Same as PACOTES in src/lib/adesivos.ts. */
+const PACOTES = [10, 20];
 
 /** Same slug rule as middleware.ts and the infancia function: each formando's folder of childhood photos. */
 function slug(nome: string): string {
@@ -231,6 +233,10 @@ Deno.serve(async (req) => {
         }
         lidos[chave] = (lidos[chave] ?? 0) + quantidade;
         if (lidos[chave] > MAXIMO) return recusar(`A quantidade de cada adesivo vai de 0 a ${MAXIMO}.`);
+      }
+      const total = Object.values(lidos).reduce((soma, q) => soma + q, 0);
+      if (!comissao && total > 0 && !PACOTES.includes(total)) {
+        return recusar(`Cada formando leva ${PACOTES.join(' ou ')} adesivos no total. O seu pedido tem ${total}.`);
       }
       const nota = typeof observacao === 'string' && observacao.trim() ? observacao.trim().slice(0, 500) : null;
       if (Object.keys(lidos).length === 0) {

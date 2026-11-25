@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { ArrowDown, ArrowUp, Check, Crop, Download, ImagePlus, Minus, Plus, ShoppingBag, TriangleAlert } from 'lucide-react';
 import { AdesivoCrianca, AjustarFoto, pngDoAdesivo, salvarArquivo, type Enquadramento } from '../components/AdesivoCrianca';
@@ -11,6 +12,9 @@ import { Input } from '../components/Input';
 import { Popups, usePopup } from '../components/Popups';
 import {
   buscarAdesivos,
+  ehPacote,
+  PACOTES,
+  type Pacote,
   chaveDe,
   descreverCores,
   descreverItem,
@@ -134,9 +138,14 @@ function Loja() {
   const [itens, setItens] = useState<Itens>({});
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  // 10 or 20 stickers in all, asked when they come in (an order already made says it).
+  const [pacote, setPacote] = useState<Pacote | null>(null);
+  const [perguntando, setPerguntando] = useState(false);
 
   function comecarDe(d: DadosAdesivos) {
     setItens(d.meu?.itens ?? {});
+    const feito = d.meu ? quantidadeDoPedido(d.meu.itens) : 0;
+    if (ehPacote(feito)) setPacote(feito);
   }
 
   async function carregar(com: AcessoAdesivos): Promise<DadosAdesivos | null> {
@@ -207,6 +216,8 @@ function Loja() {
     salvarEleitor(null);
     setEleitor(null);
     setItens({});
+    setPacote(null);
+    setPerguntando(false);
     carregar({});
   }
 
@@ -219,10 +230,29 @@ function Loja() {
   const mudou =
     JSON.stringify(Object.entries(itens).filter(([, q]) => q > 0).sort()) !== JSON.stringify(Object.entries(meu?.itens ?? {}).sort());
 
+  // Coming in with no order of 10 or 20 yet (and able to order): ask how many.
+  useEffect(() => {
+    if (dados?.voce && !travado && pacote === null) setPerguntando(true);
+  }, [dados?.voce, travado, pacote]);
+
   function mudar(id: string, q: number) {
     setErro(null);
-    setItens((atual) => ({ ...atual, [id]: Math.max(0, Math.min(MAXIMO_POR_MODELO, q)) }));
+    setItens((atual) => {
+      // Never past the 10 or 20 they chose.
+      const outros = quantidadeDoPedido(atual) - (atual[id] ?? 0);
+      const teto = pacote === null ? MAXIMO_POR_MODELO : Math.max(0, pacote - outros);
+      return { ...atual, [id]: Math.max(0, Math.min(MAXIMO_POR_MODELO, teto, q)) };
+    });
   }
+
+  function escolherPacote(n: Pacote) {
+    setPacote(n);
+    setPerguntando(false);
+    // Going from 20 to 10 with more than 10 chosen: start the choice over.
+    if (quantidadeDoPedido(itens) > n) setItens({});
+  }
+
+  const faltam = pacote === null ? 0 : pacote - quantidade;
 
   return (
     <main
@@ -240,7 +270,7 @@ function Loja() {
         <h1 className="titulo-musica">Loja de adesivos.</h1>
         <p style={{ ...texto, maxWidth: '38rem', fontSize: 'var(--fs-lead, 19px)' }}>
           No baile, a turma distribui adesivos. Escolha quais modelos você quer e quantos de cada, inclusive o seu adesivo de criança, feito com a
-          sua foto. Todos os adesivos têm {DIAMETRO / 10} cm.
+          sua foto. Cada formando leva {PACOTES.join(' ou ')} adesivos, distribuídos como quiser. Todos têm {DIAMETRO / 10} cm.
         </p>
       </header>
 
@@ -317,6 +347,18 @@ function Loja() {
                 {meu ? <Badge tone={meu.pago ? 'ok' : 'gild'}>{meu.pago ? 'Pago' : preco === null ? 'Pedido feito' : 'Esperando pagamento'}</Badge> : null}
               </div>
 
+              {pacote !== null && !travado ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: faltam === 0 ? 'var(--state-ok)' : 'var(--gild-300)' }}>
+                    {quantidade} de {pacote} adesivos
+                    {faltam > 0 ? ` · ${faltam === 1 ? 'falta 1' : `faltam ${faltam}`}` : ' · completo'}
+                  </span>
+                  <Button variant="ghost" size="sm" style={{ padding: 0 }} onClick={() => setPerguntando(true)}>
+                    Trocar para {pacote === 10 ? 20 : 10}
+                  </Button>
+                </div>
+              ) : null}
+
               {quantidade > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                   {ordenarItens(itens, modelos).map(([chave, q]) => (
@@ -346,7 +388,7 @@ function Loja() {
                   </div>
                 </div>
               ) : (
-                <p style={texto}>{meu ? 'Você tirou todos os adesivos. Salve para cancelar o pedido.' : 'Escolha a quantidade de cada adesivo acima.'}</p>
+                <p style={texto}>{meu ? 'Você tirou todos os adesivos. Salve para cancelar o pedido.' : pacote === null ? 'Escolha quantos adesivos você vai levar.' : `Distribua os seus ${pacote} adesivos entre os modelos acima.`}</p>
               )}
 
               {erro ? <span style={erroEstilo}>{erro}</span> : null}
@@ -356,7 +398,7 @@ function Loja() {
                   <Button
                     size="lg"
                     variant="gild"
-                    disabled={!mudou || (!meu && quantidade === 0)}
+                    disabled={!mudou || (quantidade === 0 ? !meu : quantidade !== pacote)}
                     carregando={salvando}
                     iconLeft={<Check size={18} />}
                     onClick={() =>
@@ -365,6 +407,11 @@ function Loja() {
                   >
                     {quantidade === 0 && meu ? 'Cancelar pedido' : meu ? 'Atualizar pedido' : 'Fazer pedido'}
                   </Button>
+                  {quantidade > 0 && pacote === null ? (
+                    <Button variant="secondary" onClick={() => setPerguntando(true)}>
+                      Escolher 10 ou 20
+                    </Button>
+                  ) : null}
                   {mudou && meu ? (
                     <Button variant="ghost" onClick={() => dados && comecarDe(dados)}>
                       Desfazer mudanças
@@ -378,7 +425,78 @@ function Loja() {
           {meu && !meu.pago && preco !== null ? <Pagamento total={totalDoPedido(meu.itens, preco)} /> : null}
         </>
       )}
+      {perguntando && dados?.voce ? (
+        <PerguntaPacote
+          nome={primeiroNome(dados.voce)}
+          atual={pacote}
+          preco={preco}
+          onEscolher={escolherPacote}
+          onFechar={pacote !== null ? () => setPerguntando(false) : undefined}
+        />
+      ) : null}
     </main>
+  );
+}
+
+/** The question when they come in: 10 or 20 stickers in all. */
+function PerguntaPacote({
+  nome,
+  atual,
+  preco,
+  onEscolher,
+  onFechar,
+}: {
+  nome: string;
+  atual: Pacote | null;
+  preco: number | null;
+  onEscolher: (n: Pacote) => void;
+  /** Only once they have chosen: before that, the question has to be answered. */
+  onFechar?: () => void;
+}) {
+  const primeiro = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    primeiro.current?.focus({ preventScroll: true });
+    const tecla = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onFechar?.();
+    };
+    document.addEventListener('keydown', tecla);
+    return () => document.removeEventListener('keydown', tecla);
+  }, [onFechar]);
+  return createPortal(
+    <div
+      className="popup-fundo"
+      style={{ ['--popup-cor' as string]: '#dcc48c' }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onFechar?.();
+      }}
+    >
+      <div className="popup-cartao" role="dialog" aria-modal="true" aria-labelledby="pergunta-pacote">
+        <span className="popup-icone" aria-hidden>
+          <ShoppingBag size={38} strokeWidth={2.4} />
+        </span>
+        <h2 id="pergunta-pacote" className="popup-titulo">
+          {nome}, 10 ou 20 adesivos?
+        </h2>
+        <p className="popup-texto">
+          Cada formando leva 10 ou 20 adesivos no total. Depois você escolhe como distribuir entre os modelos.
+          {atual !== null ? ` Hoje você está com ${atual}.` : ''}
+        </p>
+        <div className="popup-botoes">
+          {PACOTES.map((n, i) => (
+            <button
+              key={n}
+              ref={i === 0 ? primeiro : undefined}
+              type="button"
+              className={`popup-botao${atual === n ? ' secundario' : ''}`}
+              onClick={() => onEscolher(n)}
+            >
+              {n} adesivos{preco !== null ? ` · ${reais(n * preco)}` : ''}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
