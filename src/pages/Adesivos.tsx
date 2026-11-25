@@ -1181,7 +1181,7 @@ function FolhaDaTurma({
           </span>
         ) : null}
         {semFoto.length > 0 ? (
-          <span style={{ ...pequeno, color: 'var(--gild-300)' }}>Ainda sem foto de criança no site: {semFoto.join(', ')}. O lugar fica vazio na folha.</span>
+          <span style={{ ...pequeno, color: 'var(--gild-300)' }}>Ainda sem foto de criança no site: {semFoto.join(', ')}. Os rostos ficam juntos e os lugares que sobram ficam vazios no fim da folha.</span>
         ) : null}
         <label style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>
           Quantas folhas
