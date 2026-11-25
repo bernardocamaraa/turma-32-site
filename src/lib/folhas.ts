@@ -86,34 +86,12 @@ export type TiraDaFolha = { formando: string; continuacao: boolean; itens: numbe
 export type ColunaDaFolha = TiraDaFolha[];
 
 /**
- * Packs each formando's stickers into the columns as strips, one sticker
- * under the other, so each one's pack is cut as a strip, using as few
- * sheets as possible. Whoever has more than a column's worth gets full
- * columns first; the rest go in whole strips, first-fit decreasing, several
- * formandos to a column. Only if that would take more sheets than the
- * stickers need does it fill the columns in a row instead, so a strip may
- * break at the bottom of a column and go on at the top of the next one.
+ * Fills the columns in a row, top to bottom and column after column, one
+ * formando after the other: each one's stickers stay one under the other,
+ * and a strip that reaches the bottom of a column goes on at the top of the
+ * next one. Every sheet is full but the last.
  */
 function empacotar(porFormando: { formando: string; itens: number[] }[]): ColunaDaFolha[] {
-  const total = porFormando.reduce((s, f) => s + f.itens.length, 0);
-  const cheias: ColunaDaFolha[] = [];
-  const restos: TiraDaFolha[] = [];
-  for (const { formando, itens } of porFormando) {
-    let k = 0;
-    for (; itens.length - k >= LINHAS; k += LINHAS) cheias.push([{ formando, continuacao: k > 0, itens: itens.slice(k, k + LINHAS) }]);
-    if (k < itens.length) restos.push({ formando, continuacao: k > 0, itens: itens.slice(k) });
-  }
-  const caixas: { livre: number; tiras: TiraDaFolha[] }[] = [];
-  for (const tira of [...restos].sort((a, b) => b.itens.length - a.itens.length || a.formando.localeCompare(b.formando))) {
-    let caixa = caixas.find((c) => c.livre >= tira.itens.length);
-    if (!caixa) caixas.push((caixa = { livre: LINHAS, tiras: [] }));
-    caixa.tiras.push(tira);
-    caixa.livre -= tira.itens.length;
-  }
-  const colunas = [...cheias, ...caixas.map((c) => c.tiras)];
-  if (Math.ceil(colunas.length / COLUNAS) <= Math.ceil(total / POR_FOLHA)) return colunas;
-
-  // In a row: the strips only break where a column ends.
   const seguidas: ColunaDaFolha[] = [];
   let atual: ColunaDaFolha = [];
   let usados = 0;
@@ -210,8 +188,7 @@ export function itensDasFolhas(
 export const folhasPara = (colunas: number) => Math.ceil(colunas / COLUNAS);
 
 /**
- * The PDF of the sheets, in columns of strips, each formando's name just
- * over their strip. `linhaDeCorte`: a thin circle around each sticker.
+ * The PDF of the sheets, in columns of strips. `linhaDeCorte`: a thin circle around each sticker.
  */
 export async function pdfDasFolhas(
   itens: ItemDaFolha[],
@@ -245,10 +222,6 @@ export async function pdfDasFolhas(
     const x = MARGEM + naFolha * PASSO_X;
     let linha = 0;
     for (const tira of coluna) {
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(7);
-      pdf.setTextColor(120);
-      pdf.text(`${tira.formando}${tira.continuacao ? ' (cont.)' : ''}`, x + DIAMETRO / 2, MARGEM + linha * PASSO_Y - 1.5, { align: 'center', maxWidth: PASSO_X - 2 });
       for (const i of tira.itens) {
         const y = MARGEM + linha * PASSO_Y;
         pdf.addImage(imagens[i], 'JPEG', x, y, DIAMETRO, DIAMETRO, `adesivo-${i}`, 'NONE');

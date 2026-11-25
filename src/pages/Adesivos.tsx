@@ -1110,8 +1110,8 @@ function FolhasDaGrafica({
             : `${plural(adesivos, 'adesivo', 'adesivos')} em ${plural(folhas, 'folha', 'folhas')} de ${FOLHA.largura / 10} × ${FOLHA.altura / 10} cm.`}
         </span>
         <span style={pequeno}>
-          Cada adesivo com {DIAMETRO / 10} cm, margem de {MARGEM / 10} cm em volta da folha, {COLUNAS} × {LINHAS} = {POR_FOLHA} lugares por folha, aproveitados ao máximo. Os adesivos de cada
-          formando ficam um embaixo do outro, numa tira com o nome em cima, para entregar a tira de cada um. Um PDF no
+          Cada adesivo com {DIAMETRO / 10} cm, margem de {MARGEM / 10} cm em volta da folha, {COLUNAS} × {LINHAS} = {POR_FOLHA} lugares por folha, todas cheias menos a última. Os adesivos de cada
+          formando ficam um embaixo do outro, em tira (que pode continuar no alto da coluna seguinte), para entregar a tira de cada um. Um PDF no
           tamanho real, uma página por folha. Todos redondos: uma arte que não é redonda (como o 32) vai encaixada inteira dentro do círculo, sobre branco, com uma folga para o corte.
         </span>
         {semFoto.length > 0 ? (
