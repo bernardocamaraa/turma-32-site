@@ -90,7 +90,7 @@ type LinhaModelo = {
 /** Most stickers of their own a formando can keep. */
 const MAXIMO_CRIACOES = 10;
 
-type Camada = { tipo: 'matiz' | 'escuro' | 'claro'; nome: string; cor: string; h0?: number; h1?: number };
+type Camada = { tipo: 'matiz' | 'escuro' | 'claro' | 'fundo'; nome: string; cor: string; h0?: number; h1?: number };
 
 /** The parts as sent by the committee, checked; or why they're refused. */
 function lerCamadas(valor: unknown): Camada[] | string {
@@ -98,7 +98,7 @@ function lerCamadas(valor: unknown): Camada[] | string {
   if (!Array.isArray(valor) || valor.length > 4) return 'Partes de cor inválidas.';
   const saida: Camada[] = [];
   for (const c of valor as Record<string, unknown>[]) {
-    if (!c || !['matiz', 'escuro', 'claro'].includes(c.tipo as string)) return 'Partes de cor inválidas.';
+    if (!c || !['matiz', 'escuro', 'claro', 'fundo'].includes(c.tipo as string)) return 'Partes de cor inválidas.';
     const nome = typeof c.nome === 'string' ? c.nome.trim().slice(0, 30) : '';
     if (!nome) return 'Dê um nome a cada parte que muda de cor.';
     if (typeof c.cor !== 'string' || !/^#[0-9a-f]{6}$/i.test(c.cor)) return 'Partes de cor inválidas.';
@@ -115,11 +115,14 @@ function lerCamadas(valor: unknown): Camada[] | string {
 
 /**
  * "abc" or "abc@#ff0000+#111111" → the model and its colours (lowercase), or
- * null if malformed. A colour can also be "arcoiris": the LGBT pride flag's
- * stripes across that part.
+ * null if malformed. A colour can also be "arcoiris" (the LGBT pride flag's
+ * stripes across that part) or, for a background, a pattern's id ("muro" —
+ * src/lib/fundos.ts).
  */
+const COR = '(?:#[0-9a-fA-F]{6}|arcoiris|muro|concreto|estrelas|xadrez|listras|bolinhas|respingos)';
+const CHAVE = new RegExp(`^([A-Za-z0-9_-]{1,64})(?:@(${COR}(?:\\+${COR}){0,3}))?$`, 'i');
 function lerChave(chave: string): { id: string; cores: string[] | null } | null {
-  const m = /^([A-Za-z0-9_-]{1,64})(?:@((?:#[0-9a-fA-F]{6}|arcoiris)(?:\+(?:#[0-9a-fA-F]{6}|arcoiris)){0,3}))?$/i.exec(chave);
+  const m = CHAVE.exec(chave);
   return m ? { id: m[1], cores: m[2] ? m[2].toLowerCase().split('+') : null } : null;
 }
 type Enquadramento = { x: number; y: number; zoom: number };

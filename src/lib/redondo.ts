@@ -1,9 +1,11 @@
-import { pintar, type Camada } from './cores';
+import { ARCO_IRIS, FAIXAS_ARCO_IRIS, pintar, type Camada } from './cores';
+import { desenharEstampa, ehEstampa, prepararEstampa } from './fundos';
 
 /**
  * Every sticker is round (5 cm, folhas.ts). A picture that already is (a full circle
  * with empty corners) is used whole. One that isn't (the 32, cut to its
- * shape) is fitted inside the circle, on white: centred on what's visible
+ * shape) is fitted inside the circle, on white (or the colour picked for
+ * its 'fundo' part — the rainbow, or a pattern from fundos.ts): centred on what's visible
  * of it, and shrunk until no visible pixel comes closer than FOLGA to the
  * edge — so nothing gets cut off.
  */
@@ -23,12 +25,12 @@ function carregar(src: string): Promise<HTMLImageElement> {
   });
 }
 
-/** The round sticker, `lado` pixels across, as a PNG (transparent outside the circle). */
-export function noCirculo(src: string, lado: number): Promise<Blob> {
-  const chave = `${src}|${lado}`;
+/** The round sticker, `lado` pixels across, as a PNG (transparent outside the circle), on `fundo` when it isn't round art. */
+export function noCirculo(src: string, lado: number, fundo = '#ffffff'): Promise<Blob> {
+  const chave = `${src}|${lado}|${fundo}`;
   if (!prontos.has(chave)) {
     const feito = (async () => {
-      const img = await carregar(src);
+      const [img, imagemDoFundo] = await Promise.all([carregar(src), ehEstampa(fundo) ? prepararEstampa(fundo) : null]);
       // Where the visible pixels are (measured on a smaller copy, enough for this).
       const k = Math.min(1, 400 / Math.max(img.naturalWidth, img.naturalHeight));
       const w = Math.max(1, Math.round(img.naturalWidth * k));
@@ -95,10 +97,21 @@ export function noCirculo(src: string, lado: number): Promise<Blob> {
 
       ctx.beginPath();
       ctx.arc(raio, raio, raio, 0, Math.PI * 2);
-      ctx.fillStyle = '#ffffff';
-      ctx.fill();
       ctx.save();
       ctx.clip();
+      if (ehEstampa(fundo)) {
+        desenharEstampa(ctx, fundo, lado, imagemDoFundo);
+      } else if (fundo === ARCO_IRIS) {
+        // The flag's stripes, top to bottom.
+        const n = FAIXAS_ARCO_IRIS.length;
+        FAIXAS_ARCO_IRIS.forEach((c, i) => {
+          ctx.fillStyle = c;
+          ctx.fillRect(0, Math.floor((i * lado) / n), lado, Math.ceil(lado / n) + 1);
+        });
+      } else {
+        ctx.fillStyle = fundo;
+        ctx.fillRect(0, 0, lado, lado);
+      }
       // Art pixels per small-copy pixel, so the farthest one lands FOLGA inside the edge.
       const escala = (raio * (1 - FOLGA)) / longe;
       const escalaOriginal = escala * k;
@@ -117,17 +130,20 @@ export function noCirculo(src: string, lado: number): Promise<Blob> {
 
 const pintadosRedondos = new Map<string, Promise<Blob>>();
 
-/** The round sticker of a picture, painted with `cores` (one per part) first when given. */
+/** The round sticker of a picture, painted with `cores` (one per part) first when given; a 'fundo' part's colour goes behind it. */
 export function adesivoRedondo(src: string, lado: number, camadas: Camada[] = [], cores: string[] | null = null): Promise<Blob> {
-  if (!cores || camadas.length === 0) return noCirculo(src, lado);
-  const chave = `${src}|${lado}|${JSON.stringify(camadas)}|${cores.join()}`;
+  const iFundo = camadas.findIndex((c) => c.tipo === 'fundo');
+  const fundo = iFundo >= 0 ? (cores?.[iFundo] ?? camadas[iFundo].cor) : '#ffffff';
+  const repinta = !!cores && camadas.some((c, i) => c.tipo !== 'fundo' && cores[i] && cores[i].toLowerCase() !== c.cor.toLowerCase());
+  if (!repinta) return noCirculo(src, lado, fundo);
+  const chave = `${src}|${lado}|${JSON.stringify(camadas)}|${cores!.join()}`;
   if (!pintadosRedondos.has(chave)) {
     const feito = (async () => {
-      const url = URL.createObjectURL(await pintar(src, camadas, cores));
+      const url = URL.createObjectURL(await pintar(src, camadas, cores!));
       try {
-        return await noCirculo(url, lado);
+        return await noCirculo(url, lado, fundo);
       } finally {
-        prontos.delete(`${url}|${lado}`);
+        prontos.delete(`${url}|${lado}|${fundo}`);
         URL.revokeObjectURL(url);
       }
     })();
