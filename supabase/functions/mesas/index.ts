@@ -11,7 +11,11 @@
 //     anyone's seats on any table, even with the map closed, sets how many
 //     people each formando brings, how many chairs each table has
 //     (`definirCapacidade`: { mesa, capacidade }), opens/closes the map, and
-//     sees (and can replace) every formando's personal link.
+//     sees (and can replace) every formando's personal link. Also keeps the
+//     affinities for the suggested seating (`afinidades`: who sits together
+//     or apart) — `salvarAfinidade` ({ tipo, pessoas }) adds a group,
+//     `apagarAfinidade` (its id) removes one. Committee only, always: a
+//     formando never gets them.
 //
 // The anon key can't touch the mesas tables at all (mesas.sql), so this is
 // the only way in. Capacity and per-formando limits are enforced inside
@@ -41,7 +45,9 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { codigo, link, formando, mesa, lugares, definirConvidados, definirCapacidade, definirMesasAbertas, novoLink, soNome } = await req.json();
+    const {
+      codigo, link, formando, mesa, lugares, definirConvidados, definirCapacidade, definirMesasAbertas, novoLink, soNome, salvarAfinidade, apagarAfinidade,
+    } = await req.json();
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -126,7 +132,24 @@ Deno.serve(async (req) => {
       if (error) throw error;
     }
 
-    const [mesas, reservas, convidados, configuracao] = await Promise.all([
+    if (comissao && salvarAfinidade && typeof salvarAfinidade === 'object') {
+      const { tipo, pessoas } = salvarAfinidade as { tipo?: unknown; pessoas?: unknown };
+      if (tipo !== 'juntos' && tipo !== 'longe') return json({ error: 'Tipo de grupo inválido.' }, 400);
+      const nomes = Array.isArray(pessoas) ? [...new Set(pessoas.filter((p): p is string => typeof p === 'string'))] : [];
+      if (nomes.length < 2 || nomes.length > 12) return json({ error: 'Escolha de 2 a 12 formandos.' }, 400);
+      const { data: existem, error: erroNomes } = await supabase.from('convidados_formando').select('formando').in('formando', nomes);
+      if (erroNomes) throw erroNomes;
+      if ((existem ?? []).length !== nomes.length) return json({ error: 'Um dos nomes não está na lista da turma.' }, 400);
+      const { error } = await supabase.from('afinidades_mesas').insert({ tipo, pessoas: nomes });
+      if (error) throw error;
+    }
+
+    if (comissao && typeof apagarAfinidade === 'string' && /^[0-9a-f-]{36}$/i.test(apagarAfinidade)) {
+      const { error } = await supabase.from('afinidades_mesas').delete().eq('id', apagarAfinidade);
+      if (error) throw error;
+    }
+
+    const [mesas, reservas, convidados, configuracao, afinidades] = await Promise.all([
       supabase.from('mesas').select('id, capacidade, reservada_para, ocupantes_fixos'),
       supabase.from('reservas_mesa').select('formando, mesa, lugares'),
       // Links go only to the committee — a formando must never see a
@@ -135,11 +158,14 @@ Deno.serve(async (req) => {
       // goes only to the committee: the "send" button opens that chat.
       supabase.from('convidados_formando').select(comissao ? 'formando, total, link, whatsapp' : 'formando, total').order('formando'),
       supabase.from('configuracoes').select('valor').eq('chave', 'mesas_abertas').maybeSingle(),
+      // Who sits together or apart: the committee's eyes only.
+      comissao ? supabase.from('afinidades_mesas').select('id, tipo, pessoas').order('criado_em') : Promise.resolve({ data: null, error: null }),
     ]);
     if (mesas.error) throw mesas.error;
     if (reservas.error) throw reservas.error;
     if (convidados.error) throw convidados.error;
     if (configuracao.error) throw configuracao.error;
+    if (afinidades.error) throw afinidades.error;
 
     return json({
       comissao,
@@ -148,6 +174,7 @@ Deno.serve(async (req) => {
       mesas: mesas.data,
       reservas: reservas.data,
       convidados: convidados.data,
+      ...(comissao ? { afinidades: afinidades.data ?? [] } : {}),
     });
   } catch (error) {
     console.error(error);

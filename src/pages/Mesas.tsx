@@ -5,6 +5,7 @@ import { Card } from '../components/Card';
 import { Carregando } from '../components/Carregando';
 import { CarregandoSecao } from '../components/CarregandoSecao';
 import { MapaMesas } from '../components/MapaMesas';
+import { SugestaoMesas } from '../components/SugestaoMesas';
 import { Select } from '../components/Select';
 import { PageHeader } from '../components/SectionHeading';
 import { FORMANDOS } from '../lib/formandos';
@@ -382,6 +383,7 @@ export function Mesas({ codigoComissao }: { codigoComissao?: string }) {
       ) : null}
 
       {dados.comissao ? <PainelComissao dados={dados} salvando={salvando} alterar={alterar} /> : null}
+      {dados.comissao ? <SugestaoMesas dados={dados} salvando={salvando} alterar={alterar} /> : null}
     </>
   ) : null;
 
