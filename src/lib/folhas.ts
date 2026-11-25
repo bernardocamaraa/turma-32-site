@@ -199,7 +199,10 @@ export function nomesDaFolhaDaTurma(formandos: string[]): string[] {
   return nomes;
 }
 
-/** The PDF of the class sheet: `folhas` identical pages of TURMA.porFolha faces. */
+/**
+ * The PDF of the class sheet: `folhas` identical pages of TURMA.porFolha faces.
+ * Whoever has no childhood photo yet keeps their place on the sheet, empty.
+ */
 export async function pdfDaFolhaDaTurma(
   formandos: string[],
   fotos: Record<string, string>,
@@ -207,8 +210,6 @@ export async function pdfDaFolhaDaTurma(
   opcoes: { folhas: number; linhaDeCorte: boolean; aoAvancar?: (texto: string) => void },
 ): Promise<Blob> {
   const nomes = nomesDaFolhaDaTurma(formandos);
-  const semFoto = [...new Set(nomes.filter((n) => !fotos[n]))];
-  if (semFoto.length > 0) throw new Error(`Ainda sem foto de criança: ${semFoto.join(', ')}.`);
   if (nomes.length > TURMA.porFolha) throw new Error(`São ${nomes.length} adesivos, mas cabem só ${TURMA.porFolha} na folha.`);
 
   const { diametro, colunas, linhas } = TURMA;
@@ -217,7 +218,7 @@ export async function pdfDaFolhaDaTurma(
   const passoY = diametro + (util.altura - linhas * diametro) / (linhas - 1);
 
   const imagens = new Map<string, string>();
-  const unicos = [...new Set(nomes)];
+  const unicos = [...new Set(nomes)].filter((f) => fotos[f]);
   for (const [i, f] of unicos.entries()) {
     opcoes.aoAvancar?.(`Montando ${i + 1} de ${unicos.length}…`);
     imagens.set(f, await deBlob(await pngDoAdesivo(fotos[f], f, pixels, enquadramentos[f]), (url) => quadrado(url, true, pixels)));
@@ -236,6 +237,7 @@ export async function pdfDaFolhaDaTurma(
       FOLHA.altura - MARGEM / 2,
     );
     for (const [n, f] of nomes.entries()) {
+      if (!imagens.has(f)) continue;
       const x = MARGEM + (n % colunas) * passoX;
       const y = MARGEM + Math.floor(n / colunas) * passoY;
       pdf.addImage(imagens.get(f)!, 'JPEG', x, y, diametro, diametro, `rosto-${unicos.indexOf(f)}`, 'NONE');

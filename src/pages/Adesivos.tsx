@@ -1181,7 +1181,7 @@ function FolhaDaTurma({
           </span>
         ) : null}
         {semFoto.length > 0 ? (
-          <span style={{ ...pequeno, color: 'var(--gild-300)' }}>Ainda sem foto de criança no site: {semFoto.join(', ')}. A folha só sai com todos.</span>
+          <span style={{ ...pequeno, color: 'var(--gild-300)' }}>Ainda sem foto de criança no site: {semFoto.join(', ')}. O lugar fica vazio na folha.</span>
         ) : null}
         <label style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>
           Quantas folhas
@@ -1200,7 +1200,7 @@ function FolhaDaTurma({
         </label>
         {erro ? <span style={erroEstilo}>{erro}</span> : null}
         <div>
-          <Button variant="gild" disabled={semFoto.length > 0 || formandos.length === 0} carregando={!!gerando} iconLeft={<Download size={16} />} onClick={gerar}>
+          <Button variant="gild" disabled={semFoto.length === formandos.length} carregando={!!gerando} iconLeft={<Download size={16} />} onClick={gerar}>
             {gerando ?? 'Baixar folha da turma (PDF)'}
           </Button>
         </div>
