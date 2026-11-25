@@ -4,7 +4,7 @@
  * border and a list of elements — their childhood photo, the 32, their
  * signature, texts, shapes), drawn by one function, `desenhar`, both on the
  * editor's screen and into the print file — so what they see is what gets
- * printed. Everything is in the sticker's own pixels: 1181 across (6 cm),
+ * printed. Everything is in the sticker's own pixels: 1181 across,
  * like the childhood sticker's model; the sticker is the circle inside.
  */
 import { enquadramentoPadrao, recorte } from '../components/AdesivoCrianca';
