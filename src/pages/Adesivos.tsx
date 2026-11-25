@@ -37,7 +37,7 @@ import { EditorAdesivo } from '../components/EditorAdesivo';
 import { designInicial, type Design, type Recursos } from '../lib/criacao';
 import { lerEleitor, salvarEleitor } from '../lib/eleitor';
 import { assinaturaDe } from '../lib/formandos';
-import { COLUNAS, DIAMETRO, FOLHA, folhasPara, itensDasFolhas, LINHAS, MARGEM, pdfDasFolhas, POR_FOLHA } from '../lib/folhas';
+import { COLUNAS, DIAMETRO, DUAS_VEZES, FOLHA, folhasPara, itensDasFolhas, LINHAS, MARGEM, nomesDaFolhaDaTurma, pdfDasFolhas, pdfDaFolhaDaTurma, POR_FOLHA, TURMA } from '../lib/folhas';
 import { useIsMobile } from '../lib/useViewport';
 
 const texto: CSSProperties = { fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-normal)', color: 'var(--text-muted)', margin: 0 };
@@ -1037,6 +1037,8 @@ export function AdesivosComissao({ codigo }: { codigo: string }) {
 
       <FolhasDaGrafica pedidos={pedidos} modelos={modelos} fotos={dados.fotos ?? {}} enquadramentos={dados.enquadramentos ?? {}} />
 
+      <FolhaDaTurma formandos={dados.formandos ?? []} fotos={dados.fotos ?? {}} enquadramentos={dados.enquadramentos ?? {}} />
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
         <span style={titulo}>Pedidos · {pedidos.length}</span>
         {pedidos.length === 0 ? <p style={texto}>Ninguém pediu ainda.</p> : null}
@@ -1125,6 +1127,81 @@ function FolhasDaGrafica({
         <div>
           <Button variant="gild" disabled={adesivos === 0} carregando={!!gerando} iconLeft={<Download size={16} />} onClick={gerar}>
             {gerando ?? 'Baixar folhas (PDF)'}
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+/** The class sheet: every formando's face once (a few twice), 35 per sheet, as a PDF. */
+function FolhaDaTurma({
+  formandos,
+  fotos,
+  enquadramentos,
+}: {
+  formandos: string[];
+  fotos: Record<string, string>;
+  enquadramentos: Record<string, Enquadramento>;
+}) {
+  const [linhaDeCorte, setLinhaDeCorte] = useState(false);
+  const [folhas, setFolhas] = useState(1);
+  const [gerando, setGerando] = useState<string | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+  const nomes = nomesDaFolhaDaTurma(formandos);
+  const semFoto = formandos.filter((f) => !fotos[f]);
+  const duas = DUAS_VEZES.filter((f) => formandos.includes(f));
+
+  async function gerar() {
+    setErro(null);
+    setGerando('Começando…');
+    try {
+      salvarArquivo(await pdfDaFolhaDaTurma(formandos, fotos, enquadramentos, { folhas, linhaDeCorte, aoAvancar: setGerando }), 'adesivos-turma-32-rostos.pdf');
+    } catch (e) {
+      setErro(mensagemDe(e, 'Não foi possível gerar a folha agora.'));
+    } finally {
+      setGerando(null);
+    }
+  }
+
+  return (
+    <Card padding="var(--space-6) var(--space-7)">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+        <span style={rotuloSecao}>Folha com o rosto da turma</span>
+        <span style={{ fontSize: 'var(--fs-body)' }}>
+          {plural(nomes.length, 'adesivo', 'adesivos')} por folha: cada formando uma vez, e {duas.join(', ').replace(/, ([^,]*)$/, ' e $1')} duas vezes.
+        </span>
+        <span style={pequeno}>
+          Cada adesivo com {TURMA.diametro / 10} cm, {TURMA.colunas} × {TURMA.linhas} = {TURMA.porFolha} na folha de {FOLHA.largura / 10} × {FOLHA.altura / 10} cm, margem de {MARGEM / 10} cm. Um PDF no
+          tamanho real, uma página por folha (todas iguais).
+        </span>
+        {nomes.length !== TURMA.porFolha ? (
+          <span style={{ ...pequeno, color: 'var(--gild-300)' }}>
+            Atenção: são {nomes.length} adesivos, e a folha tem lugar para {TURMA.porFolha}.
+          </span>
+        ) : null}
+        {semFoto.length > 0 ? (
+          <span style={{ ...pequeno, color: 'var(--gild-300)' }}>Ainda sem foto de criança no site: {semFoto.join(', ')}. A folha só sai com todos.</span>
+        ) : null}
+        <label style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>
+          Quantas folhas
+          <input
+            type="number"
+            min={1}
+            max={50}
+            value={folhas}
+            onChange={(e) => setFolhas(Math.max(1, Math.min(50, Math.floor(Number(e.target.value) || 1))))}
+            style={{ width: 64, height: 32, padding: '0 8px', background: 'transparent', color: 'inherit', border: '1px solid var(--stroke-hair)', borderRadius: 6 }}
+          />
+        </label>
+        <label style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', cursor: 'pointer', fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}>
+          <input type="checkbox" checked={linhaDeCorte} onChange={(e) => setLinhaDeCorte(e.target.checked)} style={{ width: 18, height: 18, accentColor: 'var(--gild-400)' }} />
+          Desenhar a linha de corte (um círculo fino de {TURMA.diametro / 10} cm em volta de cada adesivo)
+        </label>
+        {erro ? <span style={erroEstilo}>{erro}</span> : null}
+        <div>
+          <Button variant="gild" disabled={semFoto.length > 0 || formandos.length === 0} carregando={!!gerando} iconLeft={<Download size={16} />} onClick={gerar}>
+            {gerando ?? 'Baixar folha da turma (PDF)'}
           </Button>
         </div>
       </div>

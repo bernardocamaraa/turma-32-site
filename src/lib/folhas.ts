@@ -48,7 +48,8 @@ function carregar(src: string): Promise<HTMLImageElement> {
  * A 6 cm square on white with the round sticker in it: the childhood one
  * cut to its circle; any other one already round (redondo.ts).
  */
-async function quadrado(src: string, redondo: boolean): Promise<string> {
+async function quadrado(src: string, redondo: boolean, pixels = PIXELS): Promise<string> {
+  const PIXELS = pixels;
   const img = await carregar(src);
   const canvas = document.createElement('canvas');
   canvas.width = PIXELS;
@@ -173,6 +174,76 @@ export async function pdfDasFolhas(itens: ItemDaFolha[], opcoes: { linhaDeCorte:
         pdf.circle(x + DIAMETRO / 2, y + DIAMETRO / 2, DIAMETRO / 2, 'S');
       }
       posicao++;
+    }
+  }
+  opcoes.aoAvancar?.('Gerando o PDF…');
+  return pdf.output('blob');
+}
+
+/**
+ * The class sheet: every formando's childhood face once, and a few twice,
+ * so one sheet has exactly TURMA.porFolha stickers. 5 cm each, 5 × 7 on the
+ * same 33 × 46 cm sheet with the 3 cm margin.
+ */
+export const TURMA = { diametro: 50, colunas: 5, linhas: 7, porFolha: 35 };
+/** Who comes twice on every class sheet. */
+export const DUAS_VEZES = ['Caio Bezerra', 'Bernardo Câmara', 'Maria Clara Bispo', 'Lívia Whitaker'];
+
+/** The names on one class sheet, in order, each twice-comer right after their first. */
+export function nomesDaFolhaDaTurma(formandos: string[]): string[] {
+  const nomes: string[] = [];
+  for (const f of [...formandos].sort((a, b) => a.localeCompare(b))) {
+    nomes.push(f);
+    if (DUAS_VEZES.includes(f)) nomes.push(f);
+  }
+  return nomes;
+}
+
+/** The PDF of the class sheet: `folhas` identical pages of TURMA.porFolha faces. */
+export async function pdfDaFolhaDaTurma(
+  formandos: string[],
+  fotos: Record<string, string>,
+  enquadramentos: Record<string, Enquadramento>,
+  opcoes: { folhas: number; linhaDeCorte: boolean; aoAvancar?: (texto: string) => void },
+): Promise<Blob> {
+  const nomes = nomesDaFolhaDaTurma(formandos);
+  const semFoto = [...new Set(nomes.filter((n) => !fotos[n]))];
+  if (semFoto.length > 0) throw new Error(`Ainda sem foto de criança: ${semFoto.join(', ')}.`);
+  if (nomes.length > TURMA.porFolha) throw new Error(`São ${nomes.length} adesivos, mas cabem só ${TURMA.porFolha} na folha.`);
+
+  const { diametro, colunas, linhas } = TURMA;
+  const pixels = Math.round((diametro / 25.4) * 300);
+  const passoX = diametro + (util.largura - colunas * diametro) / (colunas - 1);
+  const passoY = diametro + (util.altura - linhas * diametro) / (linhas - 1);
+
+  const imagens = new Map<string, string>();
+  const unicos = [...new Set(nomes)];
+  for (const [i, f] of unicos.entries()) {
+    opcoes.aoAvancar?.(`Montando ${i + 1} de ${unicos.length}…`);
+    imagens.set(f, await deBlob(await pngDoAdesivo(fotos[f], f, pixels, enquadramentos[f]), (url) => quadrado(url, true, pixels)));
+  }
+
+  const { jsPDF } = await import('jspdf');
+  const pdf = new jsPDF({ unit: 'mm', format: [FOLHA.largura, FOLHA.altura], orientation: 'portrait', compress: true });
+  for (let folha = 1; folha <= opcoes.folhas; folha++) {
+    if (folha > 1) pdf.addPage([FOLHA.largura, FOLHA.altura], 'portrait');
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(9);
+    pdf.setTextColor(150);
+    pdf.text(
+      `Turma 32 · Rostos da turma · ${nomes.length} adesivos de ${diametro / 10} cm · Folha ${folha} de ${opcoes.folhas} · ${FOLHA.largura / 10} × ${FOLHA.altura / 10} cm, margem de ${MARGEM / 10} cm`,
+      MARGEM,
+      FOLHA.altura - MARGEM / 2,
+    );
+    for (const [n, f] of nomes.entries()) {
+      const x = MARGEM + (n % colunas) * passoX;
+      const y = MARGEM + Math.floor(n / colunas) * passoY;
+      pdf.addImage(imagens.get(f)!, 'JPEG', x, y, diametro, diametro, `rosto-${unicos.indexOf(f)}`, 'NONE');
+      if (opcoes.linhaDeCorte) {
+        pdf.setDrawColor(236, 0, 140);
+        pdf.setLineWidth(0.15);
+        pdf.circle(x + diametro / 2, y + diametro / 2, diametro / 2, 'S');
+      }
     }
   }
   opcoes.aoAvancar?.('Gerando o PDF…');
