@@ -80,14 +80,65 @@ async function deBlob<T>(blob: Blob, usar: (url: string) => Promise<T>): Promise
   }
 }
 
-/** One column of a sheet: the stickers of one formando (at most LINHAS), as indexes into `itens`. */
-export type ColunaDaFolha = { formando: string; continuacao: boolean; itens: number[] };
+/** A strip: some of one formando's stickers, one under the other, as indexes into `itens`. */
+export type TiraDaFolha = { formando: string; continuacao: boolean; itens: number[] };
+/** One column of a sheet: strips stacked from the top, LINHAS stickers at most. */
+export type ColunaDaFolha = TiraDaFolha[];
 
 /**
- * The stickers in the orders, one column per formando so each one's pack is
- * cut apart in one piece: in the order of the names, each one's stickers in
- * the store's order of models. Whoever ordered more than a column holds
- * takes the next column too; a column never mixes two formandos. `itens`
+ * Packs each formando's stickers into the columns as strips, one sticker
+ * under the other, so each one's pack is cut as a strip, using as few
+ * sheets as possible. Whoever has more than a column's worth gets full
+ * columns first; the rest go in whole strips, first-fit decreasing, several
+ * formandos to a column. Only if that would take more sheets than the
+ * stickers need does it fill the columns in a row instead, so a strip may
+ * break at the bottom of a column and go on at the top of the next one.
+ */
+function empacotar(porFormando: { formando: string; itens: number[] }[]): ColunaDaFolha[] {
+  const total = porFormando.reduce((s, f) => s + f.itens.length, 0);
+  const cheias: ColunaDaFolha[] = [];
+  const restos: TiraDaFolha[] = [];
+  for (const { formando, itens } of porFormando) {
+    let k = 0;
+    for (; itens.length - k >= LINHAS; k += LINHAS) cheias.push([{ formando, continuacao: k > 0, itens: itens.slice(k, k + LINHAS) }]);
+    if (k < itens.length) restos.push({ formando, continuacao: k > 0, itens: itens.slice(k) });
+  }
+  const caixas: { livre: number; tiras: TiraDaFolha[] }[] = [];
+  for (const tira of [...restos].sort((a, b) => b.itens.length - a.itens.length || a.formando.localeCompare(b.formando))) {
+    let caixa = caixas.find((c) => c.livre >= tira.itens.length);
+    if (!caixa) caixas.push((caixa = { livre: LINHAS, tiras: [] }));
+    caixa.tiras.push(tira);
+    caixa.livre -= tira.itens.length;
+  }
+  const colunas = [...cheias, ...caixas.map((c) => c.tiras)];
+  if (Math.ceil(colunas.length / COLUNAS) <= Math.ceil(total / POR_FOLHA)) return colunas;
+
+  // In a row: the strips only break where a column ends.
+  const seguidas: ColunaDaFolha[] = [];
+  let atual: ColunaDaFolha = [];
+  let usados = 0;
+  for (const { formando, itens } of porFormando) {
+    let k = 0;
+    while (k < itens.length) {
+      const cabe = Math.min(LINHAS - usados, itens.length - k);
+      atual.push({ formando, continuacao: k > 0, itens: itens.slice(k, k + cabe) });
+      k += cabe;
+      usados += cabe;
+      if (usados === LINHAS) {
+        seguidas.push(atual);
+        atual = [];
+        usados = 0;
+      }
+    }
+  }
+  if (atual.length > 0) seguidas.push(atual);
+  return seguidas;
+}
+
+/**
+ * The stickers in the orders, laid out in columns of strips (empacotar):
+ * each formando's stickers one under the other, in the store's order of
+ * models, so each one gets their strip. `itens`
  * holds each different sticker once (a childhood one per formando, any
  * other model once per combination of colours), so the PDF stays small.
  * A childhood sticker with no photo yet can't be printed: it's left out and
@@ -101,7 +152,7 @@ export function itensDasFolhas(
 ): { itens: ItemDaFolha[]; colunas: ColunaDaFolha[]; semFoto: string[]; adesivos: number } {
   const itens: ItemDaFolha[] = [];
   const indice = new Map<string, number>();
-  const colunas: ColunaDaFolha[] = [];
+  const porFormando: { formando: string; itens: number[] }[] = [];
   const semFoto: string[] = [];
   let adesivos = 0;
   const ordem = new Map(modelos.map((m, i) => [m.id, i]));
@@ -150,19 +201,17 @@ export function itensDasFolhas(
       for (let k = 0; k < q; k++) dele.push(i);
     }
     adesivos += dele.length;
-    for (let k = 0; k < dele.length; k += LINHAS) {
-      colunas.push({ formando: p.formando, continuacao: k > 0, itens: dele.slice(k, k + LINHAS) });
-    }
+    if (dele.length > 0) porFormando.push({ formando: p.formando, itens: dele });
   }
-  return { itens, colunas, semFoto, adesivos };
+  return { itens, colunas: empacotar(porFormando), semFoto, adesivos };
 }
 
-/** Sheets for this many columns (one formando per column, COLUNAS a sheet). */
+/** Sheets for this many columns (COLUNAS a sheet). */
 export const folhasPara = (colunas: number) => Math.ceil(colunas / COLUNAS);
 
 /**
- * The PDF of the sheets, one formando per column, their name over it in the
- * margin. `linhaDeCorte`: a thin circle around each sticker.
+ * The PDF of the sheets, in columns of strips, each formando's name just
+ * over their strip. `linhaDeCorte`: a thin circle around each sticker.
  */
 export async function pdfDasFolhas(
   itens: ItemDaFolha[],
@@ -188,23 +237,27 @@ export async function pdfDasFolhas(
       pdf.setFontSize(9);
       pdf.setTextColor(150);
       pdf.text(
-        `Turma 32 · Adesivos de ${DIAMETRO / 10} cm · Folha ${folha} de ${folhas} · uma coluna por formando · ${FOLHA.largura / 10} × ${FOLHA.altura / 10} cm, margem de ${MARGEM / 10} cm`,
+        `Turma 32 · Adesivos de ${DIAMETRO / 10} cm · Folha ${folha} de ${folhas} · os adesivos de cada formando em tira, um embaixo do outro · ${FOLHA.largura / 10} × ${FOLHA.altura / 10} cm, margem de ${MARGEM / 10} cm`,
         MARGEM,
         FOLHA.altura - MARGEM / 2,
       );
     }
     const x = MARGEM + naFolha * PASSO_X;
-    pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(8);
-    pdf.setTextColor(120);
-    pdf.text(`${coluna.formando}${coluna.continuacao ? ' (cont.)' : ''}`, x + DIAMETRO / 2, MARGEM - 3, { align: 'center', maxWidth: PASSO_X - 2 });
-    for (const [linha, i] of coluna.itens.entries()) {
-      const y = MARGEM + linha * PASSO_Y;
-      pdf.addImage(imagens[i], 'JPEG', x, y, DIAMETRO, DIAMETRO, `adesivo-${i}`, 'NONE');
-      if (opcoes.linhaDeCorte) {
-        pdf.setDrawColor(236, 0, 140);
-        pdf.setLineWidth(0.15);
-        pdf.circle(x + DIAMETRO / 2, y + DIAMETRO / 2, DIAMETRO / 2, 'S');
+    let linha = 0;
+    for (const tira of coluna) {
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(7);
+      pdf.setTextColor(120);
+      pdf.text(`${tira.formando}${tira.continuacao ? ' (cont.)' : ''}`, x + DIAMETRO / 2, MARGEM + linha * PASSO_Y - 1.5, { align: 'center', maxWidth: PASSO_X - 2 });
+      for (const i of tira.itens) {
+        const y = MARGEM + linha * PASSO_Y;
+        pdf.addImage(imagens[i], 'JPEG', x, y, DIAMETRO, DIAMETRO, `adesivo-${i}`, 'NONE');
+        if (opcoes.linhaDeCorte) {
+          pdf.setDrawColor(236, 0, 140);
+          pdf.setLineWidth(0.15);
+          pdf.circle(x + DIAMETRO / 2, y + DIAMETRO / 2, DIAMETRO / 2, 'S');
+        }
+        linha++;
       }
     }
   }
