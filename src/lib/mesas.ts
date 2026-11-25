@@ -48,9 +48,9 @@ export const POSICOES_MESAS: PosicaoMesa[] = [
   redonda('D3', 505, 188),
   redonda('D4', 505, 253),
   redonda('P', 321, 259),
-  // Not on the venue's plan: an extra class table on P's left, the only side
-  // with room (R2 is too close on the right).
-  redonda('C1', 263, 259),
+  // Not on the venue's plan: an extra class table below R2, close to P (just
+  // clear of P's "Professores" label).
+  redonda('C1', 375, 293),
 ];
 
 /** The dance floor, as a box in % (left, top, width, height). */
