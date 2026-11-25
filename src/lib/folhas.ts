@@ -201,7 +201,8 @@ export function nomesDaFolhaDaTurma(formandos: string[]): string[] {
 
 /**
  * The PDF of the class sheet: `folhas` identical pages of TURMA.porFolha faces.
- * Whoever has no childhood photo yet keeps their place on the sheet, empty.
+ * Whoever has no childhood photo yet is left out; the faces stay together
+ * and the empty places end up at the end of the sheet.
  */
 export async function pdfDaFolhaDaTurma(
   formandos: string[],
@@ -209,7 +210,7 @@ export async function pdfDaFolhaDaTurma(
   enquadramentos: Record<string, Enquadramento>,
   opcoes: { folhas: number; linhaDeCorte: boolean; aoAvancar?: (texto: string) => void },
 ): Promise<Blob> {
-  const nomes = nomesDaFolhaDaTurma(formandos);
+  const nomes = nomesDaFolhaDaTurma(formandos).filter((f) => fotos[f]);
   if (nomes.length > TURMA.porFolha) throw new Error(`São ${nomes.length} adesivos, mas cabem só ${TURMA.porFolha} na folha.`);
 
   const { diametro, colunas, linhas } = TURMA;
@@ -237,7 +238,6 @@ export async function pdfDaFolhaDaTurma(
       FOLHA.altura - MARGEM / 2,
     );
     for (const [n, f] of nomes.entries()) {
-      if (!imagens.has(f)) continue;
       const x = MARGEM + (n % colunas) * passoX;
       const y = MARGEM + Math.floor(n / colunas) * passoY;
       pdf.addImage(imagens.get(f)!, 'JPEG', x, y, diametro, diametro, `rosto-${unicos.indexOf(f)}`, 'NONE');
