@@ -1,8 +1,8 @@
-import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { Minus, Plus, RefreshCw, Sparkles, Trash2 } from 'lucide-react';
 import { FORMANDOS } from '../lib/formandos';
 import type { AlteracaoMesas, DadosMesas } from '../lib/mesas';
-import { sugerirMesas } from '../lib/sugestaoMesas';
+import { sugerirMesas, type Sugestao } from '../lib/sugestaoMesas';
 import { useIsMobile } from '../lib/useViewport';
 import { Badge } from './Badge';
 import { Button } from './Button';
@@ -36,16 +36,34 @@ export function SugestaoMesas({
   const [copiado, setCopiado] = useState(false);
   const afinidades = dados.afinidades ?? [];
 
-  const sugestao = useMemo(
-    () => sugerirMesas({ mesas: dados.mesas, convidados: dados.convidados, afinidades, maximo, semente }),
-    [dados.mesas, dados.convidados, afinidades, maximo, semente],
-  );
+  // It takes about a second: worked out after the page paints, with a note meanwhile.
+  const [sugestao, setSugestao] = useState<Sugestao | null>(null);
+  const [calculando, setCalculando] = useState(true);
+  useEffect(() => {
+    setCalculando(true);
+    const id = setTimeout(() => {
+      setSugestao(sugerirMesas({ mesas: dados.mesas, convidados: dados.convidados, afinidades, maximo, semente }));
+      setCalculando(false);
+    }, 40);
+    return () => clearTimeout(id);
+  }, [dados.mesas, dados.convidados, afinidades, maximo, semente]);
+
+  if (!sugestao) {
+    return (
+      <Card padding={mobile ? 'var(--space-6)' : 'var(--space-7)'}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-3)', ...texto }}>
+          <Sparkles size={18} color="var(--gild-300)" /> Calculando a sugestão de mapa…
+        </span>
+      </Card>
+    );
+  }
   const cadeiras = sugestao.mesas.reduce((s, m) => s + m.cadeiras, 0);
   const usadas = sugestao.mesas.filter((m) => m.cadeiras > 0).length;
   const aberta = sugestao.mesas.find((m) => m.id === selecionada) ?? null;
+  const pronta = sugestao;
 
   async function copiarLista() {
-    const linhas = sugestao.mesas
+    const linhas = pronta.mesas
       .filter((m) => m.cadeiras > 0)
       .map((m) => `Mesa ${m.id} (${m.cadeiras} cadeiras): ${m.blocos.map((b) => `${b.formando} (${b.lugares})`).join(', ')}`);
     const conteudo = `Sugestão de mesas — Turma 32\n\n${linhas.join('\n')}`;
@@ -104,6 +122,13 @@ export function SugestaoMesas({
           <Numero rotulo="famílias em 2 mesas" valor={String(sugestao.divididos.length)} />
         </div>
 
+        {calculando ? <p style={{ ...pequeno, color: 'var(--gild-300)' }}>Recalculando…</p> : null}
+        {sugestao.gruposNaoAtendidos.length > 0 ? (
+          <p style={{ ...texto, fontSize: 'var(--fs-body-sm)' }}>
+            Não deu para deixar em mesas juntas ou lado a lado: <strong style={{ color: 'var(--text-primary)' }}>{sugestao.gruposNaoAtendidos.join('; ')}</strong>.
+            Tente outra sugestão, mais cadeiras por mesa, ou ajuste à mão no mapa da turma.
+          </p>
+        ) : null}
         {sugestao.semLugar.length > 0 ? (
           <p style={{ ...texto, color: 'var(--state-error)' }}>
             Com até {maximo} cadeiras por mesa não cabe todo mundo: ficam sem lugar {sugestao.semLugar.map((b) => `${b.formando} (${b.lugares})`).join(', ')}. Aumente as cadeiras por mesa.
@@ -145,7 +170,7 @@ export function SugestaoMesas({
   );
 }
 
-function MesaDaSugestao({ mesa }: { mesa: ReturnType<typeof sugerirMesas>['mesas'][number] }) {
+function MesaDaSugestao({ mesa }: { mesa: Sugestao['mesas'][number] }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)', alignItems: 'baseline' }}>

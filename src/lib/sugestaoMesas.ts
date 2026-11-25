@@ -34,9 +34,11 @@ export type Sugestao = {
   pessoas: number;
   /** Families split in two (or more) tables. */
   divididos: string[];
-  /** "Juntos" groups whose members all ended at the same or neighbouring tables, out of all. */
+  /** "Juntos" groups whose tables ended in one block (each next to another of the group), out of all. */
   gruposAtendidos: number;
   grupos: number;
+  /** The "juntos" groups that didn't end in one block of tables ("Carolina + Guilherme"). */
+  gruposNaoAtendidos: string[];
   /** "Longe" pairs that ended at the same or neighbouring tables (should be 0). */
   separacoesQuebradas: string[];
   /** People who didn't fit at all (only if the tables are too few for everyone). */
@@ -73,6 +75,28 @@ function proximidade(dist: number) {
   return 0;
 }
 const VIZINHAS = 0.6;
+
+/**
+ * Whether a group's tables make one block: starting from any of them, every
+ * other can be reached going only to the same table or a neighbouring one
+ * of the group. (A big group of friends can't all be next to each other,
+ * but it can fill one corner of the room, no one left on their own.)
+ */
+function emBloco(mesas: string[], perto: (a: string, b: string) => number): boolean {
+  const unicas = [...new Set(mesas)];
+  if (unicas.length === 0) return false;
+  const vistas = new Set([unicas[0]]);
+  const fila = [unicas[0]];
+  while (fila.length) {
+    const m = fila.pop()!;
+    for (const outra of unicas)
+      if (!vistas.has(outra) && perto(m, outra) >= VIZINHAS) {
+        vistas.add(outra);
+        fila.push(outra);
+      }
+  }
+  return vistas.size === unicas.length;
+}
 
 /** A small seeded random generator (mulberry32): the same seed, the same map. */
 function aleatorio(semente: number) {
@@ -118,9 +142,13 @@ export function sugerirMesas(entrada: {
     const k = a < b ? `${a}|${b}` : `${b}|${a}`;
     peso.set(k, (peso.get(k) ?? 0) + w);
   };
+  // Each group pulls each member with the same strength, shared among the
+  // others: a couple (2) pulls hard on each other; in a group of 6 friends
+  // each pair pulls a fifth of that. Apart pairs push hard.
   for (const g of entrada.afinidades) {
-    for (let i = 0; i < g.pessoas.length; i++)
-      for (let j = i + 1; j < g.pessoas.length; j++) somar(g.pessoas[i], g.pessoas[j], g.tipo === 'juntos' ? 1 : -4);
+    const n = g.pessoas.length;
+    const w = g.tipo === 'juntos' ? 2 / (n - 1) : -8;
+    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) somar(g.pessoas[i], g.pessoas[j], w);
   }
   const pesoEntre = (a: string, b: string) => (a === b ? 6 : (peso.get(a < b ? `${a}|${b}` : `${b}|${a}`) ?? 0));
 
@@ -161,19 +189,10 @@ export function sugerirMesas(entrada: {
         // Apart pairs only count when close; together pairs get the closeness.
         s += w * p;
       }
-      // A whole group together or side by side.
+      // A whole group in one block of tables (together or side by side).
       for (const idx of gruposIdx) {
-        let junto = true;
-        for (let a = 0; a < idx.length && junto; a++)
-          for (let b = a + 1; b < idx.length; b++) {
-            const ma = onde[idx[a]];
-            const mb = onde[idx[b]];
-            if (!ma || !mb || perto(ma, mb) < VIZINHAS) {
-              junto = false;
-              break;
-            }
-          }
-        if (junto) s += BONUS_GRUPO;
+        const mesas = idx.map((i) => onde[i]);
+        if (mesas.every((m): m is string => !!m) && emBloco(mesas, perto)) s += BONUS_GRUPO;
       }
       // Someone left without a seat is much worse than anything else.
       for (let i = 0; i < blocos.length; i++) if (!onde[i]) s -= 1000 * blocos[i].lugares;
@@ -210,7 +229,23 @@ export function sugerirMesas(entrada: {
       const temperatura = 0.6 * (1 - k / passos);
       const i = Math.floor(sorte() * blocos.length);
       const de = onde[i];
-      if (sorte() < 0.5) {
+      const tipoDeMudanca = sorte();
+      if (tipoDeMudanca < 0.15) {
+        // Swap everything at two tables: carries a whole group across the room at once.
+        const m1 = ids[Math.floor(sorte() * ids.length)];
+        const m2 = ids[Math.floor(sorte() * ids.length)];
+        if (m1 === m2) continue;
+        const trocados = onde.map((m) => (m === m1 ? m2 : m === m2 ? m1 : m));
+        const antes = onde.slice();
+        for (let b = 0; b < onde.length; b++) onde[b] = trocados[b];
+        const nova = nota();
+        if (nova >= atual || sorte() < Math.exp((nova - atual) / Math.max(temperatura, 1e-6))) {
+          const o1 = ocupacao.get(m1) ?? 0;
+          ocupacao.set(m1, ocupacao.get(m2) ?? 0);
+          ocupacao.set(m2, o1);
+          atual = nova;
+        } else for (let b = 0; b < onde.length; b++) onde[b] = antes[b];
+      } else if (tipoDeMudanca < 0.575) {
         // Move.
         const para = ids[Math.floor(sorte() * ids.length)];
         if (para === de || (ocupacao.get(para) ?? 0) + blocos[i].lugares > maximo) continue;
@@ -256,10 +291,7 @@ export function sugerirMesas(entrada: {
 
   // ---- The result, explained ----
   const mesaDe = (f: string) => blocos.flatMap((b, i) => (b.formando === f && onde[i] ? [onde[i]!] : []));
-  const juntosOuVizinhos = (nomes: string[]) => {
-    const mesas = nomes.flatMap(mesaDe);
-    return mesas.length > 0 && mesas.every((a) => mesas.every((b) => perto(a, b) >= VIZINHAS));
-  };
+  const juntosOuVizinhos = (nomes: string[]) => emBloco(nomes.flatMap(mesaDe), perto);
   const gruposJuntos = entrada.afinidades.filter((g) => g.tipo === 'juntos');
   const atendidos = gruposJuntos.filter((g) => juntosOuVizinhos(g.pessoas));
   const separacoesQuebradas = entrada.afinidades
@@ -311,6 +343,7 @@ export function sugerirMesas(entrada: {
     divididos: [...new Set(blocos.map((b) => b.formando))].filter((f) => new Set(mesaDe(f)).size > 1),
     gruposAtendidos: atendidos.length,
     grupos: gruposJuntos.length,
+    gruposNaoAtendidos: gruposJuntos.filter((g) => !atendidos.includes(g)).map((g) => g.pessoas.map(primeiro).join(' + ')),
     separacoesQuebradas,
     semLugar: blocos.filter((_, i) => !onde[i]),
   };
