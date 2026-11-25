@@ -147,6 +147,11 @@ export function descreverItem(chave: string, q: number, modelos: Modelo[]): stri
   return `${q}× ${modelo?.nome ?? 'adesivo apagado'}${cores ? ` (${descreverCores(modelo, cores)})` : ''}`;
 }
 
+/** How many stickers a formando takes in all: one of these, spread as they like (same as PACOTES in the function). */
+export const PACOTES = [10, 20] as const;
+export type Pacote = (typeof PACOTES)[number];
+export const ehPacote = (n: number): n is Pacote => (PACOTES as readonly number[]).includes(n);
+
 export function quantidadeDoPedido(itens: Itens): number {
   return Object.values(itens).reduce((s, q) => s + q, 0);
 }
