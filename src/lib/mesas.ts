@@ -85,6 +85,9 @@ export type ConvidadosFormando = {
   whatsapp?: string | null;
 };
 
+/** Committee only: a group that should sit together (friends, a family) or a pair to keep apart, for the suggested seating. */
+export type Afinidade = { id: string; tipo: 'juntos' | 'longe'; pessoas: string[] };
+
 export type DadosMesas = {
   /** True when the code typed was the committee's — unlocks reserved tables and the admin panel. */
   comissao: boolean;
@@ -95,6 +98,8 @@ export type DadosMesas = {
   mesas: Mesa[];
   reservas: Reserva[];
   convidados: ConvidadosFormando[];
+  /** Committee only: who sits together or apart, for the suggested seating (lib/sugestaoMesas.ts). */
+  afinidades?: Afinidade[];
 };
 
 export type AlteracaoMesas =
@@ -102,6 +107,9 @@ export type AlteracaoMesas =
   | { definirConvidados: { formando: string; total: number } }
   /** Committee: how many chairs a table has (1 to 20, never fewer than the people seated there). */
   | { definirCapacidade: { mesa: string; capacidade: number } }
+  /** Committee: add or remove a group for the suggested seating. */
+  | { salvarAfinidade: { tipo: 'juntos' | 'longe'; pessoas: string[] } }
+  | { apagarAfinidade: string }
   | { definirMesasAbertas: boolean }
   | { novoLink: string };
 

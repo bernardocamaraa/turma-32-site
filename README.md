@@ -121,6 +121,17 @@ espalhar os lugares dele por mais de uma mesa, se não couber tudo numa só.
   20, e nunca menos que as pessoas já sentadas nela). O mapa desenha as
   cadeiras novas na hora. Fica em `mesas.capacidade`, gravado por
   `definir_capacidade` (`mesas.sql`).
+- **Sugestão de mapa** (só a comissão, abaixo do painel da aba Mesas): um
+  segundo mapa, montado do zero pelo site (`src/lib/sugestaoMesas.ts`), que
+  **não muda nada no mapa da turma**. Parte de quantas pessoas cada formando
+  leva e dos grupos de afinidade, e busca o arranjo com cada família inteira
+  numa mesa (as maiores que uma mesa em mesas vizinhas), os grupos na mesma
+  mesa ou ao lado e quem deve ficar longe, longe, com até N cadeiras por
+  mesa (12 por padrão). Mostra quantas cadeiras cada mesa precisa e o
+  motivo de cada um estar ali; "Copiar a lista" leva o resultado para a casa
+  de festas. Os grupos ("sentar juntos" e "ficar longe") ficam no banco
+  (`afinidades_mesas`) e a comissão edita na mesma tela; só a comissão
+  recebe, nunca ficam no código do site.
 - **Fechar o mapa**: o botão "Fechar mapa" congela as mudanças da turma
   (por exemplo, quando o mapa for mandado para a casa de festas). A comissão
   continua podendo mexer.

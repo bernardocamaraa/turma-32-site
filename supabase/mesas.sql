@@ -225,6 +225,21 @@ begin
 end;
 $$;
 
+-- Who should sit together (or apart), for the committee's suggested seating
+-- (src/lib/sugestaoMesas.ts): groups of formandos — friends, families — and
+-- pairs to keep away from each other. Committee only: read and changed
+-- through the `mesas` Edge Function with the committee code. It never
+-- changes the class's own map. (A "longe" row is sensitive: it lives only
+-- here, never in the site's code, which anyone can read.)
+create table if not exists public.afinidades_mesas (
+  id uuid primary key default gen_random_uuid(),
+  tipo text not null check (tipo in ('juntos', 'longe')),
+  pessoas text[] not null check (cardinality(pessoas) between 2 and 12),
+  criado_em timestamptz not null default now()
+);
+alter table public.afinidades_mesas enable row level security;
+-- No policies: only the `mesas` Edge Function reads or writes it.
+
 -- Only the Edge Function (service role) may call these.
 revoke all on function public.definir_lugares(text, text, int, boolean) from public, anon, authenticated;
 revoke all on function public.definir_convidados(text, int) from public, anon, authenticated;
