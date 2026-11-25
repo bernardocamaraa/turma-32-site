@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { ArrowDown, ArrowUp, Check, Crop, Download, Paintbrush, Pencil, Trash2, ImagePlus, Minus, Plus, ShoppingBag, TriangleAlert } from 'lucide-react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { ArrowDown, ArrowUp, Check, Crop, Download, ImagePlus, Minus, Plus, ShoppingBag, TriangleAlert } from 'lucide-react';
 import { AdesivoCrianca, AjustarFoto, pngDoAdesivo, salvarArquivo, type Enquadramento } from '../components/AdesivoCrianca';
 import { Badge } from '../components/Badge';
 import { BotoesLink } from '../components/BotoesLink';
@@ -11,7 +11,6 @@ import { Input } from '../components/Input';
 import { Popups, usePopup } from '../components/Popups';
 import {
   buscarAdesivos,
-  salvarCriacao,
   chaveDe,
   descreverCores,
   descreverItem,
@@ -33,10 +32,7 @@ import {
 } from '../lib/adesivos';
 import { analisarCores, ARCO_IRIS, CORES, fundoDaCor, nomeDaCor, type Camada, type CamadaSugerida } from '../lib/cores';
 import { adesivoRedondo } from '../lib/redondo';
-import { EditorAdesivo } from '../components/EditorAdesivo';
-import { designInicial, type Design, type Recursos } from '../lib/criacao';
 import { lerEleitor, salvarEleitor } from '../lib/eleitor';
-import { assinaturaDe } from '../lib/formandos';
 import { COLUNAS, DIAMETRO, DUAS_VEZES, FOLHA, folhasPara, itensDasFolhas, LINHAS, MARGEM, nomesDaFolhaDaTurma, pdfDasFolhas, pdfDaFolhaDaTurma, POR_FOLHA, TURMA } from '../lib/folhas';
 import { useIsMobile } from '../lib/useViewport';
 
@@ -216,45 +212,6 @@ function Loja() {
 
   const modelos = dados?.modelos ?? [];
   const publicos = modelos.filter((m) => !m.dono);
-  const meus = modelos.filter((m) => m.dono && m.dono === dados?.voce);
-  const recursos = useMemo<Recursos>(
-    // The signature in vector (scripts/vetorizar-assinaturas.py): sharp however big it's drawn.
-    () => ({ foto: dados?.fotoInfancia ?? null, assinatura: dados?.voce ? (assinaturaDe(dados.voce)?.replace(/\.png$/, '.svg') ?? null) : null }),
-    [dados?.fotoInfancia, dados?.voce],
-  );
-  // The editor, when open: a new sticker, or one of theirs (`id`).
-  const [criando, setCriando] = useState<{ id?: string; nome: string; design: Design } | null>(null);
-  const [salvandoCriacao, setSalvandoCriacao] = useState(false);
-  const [erroCriacao, setErroCriacao] = useState<string | null>(null);
-
-  async function guardarCriacao(design: Design, nome: string) {
-    if (!eleitor || !criando) return;
-    setSalvandoCriacao(true);
-    setErroCriacao(null);
-    try {
-      const novo = await salvarCriacao(eleitor, { id: criando.id, nome, design }, recursos);
-      setDados(novo);
-      setCriando(null);
-      popup({ tipo: 'ok', titulo: criando.id ? 'Adesivo atualizado!' : 'Adesivo salvo!', texto: 'Agora escolha quantos você quer, em “Seus adesivos”.' });
-    } catch (e) {
-      setErroCriacao(mensagemDe(e, 'Não foi possível salvar o seu adesivo agora.'));
-    } finally {
-      setSalvandoCriacao(false);
-    }
-  }
-
-  async function apagarCriacao(m: Modelo) {
-    if (!eleitor) return;
-    const noPedido = Object.keys(meu?.itens ?? {}).some((k) => lerChave(k).id === m.id);
-    if (!window.confirm(`Apagar o adesivo "${m.nome}"?${noPedido ? ' Ele também sai do seu pedido.' : ''}`)) return;
-    try {
-      const novo = await buscarAdesivos(eleitor, { acao: 'apagarCriacao', id: m.id });
-      setDados(novo);
-      comecarDe(novo);
-    } catch (e) {
-      popup({ tipo: 'aviso', titulo: mensagemDe(e, 'Não foi possível apagar agora.') });
-    }
-  }
   const meu = dados?.meu ?? null;
   const travado = !!dados && (!dados.aberta || !!meu?.pago);
   const quantidade = quantidadeDoPedido(itens);
@@ -351,88 +308,6 @@ function Loja() {
               ))}
             </div>
           )}
-
-          <Card padding="var(--space-6) var(--space-7)" style={{ background: 'linear-gradient(135deg, rgba(201,169,106,.16), rgba(169,211,232,.08)), var(--ink-850)' }}>
-            <div style={{ display: 'flex', gap: 'var(--space-5)', alignItems: mobile ? 'flex-start' : 'center', flexDirection: mobile ? 'column' : 'row' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', flex: 1 }}>
-                <span style={{ ...titulo, fontSize: 'var(--fs-h3)' }}>Crie seu adesivo</span>
-                <p style={texto}>
-                  Monte um adesivo só seu: a sua foto de criança, a logo da 32, a sua assinatura, textos, estrelas, cores e fundo do jeito que quiser.
-                </p>
-              </div>
-              <Button
-                size="lg"
-                variant="gild"
-                iconLeft={<Paintbrush size={18} />}
-                disabled={travado}
-                onClick={() => {
-                  setErroCriacao(null);
-                  setCriando({ nome: 'Meu adesivo', design: designInicial(!!recursos.foto, !!recursos.assinatura) });
-                }}
-              >
-                Criar meu adesivo
-              </Button>
-            </div>
-          </Card>
-
-          {meus.length > 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-              <span style={titulo}>Seus adesivos · {meus.length}</span>
-              <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : 'repeat(auto-fill, minmax(300px, 1fr))', gap: 'var(--space-5)' }}>
-                {meus.map((m) => (
-                  <CartaoModelo
-                    key={m.id}
-                    modelo={m}
-                    preco={preco}
-                    voce={dados.voce!}
-                    foto={dados.fotoInfancia}
-                    enquadramento={dados.enquadramento}
-                    onEnquadrar={enquadrar}
-                    itens={itens}
-                    travado={travado}
-                    onMudar={mudar}
-                    acoes={
-                      !travado ? (
-                        <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            style={{ padding: 0 }}
-                            iconLeft={<Pencil size={15} />}
-                            disabled={!m.design}
-                            onClick={() => {
-                              setErroCriacao(null);
-                              if (m.design) setCriando({ id: m.id, nome: m.nome, design: m.design });
-                            }}
-                          >
-                            Editar
-                          </Button>
-                          <Button variant="ghost" size="sm" style={{ padding: 0, color: 'var(--state-error)' }} iconLeft={<Trash2 size={15} />} onClick={() => apagarCriacao(m)}>
-                            Apagar
-                          </Button>
-                        </div>
-                      ) : null
-                    }
-                  />
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {criando ? (
-            <EditorAdesivo
-              key={criando.id ?? 'novo'}
-              inicial={criando.design}
-              nomeInicial={criando.nome}
-              recursos={recursos}
-              salvando={salvandoCriacao}
-              erro={erroCriacao}
-              onSalvar={guardarCriacao}
-              onFechar={() => {
-                if (window.confirm('Sair do editor? O que não foi salvo se perde.')) setCriando(null);
-              }}
-            />
-          ) : null}
 
           <Card padding="var(--space-6) var(--space-7)" accent={quantidade > 0 && mudou}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
@@ -981,30 +856,6 @@ export function AdesivosComissao({ codigo }: { codigo: string }) {
       ) : null}
 
       <ModelosDaComissao codigo={codigo} modelos={modelos.filter((m) => !m.dono)} salvando={salvando} agir={agir} />
-
-      {modelos.some((m) => m.dono) ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-          <span style={titulo}>Criações da turma · {modelos.filter((m) => m.dono).length}</span>
-          <p style={pequeno}>Adesivos que cada formando montou em “Crie seu adesivo”. Só o dono vê o seu na loja; os pedidos e o arquivo da gráfica já incluem esses adesivos.</p>
-          <div style={{ display: 'grid', gridTemplateColumns: mobile ? 'repeat(2, 1fr)' : 'repeat(5, 1fr)', gap: 'var(--space-5)' }}>
-            {modelos
-              .filter((m) => m.dono)
-              .sort((a, b) => (a.dono ?? '').localeCompare(b.dono ?? ''))
-              .map((m) => (
-                <div key={m.id} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', alignItems: 'center', textAlign: 'center' }}>
-                  {m.imagem ? <ImagemNaCor imagem={m.imagem} camadas={[]} cores={null} alt={`${m.nome}, de ${m.dono}`} /> : null}
-                  <span style={{ fontSize: 'var(--fs-body-sm)', fontWeight: 600 }}>{m.nome}</span>
-                  <span style={pequeno}>{m.dono}</span>
-                  {m.imagem ? (
-                    <a href={m.imagem} download={`${slugDoNome(m.dono ?? '')}-${slugDoNome(m.nome)}.png`} style={{ fontSize: 13, color: 'var(--accent)' }}>
-                      Baixar
-                    </a>
-                  ) : null}
-                </div>
-              ))}
-          </div>
-        </div>
-      ) : null}
 
       <div style={{ display: 'grid', gridTemplateColumns: mobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: 'var(--space-5)' }}>
         <Numero rotulo="Pedidos" valor={`${pedidos.length}/${dados.formandos?.length ?? 0}`} />

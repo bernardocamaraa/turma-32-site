@@ -1,6 +1,5 @@
 import type { Enquadramento } from '../components/AdesivoCrianca';
 import { nomeDaCor, type Camada } from './cores';
-import { pngDaCriacao, type Design, type Recursos } from './criacao';
 import { chamarFuncao, supabase } from './supabase';
 
 /**
@@ -21,10 +20,8 @@ export type Modelo = {
   ativo: boolean;
   /** The parts whose colour the formando picks (lib/cores.ts); empty: sold as it is. */
   camadas: Camada[];
-  /** A formando's own design ("Crie seu adesivo"): whose it is; null for the models on sale to everyone. */
+  /** A sticker a formando designed themselves (no longer offered): whose it is; null for the models on sale. */
   dono?: string | null;
-  /** That design, to open it in the editor again (only for its owner). */
-  design?: Design | null;
 };
 
 /** Most of one model a formando can order — the same as MAXIMO in the function. */
@@ -90,9 +87,6 @@ export type AcaoAdesivos =
   | { acao: 'aberta'; sim: boolean }
   /** Frames the childhood photo (null: back to the default). Committee: whose, in `formando`. */
   | { acao: 'enquadrar'; enquadramento: Enquadramento | null; formando?: string }
-  /** A formando's own sticker ("Crie seu adesivo"): keep it (after sending its picture — salvarCriacao below), or delete it. */
-  | { acao: 'salvarCriacao'; id?: string; nomeCriacao: string; imagemCriacao?: string; design: Design }
-  | { acao: 'apagarCriacao'; id: string }
   /** Committee: the price of every sticker (null: none yet). */
   | { acao: 'preco'; valor: number | null }
   /** Committee: creates (no id) or changes a model. */
@@ -167,20 +161,3 @@ export const slugDoNome = (nome: string) =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
-
-/**
- * Keeps a sticker the formando designed: draws the finished picture, sends
- * it (a signed upload URL from the function), then saves it with its design.
- * `id` to change one they already have.
- */
-export async function salvarCriacao(
-  acesso: { whatsapp: string },
-  criacao: { id?: string; nome: string; design: Design },
-  recursos: Recursos,
-): Promise<DadosAdesivos> {
-  const png = await pngDaCriacao(criacao.design, recursos);
-  const { caminho, token } = await chamarFuncao<{ caminho: string; token: string }>('adesivos', { ...acesso, acao: 'prepararCriacao' });
-  const { error } = await supabase.storage.from('adesivos').uploadToSignedUrl(caminho, token, png, { contentType: 'image/png' });
-  if (error) throw new Error('Não foi possível enviar o seu adesivo agora. Tente de novo.');
-  return buscarAdesivos(acesso, { acao: 'salvarCriacao', id: criacao.id, nomeCriacao: criacao.nome, imagemCriacao: caminho, design: criacao.design });
-}
