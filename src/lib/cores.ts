@@ -8,10 +8,16 @@
  * program needed, the committee just uploads the picture.
  */
 
+import { amostraDaEstampa, ehEstampa, nomeDaEstampa } from './fundos';
+
 /** A part of the picture the formando can recolour. */
 export type Camada = {
-  /** 'matiz': the pixels of one colour (a range of hues); 'escuro': the black; 'claro': the white. */
-  tipo: 'matiz' | 'escuro' | 'claro';
+  /**
+   * 'matiz': the pixels of one colour (a range of hues); 'escuro': the black; 'claro': the white;
+   * 'fundo': none of the picture's pixels but the circle behind it (white by default), for art that
+   * isn't round itself (the 32) — redondo.ts paints it.
+   */
+  tipo: 'matiz' | 'escuro' | 'claro' | 'fundo';
   /** What the formando reads: "Sombra", "Preenchimento"… */
   nome: string;
   /** The part's colour as it is in the picture (#rrggbb). */
@@ -57,6 +63,7 @@ export const FAIXAS_ARCO_IRIS = ['#e40303', '#ff8c00', '#ffed00', '#008026', '#0
 
 /** What to paint a swatch of this colour with (the rainbow is its stripes). */
 export function fundoDaCor(cor: string): string {
+  if (ehEstampa(cor)) return `center / cover url(${amostraDaEstampa(cor)})`;
   if (cor !== ARCO_IRIS) return cor;
   const n = FAIXAS_ARCO_IRIS.length;
   return `linear-gradient(180deg, ${FAIXAS_ARCO_IRIS.map((c, i) => `${c} ${(i * 100) / n}% ${((i + 1) * 100) / n}%`).join(', ')})`;
@@ -65,7 +72,9 @@ export function fundoDaCor(cor: string): string {
 export function nomeDaCor(cor: string, camada?: Camada): string {
   const c = cor.toLowerCase();
   if (c === ARCO_IRIS) return 'Arco-íris (LGBT)';
-  if (camada && c === camada.cor.toLowerCase()) return 'original';
+  const estampa = nomeDaEstampa(c);
+  if (estampa) return estampa;
+  if (camada && camada.tipo !== 'fundo' && c === camada.cor.toLowerCase()) return 'original';
   return CORES.find((x) => x.cor === c)?.nome ?? c.toUpperCase();
 }
 
@@ -103,6 +112,7 @@ const dentroDoMatiz = (h: number, h0: number, h1: number) => (h0 <= h1 ? h >= h0
 
 /** How much a pixel belongs to a part, 0–1 (soft at the edges, so the borders blend). */
 function peso(c: Camada, h: number, s: number, l: number): number {
+  if (c.tipo === 'fundo') return 0;
   if (c.tipo === 'matiz') {
     if (l < 0.08 || l > 0.95 || !dentroDoMatiz(h, c.h0 ?? 0, c.h1 ?? 360)) return 0;
     return limitar((s - 0.1) / 0.15);

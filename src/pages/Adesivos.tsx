@@ -36,6 +36,7 @@ import {
 } from '../lib/adesivos';
 import { analisarCores, ARCO_IRIS, CORES, fundoDaCor, nomeDaCor, type Camada, type CamadaSugerida } from '../lib/cores';
 import { adesivoRedondo } from '../lib/redondo';
+import { ESTAMPAS } from '../lib/fundos';
 import { lerEleitor, salvarEleitor } from '../lib/eleitor';
 import { COLUNAS, DIAMETRO, DUAS_VEZES, FOLHA, folhasPara, itensDasFolhas, LINHAS, MARGEM, nomesDaFolhaDaTurma, pdfDasFolhas, pdfDaFolhaDaTurma, POR_FOLHA, TURMA } from '../lib/folhas';
 import { useIsMobile } from '../lib/useViewport';
@@ -584,7 +585,9 @@ function Paleta({ camada, cor, onCor }: { camada: Camada; cor: string; onCor: (c
   const canais = (c: string) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
   const perto = (a: string, b: string) => canais(a).reduce((s, v, i) => s + Math.abs(v - canais(b)[i]), 0) < 40;
   const opcoes = [
-    { nome: 'Original', cor: camada.cor.toLowerCase() },
+    { nome: camada.tipo === 'fundo' ? 'Branco' : 'Original', cor: camada.cor.toLowerCase() },
+    // The background can also be a pattern: the wall, the starry sky…
+    ...(camada.tipo === 'fundo' ? ESTAMPAS.map((e) => ({ nome: e.nome, cor: e.id })) : []),
     { nome: 'Arco-íris (LGBT)', cor: ARCO_IRIS },
     ...CORES.filter((c) => !perto(c.cor, camada.cor)),
   ];
@@ -1447,6 +1450,9 @@ function mesmaCamada(a: Camada, b: Camada): boolean {
 
 type CamadaNoForm = CamadaSugerida & { marcada: boolean };
 
+/** Sample backgrounds for the preview of a 'fundo' part. */
+const FUNDOS_AMOSTRA = ['#ffd21f', '#a9d3e8', '#111111', '#ff5fa2'];
+
 /** Sample colours to show what the chosen parts look like changed. */
 const AMOSTRAS = [
   ['#e0262b', '#111111', '#ffffff'],
@@ -1483,8 +1489,10 @@ function FormModelo({
   const [analisando, setAnalisando] = useState(false);
   const [resumo, setResumo] = useState<string | null>(null);
   const [camadas, setCamadas] = useState<CamadaNoForm[]>(() =>
-    (modelo?.camadas ?? []).map((c) => ({ ...c, parte: 0, sugerida: true, motivo: '', marcada: true })),
+    (modelo?.camadas ?? []).filter((c) => c.tipo !== 'fundo').map((c) => ({ ...c, parte: 0, sugerida: true, motivo: '', marcada: true })),
   );
+  // The circle behind art that isn't round (the 32): white unless the class may pick its colour.
+  const [fundo, setFundo] = useState(() => (modelo?.camadas ?? []).some((c) => c.tipo === 'fundo'));
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -1505,7 +1513,7 @@ function FormModelo({
         if (!ativo) return;
         setResumo(a.resumo);
         // Editing with the same picture: what was saved stays ticked (and named); a new picture starts from the suggestion.
-        const salvas = !arquivo ? (modelo?.camadas ?? []) : [];
+        const salvas = !arquivo ? (modelo?.camadas ?? []).filter((c) => c.tipo !== 'fundo') : [];
         setCamadas(
           a.camadas.map((c) => {
             const salva = salvas.find((s) => mesmaCamada(s, c));
@@ -1521,7 +1529,10 @@ function FormModelo({
   }, [previa]);
 
   const escolhidas = camadas.filter((c) => c.marcada);
-  const paraSalvar: Camada[] = escolhidas.map(({ tipo, nome, cor, h0, h1 }) => (tipo === 'matiz' ? { tipo, nome: nome.trim(), cor, h0, h1 } : { tipo, nome: nome.trim(), cor }));
+  const paraSalvar: Camada[] = [
+    ...escolhidas.map(({ tipo, nome, cor, h0, h1 }): Camada => (tipo === 'matiz' ? { tipo, nome: nome.trim(), cor, h0, h1 } : { tipo, nome: nome.trim(), cor })),
+    ...(fundo ? [{ tipo: 'fundo' as const, nome: 'Fundo', cor: '#ffffff' }] : []),
+  ];
 
   async function salvar() {
     if (!nome.trim()) return setErro('Dê um nome ao adesivo.');
@@ -1643,7 +1654,20 @@ function FormModelo({
                 </div>
               </div>
             ))}
-            {escolhidas.length > 0 ? (
+            <label style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'center', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={fundo}
+                onChange={(e) => setFundo(e.target.checked)}
+                style={{ width: 20, height: 20, accentColor: 'var(--gild-400)', flex: '0 0 auto' }}
+              />
+              <Bolinha cor="#ffffff" tamanho={24} />
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={{ fontSize: 'var(--fs-body)' }}>Fundo do círculo</span>
+                <span style={pequeno}>O branco em volta da arte, para quem não é redondo (como o 32). Marcado, a turma escolhe a cor do fundo.</span>
+              </span>
+            </label>
+            {paraSalvar.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
                 <span style={pequeno}>Assim fica com algumas cores (o nome de cada parte é o que a turma vê na loja):</span>
                 <div style={{ display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
@@ -1652,7 +1676,7 @@ function FormModelo({
                       <ImagemNaCor
                         imagem={previa}
                         camadas={paraSalvar}
-                        cores={paraSalvar.map((c, n) => (c.tipo === 'claro' ? amostra[2] : amostra[n % 2]))}
+                        cores={paraSalvar.map((c, n) => (c.tipo === 'fundo' ? FUNDOS_AMOSTRA[k] : c.tipo === 'claro' ? amostra[2] : amostra[n % 2]))}
                         alt=""
                         style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
                       />
